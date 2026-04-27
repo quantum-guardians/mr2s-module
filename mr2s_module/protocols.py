@@ -16,7 +16,7 @@ class FaceCycleProtocol(Protocol):
 
 
 class QuboSolverProtocol(Protocol):
-    def run(self, qubo: QuboMatrix) -> Solution: ...
+    def run(self, qubo: QuboMatrix, graph: Graph) -> Solution: ...
 
 
 class EvaluatorProtocol(Protocol):
