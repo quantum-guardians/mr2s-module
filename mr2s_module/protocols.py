@@ -21,3 +21,6 @@ class QuboSolverProtocol(Protocol):
 
 class EvaluatorProtocol(Protocol):
     def run(self, solution: Solution) -> Score: ...
+
+class PolyGeneratorProtocol(Protocol):
+    def run(self, graph: Graph) -> BinaryPolynomial: ...
