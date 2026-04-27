@@ -1,9 +1,13 @@
-from typing import Any, Protocol, TypeAlias
+from typing import Protocol, TypeAlias
 
-Graph: TypeAlias = Any
-Edge: TypeAlias = Any
-QuboMatrix: TypeAlias = Any
-Solution: TypeAlias = Any
+from dimod import BinaryQuadraticModel, BinaryPolynomial
+
+from mr2s_module.domain import Edge, Graph
+
+Graph: TypeAlias = Graph
+Edge: TypeAlias = Edge
+QuboMatrix: TypeAlias = BinaryQuadraticModel
+Solution: TypeAlias = set[tuple[int, int]]
 Score: TypeAlias = float
 
 
@@ -12,8 +16,11 @@ class FaceCycleProtocol(Protocol):
 
 
 class QuboSolverProtocol(Protocol):
-    def run(self, qubo: QuboMatrix) -> Solution: ...
+    def run(self, qubo: QuboMatrix, graph: Graph) -> Solution: ...
 
 
 class EvaluatorProtocol(Protocol):
     def run(self, solution: Solution) -> Score: ...
+
+class PolyGeneratorProtocol(Protocol):
+    def run(self, graph: Graph) -> BinaryPolynomial: ...
