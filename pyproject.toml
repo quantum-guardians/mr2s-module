@@ -6,9 +6,11 @@ build-backend = "hatchling.build"
 name = "mr2s-module"
 version = "0.0.1"
 description = "module for mr2s problem"
-authors = ["Lee YoHwan dldyghks123@naver.com",
-            "Kim SeYeop ksy1001k96@gmail.com",
-            "Jeong YunSeong me@yunseong.dev"]
+authors = [
+    { name = "Lee YoHwan", email = "dldyghks123@naver.com" },
+    { name = "Kim SeYeop", email = "ksy1001k96@gmail.com" },
+    { name = "Jeong YunSeong", email = "me@yunseong.dev" },
+]
 requires-python = ">=3.11"
 dependencies = [
     "annotated-doc==0.0.4",
