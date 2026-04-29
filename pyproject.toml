@@ -7,9 +7,9 @@ name = "mr2s-module"
 version = "0.0.1"
 description = "module for mr2s problem"
 authors = [
-    { name = "Lee YoHwan", email = "dldyghks123@naver.com" },
-    { name = "Kim SeYeop", email = "ksy1001k96@gmail.com" },
-    { name = "Jeong YunSeong", email = "me@yunseong.dev" },
+    { name = "Lee Yohwan", email = "dldyghks123@naver.com" },
+    { name = "Kim Seyeop", email = "ksy1001k96@gmail.com" },
+    { name = "Jeong Yunseong", email = "me@yunseong.dev" },
 ]
 requires-python = ">=3.11"
 dependencies = [
