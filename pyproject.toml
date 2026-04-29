@@ -1,0 +1,13 @@
+[project]
+name = "mr2s-module"
+version = "0.0.1"
+requires-python = ">=3.11"
+dependencies = [
+    "annotated-doc==0.0.4",
+    "annotated-types==0.7.0",
+    "colorama==0.4.6",
+    "h11==0.16.0",
+    "typing-inspection==0.4.2",
+    "typing_extensions==4.15.0",
+    "dwave-ocean-sdk",
+]
