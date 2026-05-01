@@ -14,7 +14,7 @@ from mr2s_module.util.qubo_util import map_binary_poly_to_bqm
 class QuboMR2SSolver:
   def __init__(
       self,
-      face_cycle: FaceCycleProtocol,
+      face_cycle: FaceCycleProtocol | None,
       qubo_solver: QuboSolverProtocol,
       evaluator: EvaluatorProtocol,
       poly_generators: set[PolyGeneratorProtocol],
@@ -34,9 +34,9 @@ class QuboMR2SSolver:
     return terms
 
   def run(self, graph: Graph) -> Score:
-    # preprocessing: define edges direction
-    predefined_edges = self.face_cycle.run(graph)
-    graph.define_edge_direction(predefined_edges)
+    if self.face_cycle is not None:
+      predefined_edges = self.face_cycle.run(graph)
+      graph.define_edge_direction(predefined_edges)
 
     # build qubo
     binary_polynomial = self._build_polynomial(graph)
@@ -47,4 +47,3 @@ class QuboMR2SSolver:
 
     # evaluate
     return self.evaluator.run(solution)
-
