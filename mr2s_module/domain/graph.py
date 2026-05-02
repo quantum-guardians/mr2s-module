@@ -5,6 +5,7 @@ from mr2s_module.domain.adj_entry import AdjEntry
 from mr2s_module.domain.edge import Edge
 
 
+
 @dataclass
 class Graph:
   edges: list[Edge]

@@ -20,8 +20,22 @@ dependencies = [
     "typing-inspection==0.4.2",
     "typing_extensions==4.15.0",
     "dwave-ocean-sdk",
+    "networkx",
+    "numpy",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "scipy",
+    "matplotlib",
 ]
 
 [tool.hatch.version]
 source = "vcs"
 tag-pattern = "^v(?P<version>.+)$"
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: long-running tests (full QUBO pipeline with SA), deselect with -m 'not slow'",
+]

@@ -32,13 +32,24 @@ class SAQuboSolver(QuboSolver):
 
       # handle optimized edges
       var_name = edge.to_key()
+      bit = SAQuboSolver._safe_lookup(best_sample, var_name)
 
-      if best_sample.get(var_name, 0) == 1:
+      if bit == 1:
         final_edges.add((edge.vertices[1], edge.vertices[0]))
       else:
         final_edges.add((edge.vertices[0], edge.vertices[1]))
 
     return final_edges
+
+  @staticmethod
+  def _safe_lookup(sample, var_name: str) -> int:
+    # dimod SampleView.get() raises ValueError on unknown vars (Mapping.get
+    # only catches KeyError), so 다항식 합성 중 계수가 0 으로 사라져 BQM 에
+    # 등록되지 않은 변수는 default 0 으로 처리한다.
+    try:
+      return int(sample[var_name])
+    except (KeyError, ValueError):
+      return 0
 
   def _select_best_sample(
       self,
