@@ -1,4 +1,5 @@
-from mr2s_module.protocols import Edge, Graph
+from mr2s_module.domain.edge import Edge
+from mr2s_module.domain.graph import Graph
 
 
 class FaceCycle:

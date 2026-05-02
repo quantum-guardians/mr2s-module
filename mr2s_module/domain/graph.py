@@ -1,8 +1,8 @@
 from collections import defaultdict
 from dataclasses import dataclass
 
-from mr2s_module.domain import AdjEntry
-from mr2s_module.protocols import Edge
+from mr2s_module.domain.adj_entry import AdjEntry
+from mr2s_module.domain.edge import Edge
 
 
 @dataclass
