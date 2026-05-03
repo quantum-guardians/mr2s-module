@@ -54,22 +54,12 @@ class FaceCycle:
 
     def _process_component(self, component: nx.Graph) -> set[tuple[int, int]]:
         """컴포넌트 단위 boundary 사이클을 방향이 부여된 (u, v) 쌍 집합으로 반환."""
-        # 1. 1차 오일러화 — T-join 으로 홀수 정점 짝맞추기
-        tj1 = self._find_t_join(component)
-        g_euler = nx.Graph()
-        for u, v in component.edges():
-            if tuple(sorted((u, v))) not in tj1:
-                g_euler.add_edge(u, v)
-        g_euler.remove_nodes_from(list(nx.isolates(g_euler)))
-
-        if g_euler.number_of_edges() < 3:
-            return set()
-        if not nx.check_planarity(g_euler)[0]:
+        if component.number_of_edges() < 3:
             return set()
 
-        # 2. 면 추출 — 외곽 면은 가장 큰 면적으로 식별
-        pos = nx.planar_layout(g_euler)
-        all_raw_faces = self._enumerate_faces(g_euler)
+        # 1. 면 추출 — 외곽 면은 가장 큰 면적으로 식별
+        pos = nx.planar_layout(component)
+        all_raw_faces = self._enumerate_faces(component)
         if len(all_raw_faces) < 2:
             return set()
 
@@ -91,12 +81,12 @@ class FaceCycle:
             face_centroids, dual_base, target_k
         )
 
-        # 3. 외벽 보호 2차 T-join 수리
+        # 2. 외벽 보호 2차 T-join 수리
         boundary_edges, outer_edges = self._collect_boundary_edges(
             face_edges_map, face_to_cluster
         )
         repair_edges = self._wall_protected_repair(
-            g_euler, boundary_edges, outer_edges
+            component, boundary_edges, outer_edges
         )
         final_boundary = boundary_edges.symmetric_difference(repair_edges)
 
@@ -179,29 +169,6 @@ class FaceCycle:
             else:
                 g.add_edge(u, v, weight=edge.weight)
         return g
-
-    @staticmethod
-    def _find_t_join(graph: nx.Graph) -> set[tuple[int, int]]:
-        odd = [v for v, d in graph.degree() if d % 2 != 0]
-        if not odd:
-            return set()
-
-        dist = dict(nx.all_pairs_shortest_path_length(graph))
-        complete = nx.Graph()
-        for u, v in itertools.combinations(odd, 2):
-            if v in dist[u]:
-                complete.add_edge(u, v, weight=dist[u][v])
-
-        tj: set[tuple[int, int]] = set()
-        for u, v in nx.min_weight_matching(complete):
-            path = nx.shortest_path(graph, u, v)
-            for a, b in zip(path[:-1], path[1:]):
-                e = tuple(sorted((a, b)))
-                if e in tj:
-                    tj.remove(e)
-                else:
-                    tj.add(e)
-        return tj
 
     @staticmethod
     def _enumerate_faces(graph: nx.Graph) -> list[list[int]]:

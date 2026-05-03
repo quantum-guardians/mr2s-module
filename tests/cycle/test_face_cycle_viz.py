@@ -64,14 +64,7 @@ def _run_diagnostic(
     assert is_planar, "test fixture must be planar"
     assert nx.is_biconnected(nx_graph), "test fixture must be biconnected"
 
-    tj1 = FaceCycle._find_t_join(nx_graph)
-    g_euler = nx.Graph()
-    for u, v in nx_graph.edges():
-        if tuple(sorted((u, v))) not in tj1:
-            g_euler.add_edge(u, v)
-    g_euler.remove_nodes_from(list(nx.isolates(g_euler)))
-
-    raw_faces = FaceCycle._enumerate_faces(g_euler)
+    raw_faces = FaceCycle._enumerate_faces(nx_graph)
     outer_idx = int(np.argmax([FaceCycle._face_area(f, pos) for f in raw_faces]))
     inner_faces = [f for i, f in enumerate(raw_faces) if i != outer_idx]
 
@@ -85,7 +78,7 @@ def _run_diagnostic(
     boundary, outer = FaceCycle._collect_boundary_edges(
         face_edges_map, face_to_cluster
     )
-    repair = FaceCycle._wall_protected_repair(g_euler, boundary, outer)
+    repair = FaceCycle._wall_protected_repair(nx_graph, boundary, outer)
     final_boundary = boundary.symmetric_difference(repair)
 
     face_graph = nx.Graph()
@@ -107,7 +100,6 @@ def _run_diagnostic(
 
     return {
         "nx_graph": nx_graph,
-        "g_euler": g_euler,
         "inner_faces": inner_faces,
         "components": components,
         "final_boundary": final_boundary,
@@ -143,7 +135,7 @@ def _draw_faces(ax, diag: dict, pos: dict[int, np.ndarray]) -> None:
             )
             ax.add_patch(poly)
     nx.draw_networkx_edges(
-        diag["g_euler"],
+        diag["nx_graph"],
         pos,
         ax=ax,
         edgelist=list(diag["final_boundary"]),
