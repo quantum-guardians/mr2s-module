@@ -1,7 +1,7 @@
 
 class Edge:
   id: tuple[int, int]
-  vertices: tuple[int, int]
+  vertices: tuple[int, int] # 방향 결정 시 vertices.first -> vertices.second로 진행. directed가 true 일 때만 사용.
   weight: int
   directed: bool
 
