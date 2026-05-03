@@ -1,6 +1,7 @@
+from dimod import SampleSet
 from dimod import BinaryPolynomial, Vartype
 
-from mr2s_module.domain import Edge, Graph
+from mr2s_module.domain import Edge, Graph, Solution
 from mr2s_module.solver import QuboMR2SSolver
 
 
@@ -29,7 +30,12 @@ class StubQuboSolver:
 
     def run(self, qubo, graph: Graph):
         self.received_graph = graph
-        return {(edge.vertices[0], edge.vertices[1]) for edge in graph.edges}
+        return Solution(
+            edges={(edge.vertices[0], edge.vertices[1]) for edge in graph.edges},
+            graph=graph,
+            sample_set=SampleSet.from_samples([], vartype="BINARY", energy=[]),
+            score=None,
+        )
 
 
 class StubEvaluator:
@@ -38,7 +44,7 @@ class StubEvaluator:
 
     def run(self, solution):
         self.received_solution = solution
-        return float(len(solution))
+        return float(len(solution.edges))
 
 
 def test_run_skips_preprocessing_when_face_cycle_is_none() -> None:
@@ -53,12 +59,14 @@ def test_run_skips_preprocessing_when_face_cycle_is_none() -> None:
         poly_generators={poly_generator},
     )
 
-    score = solver.run(graph)
+    result = solver.run(graph)
 
-    assert score == 1.0
+    assert result.score == 1.0
+    assert result.edges == {(1, 2)}
     assert poly_generator.seen_graphs == [graph]
     assert qubo_solver.received_graph is graph
     assert graph.edges[0].directed is False
+    assert evaluator.received_solution.score == 1.0
 
 
 def test_run_applies_preprocessing_when_face_cycle_is_provided() -> None:
@@ -75,9 +83,11 @@ def test_run_applies_preprocessing_when_face_cycle_is_provided() -> None:
         poly_generators={poly_generator},
     )
 
-    score = solver.run(graph)
+    result = solver.run(graph)
 
-    assert score == 1.0
+    assert result.score == 1.0
+    assert result.edges == {(1, 2)}
     assert face_cycle.calls == 1
     assert graph.edges == [predefined_edge]
     assert qubo_solver.received_graph is graph
+    assert evaluator.received_solution.score == 1.0
