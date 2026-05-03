@@ -1,7 +1,7 @@
 from dimod import SimulatedAnnealingSampler, SampleSet
 
-from mr2s_module.domain import Graph
-from mr2s_module.protocols import QuboMatrix, Solution, EvaluatorProtocol, Edge
+from mr2s_module.domain import Graph, Solution
+from mr2s_module.protocols import QuboMatrix, SolutionRankerProtocol, Edge
 from mr2s_module.qubo import QuboSolver
 
 
@@ -9,8 +9,8 @@ class SAQuboSolver(QuboSolver):
 
   sampler = SimulatedAnnealingSampler()
 
-  def __init__(self, evaluator: EvaluatorProtocol):
-    self.evaluator = evaluator
+  def __init__(self, ranker: SolutionRankerProtocol):
+    self.ranker = ranker
 
   @staticmethod
   def _process_solution(
@@ -58,8 +58,17 @@ class SAQuboSolver(QuboSolver):
   ) -> set[tuple[int, int]]:
 
     def get_effective_score(tuples: set[tuple[int, int]]):
-      score = self.evaluator.run(set(tuples))
-      return float('inf') if score == -1 else score
+      solution = Solution(
+        edges=tuples,
+        graph=Graph(edges=canonical_edges),
+        sample_set=sample_set,
+        score=None,
+      )
+
+      try:
+        return self.ranker.run(solution)
+      except AssertionError:
+        return float("inf")
 
     return min(
       map(lambda sample: self._process_solution(sample, canonical_edges), sample_set.samples()),
@@ -68,4 +77,9 @@ class SAQuboSolver(QuboSolver):
 
   def run(self, qubo: QuboMatrix, graph: Graph) -> Solution:
     sample_set = self.sampler.sample(qubo)
-    return self._select_best_sample(sample_set, graph.edges)
+    return Solution(
+      edges=self._select_best_sample(sample_set, graph.edges),
+      sample_set=sample_set,
+      graph=graph,
+      score=None,
+    )

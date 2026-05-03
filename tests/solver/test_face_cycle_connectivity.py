@@ -1,6 +1,6 @@
 """
 연결성 회복 테스트 — sparse 평면 biconnected 그래프 위에서 single QUBO 는
-strongly connected 솔루션을 못 찾아 `ApspSumEvaluator` 가 AssertionError 를
+strongly connected 솔루션을 못 찾아 evaluator 가 AssertionError 를
 던지는 반면, FaceCycle 로 boundary 사이클 방향을 미리 박은 본은 같은 SA 로도
 살아남음을 확인.
 
@@ -28,8 +28,9 @@ import pytest
 from scipy.spatial import Delaunay
 
 from mr2s_module import (
-    ApspSumEvaluator,
+    ApspSumRanker,
     Edge,
+    Evaluator,
     FaceCycle,
     FlowPolyGenerator,
     Graph,
@@ -83,8 +84,8 @@ class _MultiReadSAQuboSolver(SAQuboSolver):
     샘플에 대해 AssertionError 를 던지면 전체가 깨진다. 즉, num_reads 가 클수록
     나쁜 샘플이 한 개라도 끼어들 확률이 올라가 single QUBO 의 약점이 드러난다."""
 
-    def __init__(self, evaluator, num_reads: int):
-        super().__init__(evaluator)
+    def __init__(self, ranker, num_reads: int):
+        super().__init__(ranker)
         self.num_reads = num_reads
 
     def run(self, qubo, graph):
@@ -95,10 +96,11 @@ class _MultiReadSAQuboSolver(SAQuboSolver):
 def _build_solver(use_face_cycle: bool, num_reads: int = 10) -> QuboMR2SSolver:
     n_hop_gen = NHopPolyGenerator()
     n_hop_gen.small_world_spec = SmallWorldSpec(n_hops=[NHop(n=2, weight=1)])
-    evaluator = ApspSumEvaluator()
+    evaluator = Evaluator()
+    ranker = ApspSumRanker()
     return QuboMR2SSolver(
         face_cycle=FaceCycle(target_k=8) if use_face_cycle else None,
-        qubo_solver=_MultiReadSAQuboSolver(evaluator=evaluator, num_reads=num_reads),
+        qubo_solver=_MultiReadSAQuboSolver(ranker=ranker, num_reads=num_reads),
         evaluator=evaluator,
         poly_generators={FlowPolyGenerator(), n_hop_gen},
     )

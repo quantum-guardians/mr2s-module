@@ -1,6 +1,6 @@
 from mr2s_module.cycle import FaceCycle
 from mr2s_module.domain import AdjEntry, Edge, Graph
-from mr2s_module.evaluator import ApspSumEvaluator, Evaluator
+from mr2s_module.evaluator import ApspSumRanker, Evaluator
 from mr2s_module.protocols import (
     Edge as EdgeType,
     EvaluatorProtocol,
@@ -11,6 +11,7 @@ from mr2s_module.protocols import (
     QuboSolverProtocol,
     Score,
     Solution,
+    SolutionRankerProtocol,
 )
 from mr2s_module.qubo import (
     FlowPolyGenerator,
@@ -24,7 +25,7 @@ from mr2s_module.solver import MR2SSolver, QuboMR2SSolver
 
 __all__ = [
     "AdjEntry",
-    "ApspSumEvaluator",
+    "ApspSumRanker",
     "Edge",
     "EdgeType",
     "Evaluator",
@@ -46,4 +47,5 @@ __all__ = [
     "Score",
     "SmallWorldSpec",
     "Solution",
+    "SolutionRankerProtocol",
 ]
