@@ -152,6 +152,8 @@ def main() -> None:
   parser.add_argument("--remove-ratio", type=float, default=0.0)
   # Number of simulated annealing reads (samples) to draw.
   parser.add_argument("--num-reads", type=int, default=100)
+  # FaceCycle target k used when preprocessing is enabled.
+  parser.add_argument("--target-k", type=int, default=8)
   # Apply FaceCycle preprocessing before building the QUBO.
   parser.add_argument("--use-face-cycle", action="store_true")
   args = parser.parse_args()
@@ -172,7 +174,7 @@ def main() -> None:
     )
 
   if args.use_face_cycle:
-    predefined_edges = FaceCycle(target_k=8).run(graph)
+    predefined_edges = FaceCycle(target_k=args.target_k).run(graph)
     graph.define_edge_direction(predefined_edges)
 
   polynomial = build_polynomial(graph)
