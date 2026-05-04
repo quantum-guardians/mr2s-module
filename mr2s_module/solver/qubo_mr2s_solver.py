@@ -5,7 +5,7 @@ from mr2s_module.protocols import (
   FaceCycleProtocol,
   EvaluatorProtocol,
   Graph,
-  Score, PolyGeneratorProtocol
+  Score, PolyGeneratorProtocol, Solution
 )
 from mr2s_module.util import add_polys
 from mr2s_module.util.qubo_util import map_binary_poly_to_bqm
@@ -33,7 +33,7 @@ class QuboMR2SSolver:
       terms = add_polys(terms, temp)
     return terms
 
-  def run(self, graph: Graph) -> Score:
+  def run(self, graph: Graph) -> Solution:
     if self.face_cycle is not None:
       predefined_edges = self.face_cycle.run(graph)
       graph.define_edge_direction(predefined_edges)
@@ -46,4 +46,8 @@ class QuboMR2SSolver:
     solution = self.qubo_solver.run(bqm, graph)
 
     # evaluate
-    return self.evaluator.run(solution)
+    score = self.evaluator.run(solution)
+
+    solution.score = score
+
+    return solution
