@@ -1,7 +1,7 @@
 from dimod import SampleSet
 from dimod import BinaryPolynomial, Vartype
 
-from mr2s_module.domain import Edge, Graph, Solution
+from mr2s_module.domain import Edge, Graph, GraphPartitionResult, Solution
 from mr2s_module.solver import QuboMR2SSolver
 
 
@@ -10,9 +10,12 @@ class StubFaceCycle:
         self.predefined_edges = predefined_edges
         self.calls = 0
 
-    def run(self, graph: Graph) -> set[Edge]:
+    def run(self, graph: Graph) -> GraphPartitionResult:
         self.calls += 1
-        return self.predefined_edges
+        return GraphPartitionResult(
+            sub_graphs=[],
+            remaining_edges=list(self.predefined_edges),
+        )
 
 
 class StubPolyGenerator:
