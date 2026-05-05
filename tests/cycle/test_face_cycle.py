@@ -199,6 +199,42 @@ def test_directed_boundary_edges_belong_to_input_graph() -> None:
         assert nx_graph.has_edge(u, v)
 
 
+def test_outline_of_returns_directed_boundary_touching_macro() -> None:
+    # Triangle: 1 macro with 0 internal edges; outline_of falls back to
+    # singleton-macro caveat (vertex set empty → empty outline).
+    triangle = _make_graph_from_edges([(0, 1), (1, 2), (0, 2)])
+    triangle_partition = FaceCycle().run(triangle)
+    assert len(triangle_partition.sub_graphs) == 1
+    assert triangle_partition.outline_of(0) == []  # singleton macro caveat
+
+    # Real partition with multiple faces per macro: every directed remaining
+    # edge must be claimed by at least one macro's outline_of.
+    np.random.seed(31)
+    graph = _delaunay_graph(n=50, seed=31)
+    partition = FaceCycle(target_k=4).run(graph)
+
+    directed_remaining = {e.id for e in _directed_remaining(partition)}
+    claimed: set[tuple[int, int]] = set()
+    for macro_id in range(len(partition.sub_graphs)):
+        outline = partition.outline_of(macro_id)
+        for edge in outline:
+            assert edge.directed
+            macro_vertices = partition.sub_graphs[macro_id].get_vertices()
+            assert edge.id[0] in macro_vertices or edge.id[1] in macro_vertices
+            claimed.add(edge.id)
+    # Non-singleton macros must cover every directed remaining edge.
+    non_singleton_directed = {
+        e.id for e in _directed_remaining(partition)
+        if any(
+            e.id[0] in partition.sub_graphs[m].get_vertices()
+            or e.id[1] in partition.sub_graphs[m].get_vertices()
+            for m in range(len(partition.sub_graphs))
+        )
+    }
+    assert claimed == non_singleton_directed
+    assert claimed.issubset(directed_remaining)
+
+
 def test_macro_internal_edges_disjoint_from_remaining() -> None:
     # Sub-graphs hold only edges whose two adjacent faces share a macro;
     # those edges must not also appear in remaining_edges.
