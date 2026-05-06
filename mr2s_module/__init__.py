@@ -21,7 +21,9 @@ from mr2s_module.qubo import (
     SAQuboSolver,
     SmallWorldSpec,
 )
+from mr2s_module.service import PolynomialOptimizationService
 from mr2s_module.solver import MR2SSolver, QuboMR2SSolver
+from mr2s_module.util import build_bqm, estimate_required_qubits
 
 __all__ = [
     "AdjEntry",
@@ -38,6 +40,7 @@ __all__ = [
     "MR2SSolver",
     "NHop",
     "NHopPolyGenerator",
+    "PolynomialOptimizationService",
     "PolyGeneratorProtocol",
     "QuboMR2SSolver",
     "QuboMatrix",
@@ -48,4 +51,6 @@ __all__ = [
     "SmallWorldSpec",
     "Solution",
     "SolutionRankerProtocol",
+    "build_bqm",
+    "estimate_required_qubits",
 ]
