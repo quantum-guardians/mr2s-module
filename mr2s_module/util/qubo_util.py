@@ -17,11 +17,6 @@ def map_binary_poly_to_bqm(polynomial: BinaryPolynomial):
   max_coeff = max(coeffs) if coeffs else 1.0
   return make_quadratic(polynomial, strength=max_coeff * 2.0, vartype=BINARY)
 
-
-def build_bqm(polynomial: BinaryPolynomial):
-  """다항식 → BQM 변환만 담당하는 분리된 함수."""
-  return map_binary_poly_to_bqm(polynomial)
-
 def multiply_polys(
     poly1: BinaryPolynomial,
     poly2: BinaryPolynomial
