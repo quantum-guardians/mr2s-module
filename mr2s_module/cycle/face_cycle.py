@@ -17,6 +17,7 @@ _INNER_WEIGHT = 1
 class _ComponentPartition:
     """단일 biconnected component 의 거대 군집 분할 결과."""
     macro_internal_edges: list[set[tuple[int, int]]] = field(default_factory=list)
+    macro_vertex_sets: list[set[int]] = field(default_factory=list)
     directed_pairs: set[tuple[int, int]] = field(default_factory=set)
 
 
@@ -28,17 +29,23 @@ class FaceCycle:
         nx_graph = self._to_networkx(graph)
         is_planar, _ = nx.check_planarity(nx_graph)
         if not is_planar:
-            return GraphPartitionResult(sub_graphs=[], remaining_edges=list(graph.edges))
+            return GraphPartitionResult(
+                sub_graphs=[],
+                remaining_edges=list(graph.edges),
+                macro_vertex_sets=[],
+            )
 
         # Step 1. 각 컴포넌트의 분할 결과를 글로벌 macro_id 로 통합
         edge_to_macro: dict[tuple[int, int], int] = {}
         directed_orientations: dict[tuple[int, int], tuple[int, int]] = {}
+        macro_vertex_sets: list[set[int]] = []
         macro_count = 0
         for component in self._extract_biconnected_components(nx_graph):
             partition = self._partition_component(component)
             for local_id, internal_edges in enumerate(partition.macro_internal_edges):
                 for ekey in internal_edges:
                     edge_to_macro[ekey] = macro_count + local_id
+            macro_vertex_sets.extend(partition.macro_vertex_sets)
             macro_count += len(partition.macro_internal_edges)
             for u, v in partition.directed_pairs:
                 directed_orientations[tuple(sorted((u, v)))] = (u, v)
@@ -66,7 +73,11 @@ class FaceCycle:
 
         # Step 4. 결과 반환
         sub_graphs = [Graph(edges=edges) for edges in sub_graph_edges]
-        return GraphPartitionResult(sub_graphs=sub_graphs, remaining_edges=remaining_edges)
+        return GraphPartitionResult(
+            sub_graphs=sub_graphs,
+            remaining_edges=remaining_edges,
+            macro_vertex_sets=macro_vertex_sets,
+        )
 
     def _extract_biconnected_components(self, graph: nx.Graph) -> list[nx.Graph]:
         if nx.is_biconnected(graph):
@@ -173,8 +184,15 @@ class FaceCycle:
             if m0 is not None and m0 == m1:
                 macro_internal_edges[m0].add(ekey)
 
+        # 9. macro 별 정점 집합 — 그 macro 에 속한 모든 면의 정점 합집합
+        macro_vertex_sets: list[set[int]] = [set() for _ in range(len(true_components))]
+        for macro_id, comp in enumerate(true_components):
+            for f_idx in comp:
+                macro_vertex_sets[macro_id].update(inner_raw_faces[f_idx])
+
         return _ComponentPartition(
             macro_internal_edges=macro_internal_edges,
+            macro_vertex_sets=macro_vertex_sets,
             directed_pairs=directed_pairs,
         )
 

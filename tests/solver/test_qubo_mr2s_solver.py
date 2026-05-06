@@ -15,6 +15,7 @@ class StubFaceCycle:
         return GraphPartitionResult(
             sub_graphs=[],
             remaining_edges=list(self.predefined_edges),
+            macro_vertex_sets=[],
         )
 
 

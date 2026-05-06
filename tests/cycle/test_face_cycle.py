@@ -200,15 +200,17 @@ def test_directed_boundary_edges_belong_to_input_graph() -> None:
 
 
 def test_outline_of_returns_directed_boundary_touching_macro() -> None:
-    # Triangle: 1 macro with 0 internal edges; outline_of falls back to
-    # singleton-macro caveat (vertex set empty → empty outline).
+    # Triangle: 1 macro with a single inner face; macro_vertex_sets 가 {0,1,2}
+    # 를 들고 있으므로 외각 3변 전부 그 macro 의 outline 으로 반환.
     triangle = _make_graph_from_edges([(0, 1), (1, 2), (0, 2)])
     triangle_partition = FaceCycle().run(triangle)
     assert len(triangle_partition.sub_graphs) == 1
-    assert triangle_partition.outline_of(0) == []  # singleton macro caveat
+    triangle_outline = triangle_partition.outline_of(0)
+    assert {e.id for e in triangle_outline} == {(0, 1), (0, 2), (1, 2)}
+    assert all(e.directed for e in triangle_outline)
 
-    # Real partition with multiple faces per macro: every directed remaining
-    # edge must be claimed by at least one macro's outline_of.
+    # Multi-face partition: 모든 directed remaining edge 는 양쪽 endpoint 가
+    # 적어도 한 macro 의 vertex set 안에 들어 있어야 한다.
     np.random.seed(31)
     graph = _delaunay_graph(n=50, seed=31)
     partition = FaceCycle(target_k=4).run(graph)
@@ -217,22 +219,57 @@ def test_outline_of_returns_directed_boundary_touching_macro() -> None:
     claimed: set[tuple[int, int]] = set()
     for macro_id in range(len(partition.sub_graphs)):
         outline = partition.outline_of(macro_id)
+        macro_vertices = partition.macro_vertex_sets[macro_id]
         for edge in outline:
             assert edge.directed
-            macro_vertices = partition.sub_graphs[macro_id].get_vertices()
-            assert edge.id[0] in macro_vertices or edge.id[1] in macro_vertices
+            assert edge.id[0] in macro_vertices and edge.id[1] in macro_vertices
             claimed.add(edge.id)
-    # Non-singleton macros must cover every directed remaining edge.
-    non_singleton_directed = {
-        e.id for e in _directed_remaining(partition)
-        if any(
-            e.id[0] in partition.sub_graphs[m].get_vertices()
-            or e.id[1] in partition.sub_graphs[m].get_vertices()
-            for m in range(len(partition.sub_graphs))
-        )
-    }
-    assert claimed == non_singleton_directed
-    assert claimed.issubset(directed_remaining)
+    assert claimed == directed_remaining
+
+
+def test_get_inner_subgraph_returns_internal_edges_only() -> None:
+    np.random.seed(31)
+    graph = _delaunay_graph(n=50, seed=31)
+    partition = FaceCycle(target_k=4).run(graph)
+
+    for i, sg in enumerate(partition.sub_graphs):
+        inner = partition.get_inner_subgraph(i)
+        assert inner is sg
+        assert all(not e.directed for e in inner.edges)
+
+
+def test_get_subgraph_combines_inner_and_outline() -> None:
+    np.random.seed(31)
+    graph = _delaunay_graph(n=50, seed=31)
+    partition = FaceCycle(target_k=4).run(graph)
+
+    for i in range(len(partition.sub_graphs)):
+        inner = partition.get_inner_subgraph(i)
+        outline = partition.outline_of(i)
+        combined = partition.get_subgraph(i)
+
+        assert len(combined.edges) == len(inner.edges) + len(outline)
+        directed = [e for e in combined.edges if e.directed]
+        undirected = [e for e in combined.edges if not e.directed]
+        assert len(directed) == len(outline)
+        assert len(undirected) == len(inner.edges)
+        assert {e.id for e in directed} == {e.id for e in outline}
+        assert {e.id for e in undirected} == {e.id for e in inner.edges}
+
+
+def test_subgraphs_property_is_lazy_and_cached() -> None:
+    np.random.seed(31)
+    graph = _delaunay_graph(n=50, seed=31)
+    partition = FaceCycle(target_k=4).run(graph)
+
+    full = partition.subgraphs
+    assert len(full) == len(partition.sub_graphs)
+    # 캐시 확인 — 두 번째 접근에서 동일 list 객체
+    assert partition.subgraphs is full
+    # 각 요소는 get_subgraph(i) 의 결과와 동등
+    for i, full_graph in enumerate(full):
+        expected = partition.get_subgraph(i)
+        assert {e.id for e in full_graph.edges} == {e.id for e in expected.edges}
 
 
 def test_macro_internal_edges_disjoint_from_remaining() -> None:
