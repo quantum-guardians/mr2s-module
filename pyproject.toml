@@ -22,6 +22,8 @@ dependencies = [
     "dwave-ocean-sdk",
     "networkx",
     "numpy",
+    "minorminer",
+    "dwave-networkx",
 ]
 
 [project.optional-dependencies]

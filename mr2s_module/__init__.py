@@ -22,6 +22,7 @@ from mr2s_module.qubo import (
     SmallWorldSpec,
 )
 from mr2s_module.solver import MR2SSolver, QuboMR2SSolver
+from mr2s_module.util import estimate_required_qubits, map_binary_poly_to_bqm
 
 __all__ = [
     "AdjEntry",
@@ -48,4 +49,6 @@ __all__ = [
     "SmallWorldSpec",
     "Solution",
     "SolutionRankerProtocol",
+    "estimate_required_qubits",
+    "map_binary_poly_to_bqm",
 ]
