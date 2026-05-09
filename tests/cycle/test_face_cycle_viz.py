@@ -206,7 +206,7 @@ def test_face_cycle_visualization_renders_three_panels(seed: int) -> None:
     # 1. FaceCycle.run() 자체가 정상적으로 boundary 를 반환하는지.
     np.random.seed(seed)
     partition = FaceCycle(target_k=target_k).run(graph)
-    boundary_run = {e.id for e in partition.remaining_edges if e.directed}
+    boundary_run = {e.id for e in partition.directed_edges()}
     input_ids = {e.id for e in graph.edges}
     assert boundary_run, "run() should produce non-empty directed boundary edges"
     assert boundary_run.issubset(input_ids)

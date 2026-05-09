@@ -36,10 +36,7 @@ class QuboMR2SSolver:
   def run(self, graph: Graph) -> Solution:
     if self.face_cycle is not None:
       partition = self.face_cycle.run(graph)
-      # TODO: partition.sub_graphs 를 활용하는 방향은 아직 미합의.
-      # 우선은 기존 동작을 유지하기 위해 directed remaining_edges 만 predefined 로 사용한다.
-      predefined_edges = {edge for edge in partition.remaining_edges if edge.directed}
-      graph.define_edge_direction(predefined_edges)
+      graph.define_edge_direction(set(partition.directed_edges()))
 
     # build qubo
     binary_polynomial = self._build_polynomial(graph)

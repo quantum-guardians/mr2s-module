@@ -17,7 +17,7 @@ _INNER_WEIGHT = 1
 class _ComponentPartition:
     """단일 biconnected component 의 거대 군집 분할 결과."""
     macro_internal_edges: list[set[tuple[int, int]]] = field(default_factory=list)
-    macro_vertex_sets: list[set[int]] = field(default_factory=list)
+    macro_outline_keys: list[set[tuple[int, int]]] = field(default_factory=list)
     directed_pairs: set[tuple[int, int]] = field(default_factory=set)
 
 
@@ -32,20 +32,25 @@ class FaceCycle:
             return GraphPartitionResult(
                 sub_graphs=[],
                 remaining_edges=list(graph.edges),
-                macro_vertex_sets=[],
             )
 
         # Step 1. 각 컴포넌트의 분할 결과를 글로벌 macro_id 로 통합
-        edge_to_macro: dict[tuple[int, int], int] = {}
+        edge_to_inner_macro: dict[tuple[int, int], int] = {}
+        # 공유 boundary 는 인접한 두 macro 양쪽에 들어가므로 owning macro 를 list 로.
+        edge_to_outline_macros: dict[tuple[int, int], list[int]] = {}
         directed_orientations: dict[tuple[int, int], tuple[int, int]] = {}
-        macro_vertex_sets: list[set[int]] = []
         macro_count = 0
+
         for component in self._extract_biconnected_components(nx_graph):
             partition = self._partition_component(component)
             for local_id, internal_edges in enumerate(partition.macro_internal_edges):
                 for ekey in internal_edges:
-                    edge_to_macro[ekey] = macro_count + local_id
-            macro_vertex_sets.extend(partition.macro_vertex_sets)
+                    edge_to_inner_macro[ekey] = macro_count + local_id
+            for local_id, outline_keys in enumerate(partition.macro_outline_keys):
+                for ekey in outline_keys:
+                    edge_to_outline_macros.setdefault(ekey, []).append(
+                        macro_count + local_id
+                    )
             macro_count += len(partition.macro_internal_edges)
             for u, v in partition.directed_pairs:
                 directed_orientations[tuple(sorted((u, v)))] = (u, v)
@@ -55,28 +60,34 @@ class FaceCycle:
         remaining_edges: list[Edge] = []
 
         # Step 3. 원본 간선을 단일 순회로 분류 (O(E))
+        # 공유 boundary 는 인접 macro 양쪽 sub_graphs 에 같은 Edge 인스턴스로 push 한다.
         for edge in graph.edges:
             u, v = edge.id
-            if u == v: # loop 간선. 없을 예정
+            if u == v:
                 remaining_edges.append(edge)
                 continue
-            macro_id = edge_to_macro.get(edge.id)
+            macro_id = edge_to_inner_macro.get(edge.id)
             if macro_id is not None:
                 sub_graph_edges[macro_id].append(Edge(u, v, edge.weight, False))
                 continue
             orientation = directed_orientations.get(edge.id)
             if orientation is not None:
                 a, b = orientation
-                remaining_edges.append(Edge(a, b, edge.weight, True))
+                emitted = Edge(a, b, edge.weight, True)
             else:
-                remaining_edges.append(edge)
+                emitted = edge
+            owning_macros = edge_to_outline_macros.get(edge.id, ())
+            if owning_macros:
+                for owning in owning_macros:
+                    sub_graph_edges[owning].append(emitted)
+            else:
+                remaining_edges.append(emitted)
 
         # Step 4. 결과 반환
         sub_graphs = [Graph(edges=edges) for edges in sub_graph_edges]
         return GraphPartitionResult(
             sub_graphs=sub_graphs,
             remaining_edges=remaining_edges,
-            macro_vertex_sets=macro_vertex_sets,
         )
 
     def _extract_biconnected_components(self, graph: nx.Graph) -> list[nx.Graph]:
@@ -167,32 +178,35 @@ class FaceCycle:
             final_boundary, face_edges_map, inner_raw_faces, face_to_color
         )
 
-        # 8. 거대 군집의 내부 간선 — 두 면이 같은 macro 에 속하고 boundary 가 아닌 간선
+        # 8. face_edges_map 단일 패스로 inner / outline 동시 분류.
+        # 서로 다른 macro 에 걸친 boundary 는 양쪽 outline 에 들어가는 의도된 중복.
         face_to_macro: dict[int, int] = {
             f_idx: macro_id
             for macro_id, comp in enumerate(true_components)
             for f_idx in comp
         }
-        macro_internal_edges: list[set[tuple[int, int]]] = [
-            set() for _ in range(len(true_components))
-        ]
+        n_macros = len(true_components)
+        macro_internal_edges: list[set[tuple[int, int]]] = [set() for _ in range(n_macros)]
+        macro_outline_keys: list[set[tuple[int, int]]] = [set() for _ in range(n_macros)]
         for ekey, f_indices in face_edges_map.items():
-            if len(f_indices) != 2 or ekey in final_boundary:
+            if ekey in final_boundary:
+                seen: set[int] = set()
+                for f in f_indices:
+                    m = face_to_macro.get(f)
+                    if m is not None and m not in seen:
+                        macro_outline_keys[m].add(ekey)
+                        seen.add(m)
+                continue
+            if len(f_indices) != 2:
                 continue
             m0 = face_to_macro.get(f_indices[0])
             m1 = face_to_macro.get(f_indices[1])
             if m0 is not None and m0 == m1:
                 macro_internal_edges[m0].add(ekey)
 
-        # 9. macro 별 정점 집합 — 그 macro 에 속한 모든 면의 정점 합집합
-        macro_vertex_sets: list[set[int]] = [set() for _ in range(len(true_components))]
-        for macro_id, comp in enumerate(true_components):
-            for f_idx in comp:
-                macro_vertex_sets[macro_id].update(inner_raw_faces[f_idx])
-
         return _ComponentPartition(
             macro_internal_edges=macro_internal_edges,
-            macro_vertex_sets=macro_vertex_sets,
+            macro_outline_keys=macro_outline_keys,
             directed_pairs=directed_pairs,
         )
 

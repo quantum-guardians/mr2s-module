@@ -3,9 +3,9 @@
 면 단위로 색상화하여 PNG 로 저장한다.
 
 각 거대 면(macro) 마다 고유한 색을 부여하고:
-  - 면 외각선(directed `remaining_edges`)        → 그 면의 강한 색 (굵게)
-  - 면 내부의 간선(`sub_graphs[i].edges`)        → 그 면의 약한 색 (얇게)
-  - 어떤 면에도 닿지 않는 간선(undirected remain) → 회색 (얇은 배경)
+  - 면 외각선(`sub_graphs[i].edges` 중 directed) → 그 면의 강한 색 (굵게)
+  - 면 내부의 간선(`sub_graphs[i].edges` 중 undirected) → 그 면의 약한 색 (얇게)
+  - 어떤 macro 에도 속하지 않는 간선(`remaining_edges`) → 회색 (얇은 배경)
 """
 from __future__ import annotations
 
@@ -76,30 +76,26 @@ def _draw_partition(
     palette = _macro_palette(len(partition.sub_graphs))
     vertex_to_macro = _vertex_to_macro(partition.sub_graphs)
 
-    # 1) macro 와 무관한 remaining edge (bridge / 외톨이) — 옅은 회색 배경
+    # 1) macro 어디에도 속하지 않은 remaining edge (bridge / 외톨이 / 고아 directed)
     for edge in partition.remaining_edges:
         u, v = edge.id
-        if u == v or edge.directed:
+        if u == v:
             continue
-        if u in vertex_to_macro or v in vertex_to_macro:
-            # macro 정점에 닿지만 외각선은 아님 — 약한 색으로 처리
-            macro_id = vertex_to_macro.get(u, vertex_to_macro.get(v))
-            color, alpha, lw = palette[macro_id], 0.30, 0.9
-        else:
-            color, alpha, lw = _BACKGROUND_COLOR, 0.5, 0.8
         ax.plot(
             [pos[u][0], pos[v][0]],
             [pos[u][1], pos[v][1]],
-            color=color,
-            alpha=alpha,
-            linewidth=lw,
+            color=_BACKGROUND_COLOR,
+            alpha=0.5,
+            linewidth=0.8,
             zorder=1,
         )
 
-    # 2) sub_graph edges — 면 내부의 약한 색, 얇게
+    # 2) sub_graphs 내부 간선 (undirected) — 면 내부의 약한 색, 얇게
     for macro_id, sg in enumerate(partition.sub_graphs):
         color = palette[macro_id]
         for edge in sg.edges:
+            if edge.directed:
+                continue
             u, v = edge.id
             ax.plot(
                 [pos[u][0], pos[v][0]],
@@ -110,21 +106,24 @@ def _draw_partition(
                 zorder=2,
             )
 
-    # 3) directed remaining edges — 면의 외각선, 두껍게 강조
-    for edge in partition.remaining_edges:
-        u, v = edge.id
-        if u == v or not edge.directed:
-            continue
-        macro_id = vertex_to_macro.get(u, vertex_to_macro.get(v))
-        color = palette[macro_id] if macro_id is not None else _BACKGROUND_COLOR
-        ax.plot(
-            [pos[u][0], pos[v][0]],
-            [pos[u][1], pos[v][1]],
-            color=color,
-            alpha=0.98,
-            linewidth=3.2,
-            zorder=3,
-        )
+    # 3) sub_graphs 외각선 (directed) — 두껍게 강조. 공유 boundary 는 마지막에 그린
+    # macro 색으로 덮어쓰지만 인스턴스 공유라 같은 변이라는 사실은 변하지 않는다.
+    for macro_id, sg in enumerate(partition.sub_graphs):
+        color = palette[macro_id]
+        for edge in sg.edges:
+            if not edge.directed:
+                continue
+            u, v = edge.id
+            if u == v:
+                continue
+            ax.plot(
+                [pos[u][0], pos[v][0]],
+                [pos[u][1], pos[v][1]],
+                color=color,
+                alpha=0.98,
+                linewidth=3.2,
+                zorder=3,
+            )
 
     # 4) 정점 — macro 에 속한 정점은 그 색으로, 외톨이는 회색
     for v, p in pos.items():
