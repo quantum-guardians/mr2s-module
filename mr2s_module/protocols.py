@@ -5,23 +5,28 @@ from dimod import BinaryQuadraticModel, BinaryPolynomial
 if TYPE_CHECKING:
     from mr2s_module.domain.edge import Edge as EdgeModel
     from mr2s_module.domain.graph import Graph as GraphModel
+    from mr2s_module.domain.graph_partition_result import (
+        GraphPartitionResult as GraphPartitionResultModel,
+    )
     from mr2s_module.domain.score import Score as ScoreModel
     from mr2s_module.domain.solution import Solution as SolutionModel
 else:
     EdgeModel = Any
     GraphModel = Any
+    GraphPartitionResultModel = Any
     ScoreModel = Any
     SolutionModel = Any
 
 Graph: TypeAlias = GraphModel
 Edge: TypeAlias = EdgeModel
+GraphPartitionResult: TypeAlias = GraphPartitionResultModel
 QuboMatrix: TypeAlias = BinaryQuadraticModel
 Solution: TypeAlias = SolutionModel
 Score: TypeAlias = ScoreModel
 
 
 class FaceCycleProtocol(Protocol):
-    def run(self, graph: Graph) -> set[Edge]: ...
+    def run(self, graph: Graph) -> GraphPartitionResult: ...
 
 
 class QuboSolverProtocol(Protocol):

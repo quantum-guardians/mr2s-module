@@ -1,41 +1,94 @@
 import itertools
+from dataclasses import dataclass, field
 
 import networkx as nx
 import numpy as np
 
 from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
+from mr2s_module.domain.graph_partition_result import GraphPartitionResult
 
 
 _OUTER_WALL_WEIGHT = 999_999
 _INNER_WEIGHT = 1
 
 
+@dataclass
+class _ComponentPartition:
+    """단일 biconnected component 의 거대 군집 분할 결과."""
+    macro_internal_edges: list[set[tuple[int, int]]] = field(default_factory=list)
+    macro_outline_keys: list[set[tuple[int, int]]] = field(default_factory=list)
+    directed_pairs: set[tuple[int, int]] = field(default_factory=set)
+
+
 class FaceCycle:
     def __init__(self, target_k: int = 10):
         self.target_k = target_k
 
-    def run(self, graph: Graph) -> set[Edge]:
+    def run(self, graph: Graph) -> GraphPartitionResult:
         nx_graph = self._to_networkx(graph)
         is_planar, _ = nx.check_planarity(nx_graph)
         if not is_planar:
-            return set()
+            return GraphPartitionResult(
+                sub_graphs=[],
+                remaining_edges=list(graph.edges),
+            )
 
-        weight_map = {
-            edge.id: edge.weight
-            for edge in graph.edges
-            if edge.id[0] != edge.id[1]
-        }
+        # Step 1. 각 컴포넌트의 분할 결과를 글로벌 macro_id 로 통합
+        edge_to_inner_macro: dict[tuple[int, int], int] = {}
+        # 공유 boundary 는 인접한 두 macro 양쪽에 들어가므로 owning macro 를 list 로.
+        edge_to_outline_macros: dict[tuple[int, int], list[int]] = {}
+        directed_orientations: dict[tuple[int, int], tuple[int, int]] = {}
+        macro_count = 0
 
-        result_edges: set[Edge] = set()
         for component in self._extract_biconnected_components(nx_graph):
-            for u, v in self._process_component(component):
-                key = (min(u, v), max(u, v))
-                if key not in weight_map:
-                    continue
-                result_edges.add(Edge(u, v, weight_map[key], True))
+            partition = self._partition_component(component)
+            for local_id, internal_edges in enumerate(partition.macro_internal_edges):
+                for ekey in internal_edges:
+                    edge_to_inner_macro[ekey] = macro_count + local_id
+            for local_id, outline_keys in enumerate(partition.macro_outline_keys):
+                for ekey in outline_keys:
+                    edge_to_outline_macros.setdefault(ekey, []).append(
+                        macro_count + local_id
+                    )
+            macro_count += len(partition.macro_internal_edges)
+            for u, v in partition.directed_pairs:
+                directed_orientations[tuple(sorted((u, v)))] = (u, v)
 
-        return result_edges
+        # Step 2. 간선 분류용 컨테이너 준비
+        sub_graph_edges: list[list[Edge]] = [[] for _ in range(macro_count)]
+        remaining_edges: list[Edge] = []
+
+        # Step 3. 원본 간선을 단일 순회로 분류 (O(E))
+        # 공유 boundary 는 인접 macro 양쪽 sub_graphs 에 같은 Edge 인스턴스로 push 한다.
+        for edge in graph.edges:
+            u, v = edge.id
+            if u == v:
+                remaining_edges.append(edge)
+                continue
+            macro_id = edge_to_inner_macro.get(edge.id)
+            if macro_id is not None:
+                sub_graph_edges[macro_id].append(Edge(u, v, edge.weight, False))
+                continue
+            orientation = directed_orientations.get(edge.id)
+            if orientation is not None:
+                a, b = orientation
+                emitted = Edge(a, b, edge.weight, True)
+            else:
+                emitted = edge
+            owning_macros = edge_to_outline_macros.get(edge.id, ())
+            if owning_macros:
+                for owning in owning_macros:
+                    sub_graph_edges[owning].append(emitted)
+            else:
+                remaining_edges.append(emitted)
+
+        # Step 4. 결과 반환
+        sub_graphs = [Graph(edges=edges) for edges in sub_graph_edges]
+        return GraphPartitionResult(
+            sub_graphs=sub_graphs,
+            remaining_edges=remaining_edges,
+        )
 
     def _extract_biconnected_components(self, graph: nx.Graph) -> list[nx.Graph]:
         if nx.is_biconnected(graph):
@@ -52,23 +105,23 @@ class FaceCycle:
                 components.append(sub)
         return components
 
-    def _process_component(self, component: nx.Graph) -> set[tuple[int, int]]:
-        """컴포넌트 단위 boundary 사이클을 방향이 부여된 (u, v) 쌍 집합으로 반환."""
+    def _partition_component(self, component: nx.Graph) -> _ComponentPartition:
+        """컴포넌트 단위로 거대 군집의 내부 간선과 boundary 방향을 산출."""
         if component.number_of_edges() < 3:
-            return set()
+            return _ComponentPartition()
 
         # 1. 면 추출 — 외곽 면은 가장 큰 면적으로 식별
         pos = nx.planar_layout(component)
         all_raw_faces = self._enumerate_faces(component)
         if len(all_raw_faces) < 2:
-            return set()
+            return _ComponentPartition()
 
         outer_idx = int(np.argmax([self._face_area(f, pos) for f in all_raw_faces]))
         inner_raw_faces = [
             f for i, f in enumerate(all_raw_faces) if i != outer_idx
         ]
         if not inner_raw_faces:
-            return set()
+            return _ComponentPartition()
 
         face_edges_map = self._build_face_edges_map(inner_raw_faces)
         face_centroids = [
@@ -107,7 +160,7 @@ class FaceCycle:
             true_components, inner_raw_faces, face_edges_map, final_boundary
         )
         if merged_dual.number_of_nodes() > 0 and not nx.is_bipartite(merged_dual):
-            return set()
+            return _ComponentPartition()
 
         # 7. 방향 부여 — 2-coloring 으로 face traversal × CW/CCW 결정
         coloring = (
@@ -121,8 +174,40 @@ class FaceCycle:
             for f_idx in comp:
                 face_to_color[f_idx] = c
 
-        return self._orient_boundary(
+        directed_pairs = self._orient_boundary(
             final_boundary, face_edges_map, inner_raw_faces, face_to_color
+        )
+
+        # 8. face_edges_map 단일 패스로 inner / outline 동시 분류.
+        # 서로 다른 macro 에 걸친 boundary 는 양쪽 outline 에 들어가는 의도된 중복.
+        face_to_macro: dict[int, int] = {
+            f_idx: macro_id
+            for macro_id, comp in enumerate(true_components)
+            for f_idx in comp
+        }
+        n_macros = len(true_components)
+        macro_internal_edges: list[set[tuple[int, int]]] = [set() for _ in range(n_macros)]
+        macro_outline_keys: list[set[tuple[int, int]]] = [set() for _ in range(n_macros)]
+        for ekey, f_indices in face_edges_map.items():
+            if ekey in final_boundary:
+                seen: set[int] = set()
+                for f in f_indices:
+                    m = face_to_macro.get(f)
+                    if m is not None and m not in seen:
+                        macro_outline_keys[m].add(ekey)
+                        seen.add(m)
+                continue
+            if len(f_indices) != 2:
+                continue
+            m0 = face_to_macro.get(f_indices[0])
+            m1 = face_to_macro.get(f_indices[1])
+            if m0 is not None and m0 == m1:
+                macro_internal_edges[m0].add(ekey)
+
+        return _ComponentPartition(
+            macro_internal_edges=macro_internal_edges,
+            macro_outline_keys=macro_outline_keys,
+            directed_pairs=directed_pairs,
         )
 
     @staticmethod

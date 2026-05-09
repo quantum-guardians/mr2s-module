@@ -57,7 +57,7 @@ def _delaunay_graph_with_pos(
 def _run_diagnostic(
     graph: Graph, pos: dict[int, np.ndarray], target_k: int
 ) -> dict:
-    """`FaceCycle._process_component` 와 동일한 흐름을 순수 함수로 재현,
+    """`FaceCycle._partition_component` 와 동일한 흐름을 순수 함수로 재현,
     중간 산출물(면, 컴포넌트, 2-coloring) 을 함께 반환."""
     nx_graph = FaceCycle._to_networkx(graph)
     is_planar, _ = nx.check_planarity(nx_graph)
@@ -205,9 +205,10 @@ def test_face_cycle_visualization_renders_three_panels(seed: int) -> None:
 
     # 1. FaceCycle.run() 자체가 정상적으로 boundary 를 반환하는지.
     np.random.seed(seed)
-    boundary_run = {e.id for e in FaceCycle(target_k=target_k).run(graph)}
+    partition = FaceCycle(target_k=target_k).run(graph)
+    boundary_run = {e.id for e in partition.directed_edges()}
     input_ids = {e.id for e in graph.edges}
-    assert boundary_run, "run() should return a non-empty boundary set"
+    assert boundary_run, "run() should produce non-empty directed boundary edges"
     assert boundary_run.issubset(input_ids)
 
     # 2. 시각화용 진단 파이프라인 — FaceCycle 의 내부 planar_layout 대신

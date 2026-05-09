@@ -35,8 +35,8 @@ class QuboMR2SSolver:
 
   def run(self, graph: Graph) -> Solution:
     if self.face_cycle is not None:
-      predefined_edges = self.face_cycle.run(graph)
-      graph.define_edge_direction(predefined_edges)
+      partition = self.face_cycle.run(graph)
+      graph.define_edge_direction(set(partition.directed_edges()))
 
     # build qubo
     binary_polynomial = self._build_polynomial(graph)
