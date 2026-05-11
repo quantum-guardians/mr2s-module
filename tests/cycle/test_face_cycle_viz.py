@@ -14,16 +14,20 @@ from __future__ import annotations
 import itertools
 from pathlib import Path
 
-import matplotlib
+import pytest
+
+matplotlib = pytest.importorskip("matplotlib")
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-import pytest
-from scipy.spatial import Delaunay
+
+scipy_spatial = pytest.importorskip("scipy.spatial")
+Delaunay = scipy_spatial.Delaunay
 
 from mr2s_module.cycle import FaceCycle
+from mr2s_module.cycle.face_clusterer import SnowballFaceClusterer
 from mr2s_module.domain import Edge, Graph
 
 _OUTPUT_DIR = Path(__file__).parent / "output"
@@ -73,7 +77,7 @@ def _run_diagnostic(
     dual_base = FaceCycle._build_dual_base(face_edges_map)
 
     k = max(1, min(target_k, len(inner_faces)))
-    face_to_cluster = FaceCycle._snowball_cluster(centroids, dual_base, k)
+    face_to_cluster = SnowballFaceClusterer().run(centroids, dual_base, k)
 
     boundary, outer = FaceCycle._collect_boundary_edges(
         face_edges_map, face_to_cluster

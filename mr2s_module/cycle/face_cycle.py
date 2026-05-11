@@ -4,6 +4,10 @@ from dataclasses import dataclass, field
 import networkx as nx
 import numpy as np
 
+from mr2s_module.cycle.face_clusterer import (
+    FaceClusterer,
+    SnowballFaceClusterer,
+)
 from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.graph_partition_result import GraphPartitionResult
@@ -22,8 +26,13 @@ class _ComponentPartition:
 
 
 class FaceCycle:
-    def __init__(self, target_k: int = 10):
+    def __init__(
+        self,
+        target_k: int = 10,
+        clusterer: FaceClusterer | None = None,
+    ):
         self.target_k = target_k
+        self.clusterer = clusterer or SnowballFaceClusterer()
 
     def run(self, graph: Graph) -> GraphPartitionResult:
         nx_graph = self._to_networkx(graph)
@@ -130,7 +139,7 @@ class FaceCycle:
         dual_base = self._build_dual_base(face_edges_map)
 
         target_k = max(1, min(self.target_k, len(inner_raw_faces)))
-        face_to_cluster = self._snowball_cluster(
+        face_to_cluster = self.clusterer.run(
             face_centroids, dual_base, target_k
         )
 
@@ -306,49 +315,6 @@ class FaceCycle:
             if len(f_indices) == 2:
                 dual.add_edge(f_indices[0], f_indices[1])
         return dual
-
-    @staticmethod
-    def _snowball_cluster(
-        centroids: list[np.ndarray],
-        dual_base: nx.Graph,
-        target_k: int,
-    ) -> dict[int, int]:
-        n = len(centroids)
-        seeds = [int(np.random.randint(n))]
-        while len(seeds) < target_k:
-            best_idx, max_d = -1, -1.0
-            for f_idx in range(n):
-                if f_idx in seeds:
-                    continue
-                min_d = min(
-                    float(np.linalg.norm(centroids[f_idx] - centroids[s]))
-                    for s in seeds
-                )
-                if min_d > max_d:
-                    max_d, best_idx = min_d, f_idx
-            if best_idx == -1:
-                break
-            seeds.append(best_idx)
-
-        face_to_cluster: dict[int, int] = {s: i for i, s in enumerate(seeds)}
-        frontiers: dict[int, list[int]] = {i: [s] for i, s in enumerate(seeds)}
-        while len(face_to_cluster) < n:
-            progressed = False
-            for c_id in range(len(seeds)):
-                next_frontier: list[int] = []
-                for node in frontiers[c_id]:
-                    if node not in dual_base:
-                        continue
-                    for nbr in dual_base.neighbors(node):
-                        if nbr in face_to_cluster:
-                            continue
-                        face_to_cluster[nbr] = c_id
-                        next_frontier.append(nbr)
-                        progressed = True
-                frontiers[c_id] = next_frontier
-            if not progressed:
-                break
-        return face_to_cluster
 
     @staticmethod
     def _collect_boundary_edges(
