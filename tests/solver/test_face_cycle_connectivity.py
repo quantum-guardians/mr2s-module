@@ -40,6 +40,7 @@ from mr2s_module import (
     SAQuboSolver,
     SmallWorldSpec,
 )
+from mr2s_module.domain import Solution
 
 
 def _delaunay_nx(n: int, seed: int) -> nx.Graph:
@@ -90,7 +91,12 @@ class _MultiReadSAQuboSolver(SAQuboSolver):
 
     def run(self, qubo, graph):
         sample_set = self.sampler.sample(qubo, num_reads=self.num_reads)
-        return self._select_best_sample(sample_set, graph.edges)
+        return Solution(
+            edges=self._select_best_sample(sample_set, graph.edges),
+            graph=graph,
+            sample_set=sample_set,
+            score=None,
+        )
 
 
 def _build_solver(use_face_cycle: bool, num_reads: int = 10) -> QuboMR2SSolver:
@@ -102,7 +108,7 @@ def _build_solver(use_face_cycle: bool, num_reads: int = 10) -> QuboMR2SSolver:
         face_cycle=FaceCycle(target_k=8) if use_face_cycle else None,
         qubo_solver=_MultiReadSAQuboSolver(ranker=ranker, num_reads=num_reads),
         evaluator=evaluator,
-        poly_generators={FlowPolyGenerator(), n_hop_gen},
+        poly_generators=[FlowPolyGenerator(), n_hop_gen],
     )
 
 
@@ -112,8 +118,12 @@ def _run_once(use_face_cycle: bool, graph: Graph, seed: int) -> dict:
     solver = _build_solver(use_face_cycle)
     t0 = time.time()
     try:
-        score = solver.run(graph)
-        return {"ok": True, "score": float(score), "elapsed": time.time() - t0}
+        solution = solver.run(graph)
+        return {
+            "ok": True,
+            "score": solution.score.apsp_sum if solution.score else 0.0,
+            "elapsed": time.time() - t0,
+        }
     except AssertionError as ex:
         return {"ok": False, "reason": str(ex), "elapsed": time.time() - t0}
 

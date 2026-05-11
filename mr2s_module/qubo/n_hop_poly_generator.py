@@ -16,9 +16,10 @@ class NHop:
 class SmallWorldSpec:
   n_hops: list[NHop]
 
+@dataclass
 class NHopPolyGenerator:
 
-  small_world_spec: SmallWorldSpec
+  small_world_spec: SmallWorldSpec = None
 
   def _get_n_hop_polynomial(
       self,

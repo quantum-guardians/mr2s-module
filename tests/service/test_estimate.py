@@ -1,9 +1,10 @@
 import pytest
 
+from mr2s_module import EmbeddingEstimate
 from mr2s_module.domain import Edge, Graph
 from mr2s_module.qubo import FlowPolyGenerator
 from mr2s_module.util import estimate_required_qubits, map_binary_poly_to_bqm
-from mr2s_module.util.embedding_util import EmbeddingEstimate
+from mr2s_module.util import EmbeddingEstimate as UtilEmbeddingEstimate
 
 
 def _build_triangle_graph() -> Graph:
@@ -63,6 +64,7 @@ class TestEstimateRequiredQubits:
         result = estimate_required_qubits(bqm)
 
         assert isinstance(result, EmbeddingEstimate)
+        assert isinstance(result, UtilEmbeddingEstimate)
         assert result.num_logical_variables == len(bqm.variables)
         assert result.num_quadratic_couplings == len(bqm.quadratic)
         assert result.num_physical_qubits >= result.num_logical_variables
