@@ -12,13 +12,16 @@ from __future__ import annotations
 import itertools
 from pathlib import Path
 
-import matplotlib
+import pytest
+
+matplotlib = pytest.importorskip("matplotlib")
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-import pytest
-from scipy.spatial import Delaunay
+
+scipy_spatial = pytest.importorskip("scipy.spatial")
+Delaunay = scipy_spatial.Delaunay
 
 from mr2s_module.cycle import FaceCycle
 from mr2s_module.domain import Edge, Graph, GraphPartitionResult
