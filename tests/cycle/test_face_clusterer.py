@@ -36,6 +36,23 @@ def test_face_cycle_uses_injected_clusterer() -> None:
     assert clusterer.calls == 1
 
 
+def test_face_cycle_boundary_repair_mode_can_remove_only() -> None:
+    boundary_edges = {(1, 2), (2, 3)}
+    repair_edges = {(2, 3), (3, 4)}
+
+    toggle = FaceCycle(repair_mode="toggle")._apply_boundary_repair(
+        boundary_edges,
+        repair_edges,
+    )
+    remove = FaceCycle(repair_mode="remove")._apply_boundary_repair(
+        boundary_edges,
+        repair_edges,
+    )
+
+    assert toggle == {(1, 2), (3, 4)}
+    assert remove == {(1, 2)}
+
+
 def test_kmeans_face_clusterer_assigns_each_face_to_cluster() -> None:
     centroids = [
         np.array([0.0, 0.0]),

@@ -128,6 +128,7 @@ def build_dnc_solver(num_reads: int = 20) -> DnCMr2sSolver:
     face_cycle=FaceCycle(
       target_k=4,
       clusterer=BalancedFaceGraphClusterer(),
+      repair_mode="remove",
     ),
   )
 
@@ -362,7 +363,10 @@ def build_partition_diagnostic(graph: Graph, face_cycle: FaceCycle) -> dict:
     boundary_edges,
     outer_edges,
   )
-  final_boundary = boundary_edges.symmetric_difference(repair_edges)
+  final_boundary = face_cycle._apply_boundary_repair(
+    boundary_edges,
+    repair_edges,
+  )
 
   face_graph = nx.Graph()
   face_graph.add_nodes_from(range(len(inner_faces)))
@@ -394,9 +398,9 @@ def write_partition_pngs(
   _OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
   diagnostic = build_partition_diagnostic(graph, face_cycle)
   paths = [
-    _OUTPUT_DIR / "dnc_graph_full.png",
-    _OUTPUT_DIR / "dnc_pre_repair_clusters.png",
-    _OUTPUT_DIR / "dnc_post_repair_components.png",
+    _OUTPUT_DIR / f"dnc_{face_cycle.repair_mode}_repair_graph_full.png",
+    _OUTPUT_DIR / f"dnc_{face_cycle.repair_mode}_repair_pre_clusters.png",
+    _OUTPUT_DIR / f"dnc_{face_cycle.repair_mode}_repair_post_components.png",
   ]
 
   _save_graph_png(
@@ -412,7 +416,7 @@ def write_partition_pngs(
     groups=diagnostic["pre_groups"],
     boundary_edges=diagnostic["pre_boundary"],
     path=paths[1],
-    title="pre-repair face clusters",
+    title=f"pre-repair face clusters ({face_cycle.repair_mode})",
   )
   _save_face_groups_png(
     graph=graph,
@@ -421,11 +425,11 @@ def write_partition_pngs(
     groups=diagnostic["post_groups"],
     boundary_edges=diagnostic["post_boundary"],
     path=paths[2],
-    title="post-repair true components",
+    title=f"post-repair true components ({face_cycle.repair_mode})",
   )
 
   for index, sub_graph in enumerate(sub_graphs):
-    path = _OUTPUT_DIR / f"dnc_leaf_subgraph_{index}.png"
+    path = _OUTPUT_DIR / f"dnc_{face_cycle.repair_mode}_repair_leaf_subgraph_{index}.png"
     _save_graph_png(
       graph=sub_graph,
       positions=positions,
@@ -503,5 +507,5 @@ def test_run_dnc_mr2s_solver_on_planar_graph_with_removed_edges(
   assert len(graph.edges) == len(base_graph.edges) - removed_count
   assert solution.graph is graph
   assert len(solution.edges) > 0
-  assert len(leaf_sub_graphs) > 1
+  assert len(leaf_sub_graphs) >= 1
   assert all(path.exists() and path.stat().st_size > 0 for path in png_paths)

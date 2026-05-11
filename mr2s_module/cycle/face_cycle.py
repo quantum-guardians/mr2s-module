@@ -30,9 +30,13 @@ class FaceCycle:
         self,
         target_k: int = 10,
         clusterer: FaceClusterer | None = None,
+        repair_mode: str = "toggle",
     ):
         self.target_k = target_k
         self.clusterer = clusterer or SnowballFaceClusterer()
+        if repair_mode not in {"toggle", "remove"}:
+            raise ValueError("repair_mode must be either 'toggle' or 'remove'")
+        self.repair_mode = repair_mode
 
     def run(self, graph: Graph) -> GraphPartitionResult:
         nx_graph = self._to_networkx(graph)
@@ -150,7 +154,7 @@ class FaceCycle:
         repair_edges = self._wall_protected_repair(
             component, boundary_edges, outer_edges
         )
-        final_boundary = boundary_edges.symmetric_difference(repair_edges)
+        final_boundary = self._apply_boundary_repair(boundary_edges, repair_edges)
 
         # 4. Flood fill — 같은 군집의 면들 병합
         face_graph = nx.Graph()
@@ -218,6 +222,15 @@ class FaceCycle:
             macro_outline_keys=macro_outline_keys,
             directed_pairs=directed_pairs,
         )
+
+    def _apply_boundary_repair(
+        self,
+        boundary_edges: set[tuple[int, int]],
+        repair_edges: set[tuple[int, int]],
+    ) -> set[tuple[int, int]]:
+        if self.repair_mode == "remove":
+            return boundary_edges.difference(repair_edges)
+        return boundary_edges.symmetric_difference(repair_edges)
 
     @staticmethod
     def _orient_boundary(
