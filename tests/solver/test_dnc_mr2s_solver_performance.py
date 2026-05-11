@@ -1,4 +1,5 @@
 import random
+import time
 from pathlib import Path
 
 import numpy as np
@@ -120,17 +121,27 @@ def build_dnc_solver(num_reads: int = 20) -> DnCMr2sSolver:
   n_hop_generator.small_world_spec = SmallWorldSpec(
     n_hops=[NHop(n=2, weight=1)]
   )
-  mr2s_solver = QuboMR2SSolver(
-    qubo_solver=ConfiguredSAQuboSolver(num_reads=num_reads),
-  )
+  mr2s_solver = build_qubo_solver(num_reads)
   return DnCMr2sSolver(
     mr2s_solver=mr2s_solver,
     face_cycle=FaceCycle(
       target_k=4,
       clusterer=BalancedFaceGraphClusterer(),
-      repair_mode="remove",
     ),
   )
+
+
+def build_qubo_solver(num_reads: int = 20) -> QuboMR2SSolver:
+  return QuboMR2SSolver(
+    qubo_solver=ConfiguredSAQuboSolver(num_reads=num_reads),
+  )
+
+
+def clone_graph(graph: Graph) -> Graph:
+  return Graph(edges=[
+    Edge(edge.vertices[0], edge.vertices[1], edge.weight, edge.directed)
+    for edge in graph.edges
+  ])
 
 
 def _trace_entry(
@@ -444,13 +455,118 @@ def write_partition_pngs(
   return paths
 
 
+def run_timed_solver(name: str, solver, graph: Graph) -> dict[str, object]:
+  started_at = time.perf_counter()
+  solution = solver.run(graph)
+  elapsed_seconds = time.perf_counter() - started_at
+  score = solution.score
+  selected_undirected_edges = {
+    (min(source, target), max(source, target))
+    for source, target in solution.edges
+  }
+  input_edge_ids = {edge.id for edge in graph.edges}
+
+  return {
+    "name": name,
+    "solution": solution,
+    "elapsed_seconds": elapsed_seconds,
+    "vertices": len(graph.get_vertices()),
+    "edges": len(graph.edges),
+    "selected_edges": len(solution.edges),
+    "selected_undirected_edges": len(selected_undirected_edges),
+    "reverse_direction_conflicts": (
+      len(solution.edges) - len(selected_undirected_edges)
+    ),
+    "missing_input_edges": len(input_edge_ids - selected_undirected_edges),
+    "extra_selected_edges": len(selected_undirected_edges - input_edge_ids),
+    "apsp_sum": score.apsp_sum if score is not None else None,
+    "strong_connect_rate": (
+      score.strong_connect_rate if score is not None else None
+    ),
+    "flow_score": score.flow_score if score is not None else None,
+    "sample_score": score.sample_score if score is not None else None,
+  }
+
+
+def print_solver_comparison(results: list[dict[str, object]]) -> None:
+  print()
+  print("MR2S solver comparison")
+  for result in results:
+    print(f"  {result['name']}")
+    print(f"    elapsed_seconds: {result['elapsed_seconds']:.4f}")
+    print(f"    vertices: {result['vertices']}")
+    print(f"    edges: {result['edges']}")
+    print(f"    selected_edges: {result['selected_edges']}")
+    print(f"    selected_undirected_edges: {result['selected_undirected_edges']}")
+    print(f"    reverse_direction_conflicts: {result['reverse_direction_conflicts']}")
+    print(f"    missing_input_edges: {result['missing_input_edges']}")
+    print(f"    extra_selected_edges: {result['extra_selected_edges']}")
+    print(f"    apsp_sum: {result['apsp_sum']}")
+    print(f"    strong_connect_rate: {result['strong_connect_rate']}")
+    print(f"    flow_score: {result['flow_score']}")
+    print(f"    sample_score: {result['sample_score']}")
+
+
+@pytest.mark.slow
+def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  base_graph, _positions = build_delaunay_planar_graph(
+    num_points=1000,
+    seed=11,
+  )
+  graph, removed_count = remove_edges_by_percent(
+    graph=base_graph,
+    remove_percent=50,
+    seed=11,
+  )
+
+  def estimate_with_test_limit(bqm):
+    if len(bqm.variables) > 35:
+      raise RuntimeError("test limit exceeded")
+    return None
+
+  monkeypatch.setattr(
+    dnc_mr2s_solver,
+    "estimate_required_qubits",
+    estimate_with_test_limit,
+  )
+
+  dnc_solver = build_dnc_solver(num_reads=5)
+  qubo_solver = build_qubo_solver(num_reads=5)
+  division_trace, leaf_sub_graphs = trace_division(dnc_solver, clone_graph(graph))
+  results = [
+    run_timed_solver("dnc_mr2s_solver", dnc_solver, clone_graph(graph)),
+    run_timed_solver("qubo_mr2s_solver", qubo_solver, clone_graph(graph)),
+  ]
+
+  print_solver_comparison(results)
+  print("  dnc_division")
+  print(f"    original_edges: {len(base_graph.edges)}")
+  print(f"    removed_edges: {removed_count}")
+  print(f"    leaf_count: {len(leaf_sub_graphs)}")
+  print(f"    trace_entries: {len(division_trace)}")
+
+  assert len(graph.edges) == len(base_graph.edges) - removed_count
+  assert len(leaf_sub_graphs) >= 1
+  assert all(result["elapsed_seconds"] >= 0.0 for result in results)
+  assert all(result["selected_edges"] > 0 for result in results)
+  assert all(result["reverse_direction_conflicts"] == 0 for result in results)
+  assert all(result["missing_input_edges"] == 0 for result in results)
+  assert all(result["extra_selected_edges"] == 0 for result in results)
+  assert all(result["apsp_sum"] is not None for result in results)
+  assert all(result["strong_connect_rate"] is not None for result in results)
+  assert all(result["flow_score"] is not None for result in results)
+  assert all(result["sample_score"] is not None for result in results)
+
+
 @pytest.mark.slow
 def test_run_dnc_mr2s_solver_on_planar_graph_with_removed_edges(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
   remove_percent = 20
   base_graph, positions = build_delaunay_planar_graph(
-    num_points=80,
+    num_points=1000,
     seed=7,
   )
   graph, removed_count = remove_edges_by_percent(
@@ -502,6 +618,7 @@ def test_run_dnc_mr2s_solver_on_planar_graph_with_removed_edges(
     print(f"  apsp_sum: {solution.score.apsp_sum}")
     print(f"  strong_connect_rate: {solution.score.strong_connect_rate:.4f}")
     print(f"  flow_score: {solution.score.flow_score}")
+    print(f"  sample_score: {solution.score.sample_score}")
   print(f"  directed_edges_preview: {sorted(solution.edges)[:20]}")
 
   assert len(graph.edges) == len(base_graph.edges) - removed_count

@@ -6,6 +6,7 @@ class Score:
   apsp_sum: float
   strong_connect_rate: float
   flow_score: float
+  sample_score: float = 0.0
 
 @dataclass
 class EmbeddingEstimate:

@@ -17,7 +17,7 @@ class ApspSumRanker:
     vertices = solution.graph.get_vertices()
 
     if not nx.is_strongly_connected(graph):
-      raise AssertionError("solution must be strongly connected")
+      return float("inf")
 
     total_distance = 0
     path_lengths = dict(nx.all_pairs_shortest_path_length(graph))

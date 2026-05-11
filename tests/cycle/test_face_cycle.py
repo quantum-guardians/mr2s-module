@@ -6,6 +6,7 @@ import pytest
 from scipy.spatial import Delaunay
 
 from mr2s_module.cycle import FaceCycle
+from mr2s_module.cycle.face_cycle import _ComponentPartition
 from mr2s_module.domain import Edge, Graph, GraphPartitionResult
 
 
@@ -262,3 +263,32 @@ def test_sub_graphs_disjoint_from_remaining() -> None:
     sub_ids = {e.id for sg in result.sub_graphs for e in sg.edges}
     remaining_ids = {e.id for e in result.remaining_edges}
     assert sub_ids.isdisjoint(remaining_ids)
+
+
+def test_raises_when_undirected_edge_overlaps_between_subgraphs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Simulate a partition bug: one undirected boundary edge assigned to two macros.
+    graph = _make_graph_from_edges([(0, 1)])
+    cycle = FaceCycle()
+
+    monkeypatch.setattr(
+        cycle,
+        "_extract_biconnected_components",
+        lambda _graph: [object()],
+    )
+    monkeypatch.setattr(
+        cycle,
+        "_partition_component",
+        lambda _component: _ComponentPartition(
+            macro_internal_edges=[set(), set()],
+            macro_outline_keys=[{(0, 1)}, {(0, 1)}],
+            directed_pairs=set(),
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Undirected edge overlap detected across subgraphs",
+    ):
+        cycle.run(graph)

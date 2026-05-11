@@ -71,6 +71,7 @@ graph = Graph(edges=[
 - `apsp_sum`: 선택된 방향 그래프에 대한 APSP 기반 점수
 - `strong_connect_rate`: 샘플들 중 강연결인 해의 비율
 - `flow_score`: 각 정점의 흐름 불균형 제곱합
+- `sample_score`: 샘플 해들 중 최소 에너지
 
 ## 구조
 

@@ -98,10 +98,34 @@ class FaceCycle:
 
         # Step 4. 결과 반환
         sub_graphs = [Graph(edges=edges) for edges in sub_graph_edges]
+        self._validate_no_undirected_edge_overlap(sub_graphs)
         return GraphPartitionResult(
             sub_graphs=sub_graphs,
             remaining_edges=remaining_edges,
         )
+
+    @staticmethod
+    def _validate_no_undirected_edge_overlap(sub_graphs: list[Graph]) -> None:
+        owner_by_edge: dict[tuple[int, int], int] = {}
+        overlaps: dict[tuple[int, int], tuple[int, int]] = {}
+        for subgraph_idx, subgraph in enumerate(sub_graphs):
+            for edge in subgraph.edges:
+                if edge.directed:
+                    continue
+                prev_owner = owner_by_edge.get(edge.id)
+                if prev_owner is None:
+                    owner_by_edge[edge.id] = subgraph_idx
+                    continue
+                if prev_owner != subgraph_idx:
+                    overlaps[edge.id] = (prev_owner, subgraph_idx)
+        if overlaps:
+            details = ", ".join(
+                f"{edge_id}@({owner0},{owner1})"
+                for edge_id, (owner0, owner1) in sorted(overlaps.items())
+            )
+            raise ValueError(
+                f"Undirected edge overlap detected across subgraphs: {details}"
+            )
 
     def _extract_biconnected_components(self, graph: nx.Graph) -> list[nx.Graph]:
         if nx.is_biconnected(graph):

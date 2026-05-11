@@ -89,9 +89,16 @@ class Evaluator:
       for vertex in vertices
     ))
 
+  @staticmethod
+  def eval_sample_score(solution: Solution) -> float:
+    if len(solution.sample_set) == 0:
+      return float("inf")
+    return float(solution.sample_set.record.energy.min())
+
   def run(self, solution: Solution) -> Score:
     return Score(
       apsp_sum=self.eval_apsp_sum(solution),
       strong_connect_rate=self.eval_strong_connect_rate(solution),
       flow_score=self.eval_flow(solution),
+      sample_score=self.eval_sample_score(solution),
     )

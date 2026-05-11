@@ -123,6 +123,7 @@ def describe_result(graph: Graph, score, solution: Solution) -> None:
   print(f"  apsp_sum: {score.apsp_sum}")
   print(f"  strong_connect_rate: {score.strong_connect_rate:.4f}")
   print(f"  flow_score: {score.flow_score}")
+  print(f"  sample_score: {score.sample_score}")
   print()
 
   print("Selected orientation")
