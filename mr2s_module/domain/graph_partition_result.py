@@ -9,6 +9,7 @@ class GraphPartitionResult:
 
     - `sub_graphs[i]`     : macro `i` 의 full subgraph (inner undirected + outline directed).
                             공유 boundary 는 양쪽 macro 의 `sub_graphs` 에 같은 인스턴스로 등장 (의도된 중복).
+                            inner undirected edge는 중복되지 않아야한다.
     - `remaining_edges`   : 어떤 macro 에도 속하지 않은 간선 — 브리지, 외톨이, 고아 directed.
     """
     sub_graphs: list[Graph]
