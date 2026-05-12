@@ -11,6 +11,7 @@ from mr2s_module.cycle import FaceCycle
 from mr2s_module.cycle.face_clusterer import KMeansFaceClusterer
 from mr2s_module.domain import Edge, Graph, GraphPartitionResult, Score, Solution
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
+from mr2s_module.util import empty_binary_sample_set
 
 
 def _run_subgraph_solution(args: tuple[QuboMR2SSolver, Graph, SampleSet]) -> Solution:
@@ -45,10 +46,6 @@ class DnCMr2sSolver:
     if self.subgraph_processes is not None and self.subgraph_processes < 1:
       raise ValueError("subgraph_processes must be None or at least 1")
 
-  @staticmethod
-  def _empty_sample_set() -> SampleSet:
-    return SampleSet.from_samples([], vartype="BINARY", energy=[])
-
   def merge_solutions(
       self,
       solutions: Iterable[Solution],
@@ -81,7 +78,7 @@ class DnCMr2sSolver:
     sample_set = (
       solution_list[0].sample_set
       if solution_list
-      else self._empty_sample_set()
+      else empty_binary_sample_set()
     )
 
     return Solution(
@@ -230,7 +227,7 @@ class DnCMr2sSolver:
 
   def _solve_subgraphs(self, sub_graphs: list[Graph]) -> list[Solution]:
     process_count = self._resolve_subgraph_processes(len(sub_graphs))
-    empty_sample_set = self._empty_sample_set()
+    empty_sample_set = empty_binary_sample_set()
     if process_count == 1:
       return [
         _solve_subgraph(self.mr2s_solver, sub_graph, empty_sample_set)

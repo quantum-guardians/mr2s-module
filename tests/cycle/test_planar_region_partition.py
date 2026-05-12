@@ -1,5 +1,3 @@
-import random
-
 import networkx as nx
 import pytest
 
@@ -12,30 +10,13 @@ from mr2s_module.cycle.planar_region_partition import (
     verify,
 )
 from mr2s_module.domain import Edge, Graph
+from tests.util.graph_fixtures import random_planar_nx_graph
 
 
 def _print_result(name: str, graph: nx.Graph, regions: list[set[int]]) -> None:
     eulerian = verify(regions=regions, graph=graph, raise_on_failure=False)
     sizes = [len(region) for region in regions]
     print(f"{name}: region_sizes={sizes}, eulerian={eulerian}")
-
-
-def _random_planar_graph(node_count: int, seed: int) -> nx.Graph:
-    rng = random.Random(seed)
-    graph = nx.random_labeled_tree(node_count, seed=seed)
-    candidates = [
-        (u, v)
-        for u in graph.nodes
-        for v in graph.nodes
-        if u < v and not graph.has_edge(u, v)
-    ]
-    rng.shuffle(candidates)
-
-    for u, v in candidates:
-        graph.add_edge(u, v)
-        if not nx.check_planarity(graph)[0]:
-            graph.remove_edge(u, v)
-    return graph
 
 
 def test_extract_faces_excludes_outer_face() -> None:
@@ -78,7 +59,7 @@ def test_partition_icosahedral_graph_k4_prints_balance_and_eulerian() -> None:
 
 
 def test_partition_random_planar_graph_k3_prints_balance_and_eulerian() -> None:
-    graph = _random_planar_graph(20, seed=7)
+    graph = random_planar_nx_graph(20, seed=7)
 
     regions = partition(graph, 3)
 

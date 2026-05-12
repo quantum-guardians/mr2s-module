@@ -1,13 +1,9 @@
-from dimod import SampleSet
 import pytest
 
 from mr2s_module.domain import Edge, Graph, GraphPartitionResult, Score, Solution
 import mr2s_module.solver.dnc_mr2s_solver as dnc_mr2s_solver
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver
-
-
-def _empty_sample_set() -> SampleSet:
-  return SampleSet.from_samples([], vartype="BINARY", energy=[])
+from mr2s_module.util import empty_binary_sample_set
 
 
 class StubMr2sSolver:
@@ -87,7 +83,7 @@ class StubRunningMr2sSolver:
     return Solution(
       edges={(edge.vertices[0], edge.vertices[1]) for edge in graph.edges},
       graph=graph,
-      sample_set=_empty_sample_set(),
+      sample_set=empty_binary_sample_set(),
     )
 
 
@@ -98,7 +94,7 @@ def test_merge_solutions_combines_solution_edges() -> None:
     Edge(3, 4, 1, False),
     Edge(4, 1, 1, False),
   ])
-  sample_set = _empty_sample_set()
+  sample_set = empty_binary_sample_set()
   solver = DnCMr2sSolver(mr2s_solver=object())
 
   merged = solver.merge_solutions(
@@ -111,7 +107,7 @@ def test_merge_solutions_combines_solution_edges() -> None:
       Solution(
         edges={(2, 3), (4, 3)},
         graph=Graph(edges=[Edge(2, 3, 1, False), Edge(3, 4, 1, False)]),
-        sample_set=_empty_sample_set(),
+        sample_set=empty_binary_sample_set(),
       ),
     ],
     graph=graph,
@@ -135,12 +131,12 @@ def test_merge_solutions_keeps_one_direction_per_input_edge() -> None:
       Solution(
         edges={(1, 2), (2, 3)},
         graph=graph,
-        sample_set=_empty_sample_set(),
+        sample_set=empty_binary_sample_set(),
       ),
       Solution(
         edges={(2, 1), (3, 2)},
         graph=graph,
-        sample_set=_empty_sample_set(),
+        sample_set=empty_binary_sample_set(),
       ),
     ],
     graph=graph,
@@ -167,12 +163,12 @@ def test_merge_solutions_selects_direction_that_reduces_flow_imbalance() -> None
       Solution(
         edges={(1, 3), (2, 3)},
         graph=graph,
-        sample_set=_empty_sample_set(),
+        sample_set=empty_binary_sample_set(),
       ),
       Solution(
         edges={(3, 2)},
         graph=graph,
-        sample_set=_empty_sample_set(),
+        sample_set=empty_binary_sample_set(),
       ),
     ],
     graph=graph,
@@ -190,19 +186,19 @@ def test_score_merged_solution_multiplies_child_strong_connect_rates() -> None:
   merged = Solution(
     edges={(1, 2), (2, 3)},
     graph=graph,
-    sample_set=_empty_sample_set(),
+    sample_set=empty_binary_sample_set(),
   )
   child_solutions = [
     Solution(
       edges={(1, 2)},
       graph=Graph(edges=[Edge(1, 2, 1, False)]),
-      sample_set=_empty_sample_set(),
+      sample_set=empty_binary_sample_set(),
       score=Score(apsp_sum=1.0, strong_connect_rate=0.8, flow_score=0.0),
     ),
     Solution(
       edges={(2, 3)},
       graph=Graph(edges=[Edge(2, 3, 1, False)]),
-      sample_set=_empty_sample_set(),
+      sample_set=empty_binary_sample_set(),
       score=Score(apsp_sum=1.0, strong_connect_rate=0.5, flow_score=0.0),
     ),
   ]

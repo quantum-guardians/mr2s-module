@@ -23,10 +23,18 @@ from mr2s_module.qubo import (
 )
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
+from mr2s_module.util import (
+  build_dual_base,
+  build_face_edges_map,
+  clone_edge,
+  domain_graph_to_networkx,
+  enumerate_faces,
+  polygon_area,
+)
+from tests.util.graph_fixtures import delaunay_graph_with_pos
 
 _OUTPUT_DIR = Path(__file__).parent / "output"
-scipy_spatial = pytest.importorskip("scipy.spatial")
-Delaunay = scipy_spatial.Delaunay
+pytest.importorskip("scipy.spatial")
 _PALETTE = plt.colormaps.get_cmap("tab20")
 
 
@@ -58,27 +66,16 @@ def build_delaunay_planar_graph(
     seed: int,
     weight: int = 1,
 ) -> tuple[Graph, dict[int, tuple[float, float]]]:
-  rng = np.random.default_rng(seed)
-  points = rng.random((num_points, 2))
-  triangulation = Delaunay(points)
-
-  seen: set[tuple[int, int]] = set()
-  edges: list[Edge] = []
-  for simplex in triangulation.simplices:
-    for index in range(len(simplex)):
-      u = int(simplex[index])
-      v = int(simplex[(index + 1) % len(simplex)])
-      edge_id = (min(u, v), max(u, v))
-      if edge_id in seen:
-        continue
-      seen.add(edge_id)
-      edges.append(Edge(edge_id[0], edge_id[1], weight, False))
-
+  graph, raw_positions = delaunay_graph_with_pos(
+    num_points,
+    seed,
+    weight=weight,
+  )
   positions = {
     vertex: (float(point[0]), float(point[1]))
-    for vertex, point in enumerate(points)
+    for vertex, point in raw_positions.items()
   }
-  return Graph(edges=edges), positions
+  return graph, positions
 
 
 def remove_edges_by_percent(
@@ -138,10 +135,7 @@ def build_qubo_solver(num_reads: int = 20) -> QuboMR2SSolver:
 
 
 def clone_graph(graph: Graph) -> Graph:
-  return Graph(edges=[
-    Edge(edge.vertices[0], edge.vertices[1], edge.weight, edge.directed)
-    for edge in graph.edges
-  ])
+  return Graph(edges=[clone_edge(edge) for edge in graph.edges])
 
 
 def _trace_entry(
@@ -228,14 +222,6 @@ def print_leaf_sub_graph_summary(sub_graphs: list[Graph]) -> None:
     print(f"    undirected_edges: {len(undirected_edges)}")
     print(f"    edge_preview: {edge_preview}")
   print()
-
-
-def _to_networkx(graph: Graph) -> nx.Graph:
-  nx_graph = nx.Graph()
-  nx_graph.add_edges_from(edge.id for edge in graph.edges)
-  nx_graph.add_nodes_from(graph.get_vertices())
-  return nx_graph
-
 
 def _draw_edges(ax, graph: Graph, positions, color: str, linewidth: float) -> None:
   for edge in graph.edges:
@@ -338,21 +324,21 @@ def _save_face_groups_png(
 
 
 def build_partition_diagnostic(graph: Graph, face_cycle: FaceCycle) -> dict:
-  nx_graph = FaceCycle._to_networkx(graph)
+  nx_graph = domain_graph_to_networkx(graph)
   component = face_cycle._extract_biconnected_components(nx_graph)[0]
   planar_positions = nx.planar_layout(component)
-  raw_faces = FaceCycle._enumerate_faces(component)
+  raw_faces = enumerate_faces(component)
   outer_idx = int(np.argmax([
-    FaceCycle._face_area(face, planar_positions)
+    abs(polygon_area(face, planar_positions))
     for face in raw_faces
   ]))
   inner_faces = [face for idx, face in enumerate(raw_faces) if idx != outer_idx]
-  face_edges_map = FaceCycle._build_face_edges_map(inner_faces)
+  face_edges_map = build_face_edges_map(inner_faces)
   centroids = [
     np.mean([planar_positions[vertex] for vertex in face], axis=0)
     for face in inner_faces
   ]
-  dual_base = FaceCycle._build_dual_base(face_edges_map)
+  dual_base = build_dual_base(face_edges_map)
 
   target_k = max(1, min(face_cycle.target_k, len(inner_faces)))
   face_to_cluster = face_cycle.clusterer.run(centroids, dual_base, target_k)

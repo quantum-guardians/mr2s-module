@@ -9,9 +9,14 @@ import networkx as nx
 from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.graph_partition_result import GraphPartitionResult
-
-
-EdgeKey = tuple[int, int]
+from mr2s_module.util.planar_graph import (
+    EdgeKey,
+    domain_graph_to_networkx,
+    enumerate_faces,
+    face_edges,
+    normalize_planar_input,
+    select_outer_face,
+)
 
 
 @dataclass(frozen=True)
@@ -41,7 +46,7 @@ class PlanarRegionFaceCycle:
         if any(edge.directed for edge in graph.edges):
             raise ValueError("PlanarRegionFaceCycle requires an undirected input graph")
 
-        nx_graph = _domain_graph_to_networkx(graph)
+        nx_graph = domain_graph_to_networkx(graph)
         is_planar, _ = nx.check_planarity(nx_graph)
         if not is_planar:
             return GraphPartitionResult(
@@ -73,18 +78,18 @@ class PlanarRegionFaceCycle:
 
 
 def extract_faces(graph: nx.Graph | nx.PlanarEmbedding) -> list[Face]:
-    nx_graph, embedding = _normalize_planar_input(graph)
-    raw_faces = _enumerate_faces(embedding)
+    nx_graph, embedding = normalize_planar_input(graph)
+    raw_faces = enumerate_faces(embedding)
     if len(raw_faces) <= 1:
         return []
 
-    outer_index = _select_outer_face(raw_faces, nx_graph)
+    outer_index = select_outer_face(raw_faces, nx_graph)
     faces: list[Face] = []
     for index, vertices in enumerate(raw_faces):
         if index == outer_index:
             continue
         vertex_tuple = tuple(vertices)
-        edges = frozenset(_face_edges(vertex_tuple))
+        edges = frozenset(face_edges(vertex_tuple))
         faces.append(Face(
             vertices=vertex_tuple,
             edges=edges,
@@ -176,7 +181,7 @@ def faces_to_regions(
     faces: list[Face],
     face_clusters: list[set[int]],
 ) -> RegionPartition:
-    nx_graph, _ = _normalize_planar_input(graph)
+    nx_graph, _ = normalize_planar_input(graph)
     face_counts_by_vertex: dict[int, Counter[int]] = defaultdict(Counter)
     candidate_vertices_by_region: list[set[int]] = []
 
@@ -213,7 +218,7 @@ def verify(
     *,
     raise_on_failure: bool = True,
 ) -> bool:
-    nx_graph, _ = _normalize_planar_input(graph)
+    nx_graph, _ = normalize_planar_input(graph)
     failures: list[str] = []
 
     if len(regions) == 0:
@@ -267,36 +272,6 @@ def partition(graph: nx.Graph | nx.PlanarEmbedding, k: int) -> RegionPartition:
     regions = faces_to_regions(graph, faces, face_clusters)
     verify(graph, regions)
     return regions
-
-
-def _normalize_planar_input(
-    graph: nx.Graph | nx.PlanarEmbedding,
-) -> tuple[nx.Graph, nx.PlanarEmbedding]:
-    if isinstance(graph, nx.PlanarEmbedding):
-        embedding = graph
-        nx_graph = nx.Graph()
-        nx_graph.add_nodes_from(embedding.nodes)
-        for u in embedding.nodes:
-            for v in embedding.neighbors_cw_order(u):
-                if u != v:
-                    nx_graph.add_edge(u, v)
-        embedding.check_structure()
-        return nx_graph, embedding
-
-    nx_graph = nx.Graph(graph)
-    is_planar, embedding = nx.check_planarity(nx_graph)
-    if not is_planar:
-        raise ValueError("graph must be planar")
-    return nx_graph, embedding
-
-
-def _domain_graph_to_networkx(graph: Graph) -> nx.Graph:
-    nx_graph = nx.Graph()
-    for edge in graph.edges:
-        u, v = edge.id
-        if u != v:
-            nx_graph.add_edge(u, v, weight=edge.weight)
-    return nx_graph
 
 
 def _face_clusters_to_graph_partition(
@@ -358,44 +333,6 @@ def _direct_boundary_edges(
                 directed[edge_id] = Edge(u, v, weight_by_edge[edge_id], True)
 
     return directed
-
-
-def _enumerate_faces(embedding: nx.PlanarEmbedding) -> list[list[int]]:
-    faces: list[list[int]] = []
-    visited: set[tuple[int, int]] = set()
-    for u in embedding.nodes:
-        for v in embedding.neighbors_cw_order(u):
-            if (u, v) in visited:
-                continue
-            face = list(embedding.traverse_face(u, v, mark_half_edges=visited))
-            faces.append(face)
-    return faces
-
-
-def _select_outer_face(faces: list[list[int]], graph: nx.Graph) -> int:
-    try:
-        pos = nx.planar_layout(graph)
-    except nx.NetworkXException:
-        return max(range(len(faces)), key=lambda index: len(set(faces[index])))
-    areas = [_polygon_area(face, pos) for face in faces]
-    return max(range(len(faces)), key=lambda index: abs(areas[index]))
-
-
-def _polygon_area(face: list[int], pos: dict[int, tuple[float, float]]) -> float:
-    area = 0.0
-    for index, vertex in enumerate(face):
-        next_vertex = face[(index + 1) % len(face)]
-        x1, y1 = pos[vertex]
-        x2, y2 = pos[next_vertex]
-        area += x1 * y2 - x2 * y1
-    return area / 2.0
-
-
-def _face_edges(vertices: tuple[int, ...]) -> set[EdgeKey]:
-    return {
-        tuple(sorted((vertices[index], vertices[(index + 1) % len(vertices)])))
-        for index in range(len(vertices))
-    }
 
 
 def _component_weight(face_graph: nx.Graph, component: set[int]) -> int:

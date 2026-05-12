@@ -11,6 +11,13 @@ from mr2s_module.cycle.face_clusterer import (
 from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.graph_partition_result import GraphPartitionResult
+from mr2s_module.util.planar_graph import (
+    build_dual_base,
+    build_face_edges_map,
+    domain_graph_to_networkx,
+    enumerate_faces,
+    polygon_area,
+)
 
 
 _OUTER_WALL_WEIGHT = 999_999
@@ -42,7 +49,7 @@ class FaceCycle:
         if any(edge.directed for edge in graph.edges):
             raise ValueError("FaceCycle requires an undirected input graph")
 
-        nx_graph = self._to_networkx(graph)
+        nx_graph = domain_graph_to_networkx(graph)
         is_planar, _ = nx.check_planarity(nx_graph)
         if not is_planar:
             return GraphPartitionResult(
@@ -152,22 +159,25 @@ class FaceCycle:
 
         # 1. 면 추출 — 외곽 면은 가장 큰 면적으로 식별
         pos = nx.planar_layout(component)
-        all_raw_faces = self._enumerate_faces(component)
+        all_raw_faces = enumerate_faces(component)
         if len(all_raw_faces) < 2:
             return _ComponentPartition()
 
-        outer_idx = int(np.argmax([self._face_area(f, pos) for f in all_raw_faces]))
+        outer_idx = int(np.argmax([
+            abs(polygon_area(face, pos))
+            for face in all_raw_faces
+        ]))
         inner_raw_faces = [
             f for i, f in enumerate(all_raw_faces) if i != outer_idx
         ]
         if not inner_raw_faces:
             return _ComponentPartition()
 
-        face_edges_map = self._build_face_edges_map(inner_raw_faces)
+        face_edges_map = build_face_edges_map(inner_raw_faces)
         face_centroids = [
             np.mean([pos[v] for v in f], axis=0) for f in inner_raw_faces
         ]
-        dual_base = self._build_dual_base(face_edges_map)
+        dual_base = build_dual_base(face_edges_map)
 
         target_k = max(1, min(self.target_k, len(inner_raw_faces)))
         face_to_cluster = self.clusterer.run(
@@ -288,73 +298,6 @@ class FaceCycle:
                     directed_pairs.add((a, b))
                     break
         return directed_pairs
-
-    @staticmethod
-    def _to_networkx(graph: Graph) -> nx.Graph:
-        # 동일 정점 쌍이 여러 번 나오면 최소 가중치만 남기고, self-loop은 무시.
-        g = nx.Graph()
-        for edge in graph.edges:
-            u, v = edge.id
-            if u == v:
-                continue
-            if g.has_edge(u, v):
-                if edge.weight < g[u][v]["weight"]:
-                    g[u][v]["weight"] = edge.weight
-            else:
-                g.add_edge(u, v, weight=edge.weight)
-        return g
-
-    @staticmethod
-    def _enumerate_faces(graph: nx.Graph) -> list[list[int]]:
-        is_planar, embedding = nx.check_planarity(graph)
-        if not is_planar:
-            return []
-
-        faces: list[list[int]] = []
-        visited: set[tuple[int, int]] = set()
-        for u, v in graph.edges():
-            for he in ((u, v), (v, u)):
-                if he in visited:
-                    continue
-                face: list[int] = []
-                cu, cv = he
-                while (cu, cv) not in visited:
-                    visited.add((cu, cv))
-                    face.append(cu)
-                    cu, cv = cv, embedding.next_face_half_edge(cu, cv)[1]
-                faces.append(face)
-        return faces
-
-    @staticmethod
-    def _face_area(face: list[int], pos: dict) -> float:
-        coords = [pos[v] for v in face]
-        a = 0.0
-        for i in range(len(coords)):
-            x1, y1 = coords[i]
-            x2, y2 = coords[(i + 1) % len(coords)]
-            a += x1 * y2 - x2 * y1
-        return abs(a) / 2.0
-
-    @staticmethod
-    def _build_face_edges_map(
-        faces: list[list[int]],
-    ) -> dict[tuple[int, int], list[int]]:
-        face_edges_map: dict[tuple[int, int], list[int]] = {}
-        for f_idx, face in enumerate(faces):
-            for i in range(len(face)):
-                e = tuple(sorted((face[i], face[(i + 1) % len(face)])))
-                face_edges_map.setdefault(e, []).append(f_idx)
-        return face_edges_map
-
-    @staticmethod
-    def _build_dual_base(
-        face_edges_map: dict[tuple[int, int], list[int]],
-    ) -> nx.Graph:
-        dual = nx.Graph()
-        for f_indices in face_edges_map.values():
-            if len(f_indices) == 2:
-                dual.add_edge(f_indices[0], f_indices[1])
-        return dual
 
     @staticmethod
     def _collect_boundary_edges(

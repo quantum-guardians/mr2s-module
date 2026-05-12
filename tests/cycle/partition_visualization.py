@@ -1,43 +1,17 @@
 from __future__ import annotations
 
-import itertools
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import networkx as nx
 import numpy as np
-from scipy.spatial import Delaunay
 
 from mr2s_module.domain import Edge, Graph, GraphPartitionResult
 from mr2s_module.protocols import FaceCycleProtocol
+from mr2s_module.util import face_edges, inner_faces
+from tests.util.graph_fixtures import delaunay_graph_with_pos
 
 
 BACKGROUND_COLOR = "#bcbcbc"
-
-
-def delaunay_graph_with_pos(
-    n: int,
-    seed: int,
-) -> tuple[Graph, dict[int, np.ndarray]]:
-    rng = np.random.default_rng(seed)
-    points = rng.random((n, 2))
-    tri = Delaunay(points)
-
-    seen: set[tuple[int, int]] = set()
-    edges: list[Edge] = []
-    for simplex in tri.simplices:
-        for u, v in itertools.combinations(simplex, 2):
-            u, v = int(u), int(v)
-            if u == v:
-                continue
-            key = (min(u, v), max(u, v))
-            if key in seen:
-                continue
-            seen.add(key)
-            edges.append(Edge(key[0], key[1], 1, False))
-
-    pos = {i: np.array(points[i]) for i in range(n)}
-    return Graph(edges=edges), pos
 
 
 def render_face_cycle_partition_png(
@@ -150,9 +124,8 @@ def _fill_partition_faces(
         for sub_graph in partition.sub_graphs
     ]
 
-    for face in _inner_faces(graph, pos):
-        face_edges = _face_edges(face)
-        owner = _best_face_owner(face_edges, macro_edge_ids)
+    for face in inner_faces(graph, pos):
+        owner = _best_face_owner(face_edges(face), macro_edge_ids)
         if owner is None:
             continue
         polygon = plt.Polygon(
@@ -179,56 +152,6 @@ def _best_face_owner(
     if best_count == 0:
         return None
     return best_macro
-
-
-def _inner_faces(graph: Graph, pos: dict[int, np.ndarray]) -> list[list[int]]:
-    nx_graph = nx.Graph()
-    for edge in graph.edges:
-        u, v = edge.id
-        if u != v:
-            nx_graph.add_edge(u, v)
-
-    is_planar, embedding = nx.check_planarity(nx_graph)
-    if not is_planar:
-        return []
-
-    faces: list[list[int]] = []
-    visited: set[tuple[int, int]] = set()
-    for u in embedding.nodes:
-        for v in embedding.neighbors_cw_order(u):
-            if (u, v) in visited:
-                continue
-            faces.append(list(embedding.traverse_face(u, v, mark_half_edges=visited)))
-
-    if len(faces) <= 1:
-        return []
-
-    outer_index = max(
-        range(len(faces)),
-        key=lambda index: abs(_polygon_area(faces[index], pos)),
-    )
-    return [
-        face
-        for index, face in enumerate(faces)
-        if index != outer_index
-    ]
-
-
-def _polygon_area(face: list[int], pos: dict[int, np.ndarray]) -> float:
-    area = 0.0
-    for index, vertex in enumerate(face):
-        next_vertex = face[(index + 1) % len(face)]
-        x1, y1 = pos[vertex]
-        x2, y2 = pos[next_vertex]
-        area += x1 * y2 - x2 * y1
-    return area / 2.0
-
-
-def _face_edges(face: list[int]) -> set[tuple[int, int]]:
-    return {
-        tuple(sorted((face[index], face[(index + 1) % len(face)])))
-        for index in range(len(face))
-    }
 
 
 def _plot_edge(

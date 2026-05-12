@@ -1,8 +1,8 @@
-from dimod import SampleSet
 from dimod import BinaryPolynomial, Vartype
 
 from mr2s_module.domain import Edge, Graph, GraphPartitionResult, Solution
 from mr2s_module.solver import QuboMR2SSolver
+from mr2s_module.util import empty_binary_sample_set
 
 
 class StubFaceCycle:
@@ -36,7 +36,7 @@ class StubQuboSolver:
         return Solution(
             edges={(edge.vertices[0], edge.vertices[1]) for edge in graph.edges},
             graph=graph,
-            sample_set=SampleSet.from_samples([], vartype="BINARY", energy=[]),
+            sample_set=empty_binary_sample_set(),
             score=None,
         )
 
