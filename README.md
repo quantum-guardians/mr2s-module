@@ -105,6 +105,7 @@ Important separation:
 
 - `SAQuboSolver`
 - `QuboMR2SSolver`
+- `SAMr2sSolver` (direct simulated annealing on edge orientations)
 
 ### Ranking and evaluation
 

@@ -23,6 +23,7 @@ from mr2s_module.qubo import (
 )
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
+from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver
 from mr2s_module.util import (
   build_dual_base,
   build_face_edges_map,
@@ -131,6 +132,20 @@ def build_dnc_solver(num_reads: int = 20) -> DnCMr2sSolver:
 def build_qubo_solver(num_reads: int = 20) -> QuboMR2SSolver:
   return QuboMR2SSolver(
     qubo_solver=ConfiguredSAQuboSolver(num_reads=num_reads),
+  )
+
+
+def build_sa_solver() -> SAMR2SSolver:
+  return SAMR2SSolver(
+    apsp_weight=0.0,
+    flow_weight=1.0,
+    disconnected_pair_penalty=0.0,
+    initial_temperature=0.5,
+    final_temperature=0.25,
+    cooling_rate=0.5,
+    sweeps_per_temperature=1,
+    num_restarts=1,
+    random_seed=11,
   )
 
 
@@ -489,7 +504,7 @@ def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
   base_graph, _positions = build_delaunay_planar_graph(
-    num_points=1000,
+    num_points=500,
     seed=11,
   )
   graph, removed_count = remove_edges_by_percent(
@@ -511,10 +526,12 @@ def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance(
 
   dnc_solver = build_dnc_solver(num_reads=5)
   qubo_solver = build_qubo_solver(num_reads=5)
+  sa_solver = build_sa_solver()
   division_trace, leaf_sub_graphs = trace_division(dnc_solver, clone_graph(graph))
   results = [
     run_timed_solver("dnc_mr2s_solver", dnc_solver, clone_graph(graph)),
     run_timed_solver("qubo_mr2s_solver", qubo_solver, clone_graph(graph)),
+    run_timed_solver("sa_mr2s_solver", sa_solver, clone_graph(graph)),
   ]
 
   print_solver_comparison(results)

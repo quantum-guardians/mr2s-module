@@ -105,6 +105,7 @@ graph = Graph(edges=[
 
 - `SAQuboSolver`
 - `QuboMR2SSolver`
+- `SAMr2sSolver` (간선 방향 자체를 직접 simulated annealing으로 최적화)
 
 ### 랭킹 및 평가
 
