@@ -39,6 +39,9 @@ class FaceCycle:
         self.repair_mode = repair_mode
 
     def run(self, graph: Graph) -> GraphPartitionResult:
+        if any(edge.directed for edge in graph.edges):
+            raise ValueError("FaceCycle requires an undirected input graph")
+
         nx_graph = self._to_networkx(graph)
         is_planar, _ = nx.check_planarity(nx_graph)
         if not is_planar:

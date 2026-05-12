@@ -51,6 +51,16 @@ def test_non_planar_graph_opts_out() -> None:
     assert not any(e.directed for e in result.remaining_edges)
 
 
+def test_directed_input_graph_raises_error() -> None:
+    graph = Graph(edges=[
+        Edge(0, 1, 1, True),
+        Edge(1, 2, 1, False),
+    ])
+
+    with pytest.raises(ValueError, match="undirected input graph"):
+        FaceCycle().run(graph)
+
+
 def test_triangle_directs_its_three_boundary_edges() -> None:
     graph = _make_graph_from_edges([(0, 1), (1, 2), (0, 2)])
     result = FaceCycle().run(graph)
