@@ -178,23 +178,14 @@ def trace_division(
     graph: Graph,
     depth: int = 0,
 ) -> tuple[list[dict[str, object]], list[Graph]]:
-  try:
-    bqm = solver.mr2s_solver.build_bqm(graph)
-    dnc_mr2s_solver.estimate_required_qubits(bqm)
+  if solver._can_embed(graph):
     return [_trace_entry(depth, graph, "embedded")], [graph]
-  except RuntimeError:
-    result = solver.face_cycle.run(graph)
-    sub_graphs = result.sub_graphs
-    if not solver._can_recurse(graph, sub_graphs):
-      return [_trace_entry(depth, graph, "fallback", sub_graphs)], [graph]
 
-    trace = [_trace_entry(depth, graph, "divided", sub_graphs)]
-    leaves = []
-    for sub_graph in sub_graphs:
-      child_trace, child_leaves = trace_division(solver, sub_graph, depth + 1)
-      trace.extend(child_trace)
-      leaves.extend(child_leaves)
-    return trace, leaves
+  sub_graphs = solver.divide_graph(graph)
+  if len(sub_graphs) == 1 and sub_graphs[0] is graph:
+    return [_trace_entry(depth, graph, "fallback", sub_graphs)], [graph]
+
+  return [_trace_entry(depth, graph, "divided", sub_graphs)], sub_graphs
 
 
 def print_division_trace(trace: list[dict[str, object]]) -> None:

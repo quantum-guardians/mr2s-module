@@ -6,7 +6,7 @@ from dimod import SampleSet
 from mr2s_module import estimate_required_qubits
 from mr2s_module.cycle import FaceCycle
 from mr2s_module.cycle.face_clusterer import KMeansFaceClusterer
-from mr2s_module.domain import Graph, Score, Solution
+from mr2s_module.domain import Edge, Graph, GraphPartitionResult, Score, Solution
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
 
 
@@ -25,28 +25,29 @@ class DnCMr2sSolver:
       graph: Graph
   ) -> Solution:
     solution_list = list(solutions)
-    candidate_edges: dict[tuple[int, int], set[tuple[int, int]]] = {}
-    balance: dict[int, float] = {}
+    candidate_edges: dict[tuple[int, int], tuple[int, int]] = {}
 
     for solution in solution_list:
       for source, target in solution.edges:
         edge_id = (min(source, target), max(source, target))
-        candidate_edges.setdefault(edge_id, set()).add((source, target))
+        direction = (source, target)
+        previous_direction = candidate_edges.get(edge_id)
+        if previous_direction is not None and previous_direction != direction:
+          raise ValueError(
+            f"Conflicting directions for edge {edge_id}: "
+            f"{previous_direction} and {direction}"
+          )
+        candidate_edges[edge_id] = direction
 
     merged_edges: set[tuple[int, int]] = set()
     for edge in graph.edges:
-      candidates = candidate_edges.get(edge.id, set())
-      if not candidates:
+      direction = candidate_edges.get(edge.id)
+      if direction is None:
         continue
       if edge.directed:
         direction = edge.vertices
-      elif len(candidates) == 1:
-        direction = next(iter(candidates))
-      elif len(candidates) > 1:
-        direction = self._select_merge_direction(candidates, edge.weight, balance)
 
       merged_edges.add(direction)
-      self._apply_flow_balance(direction, edge.weight, balance)
 
     sample_set = (
       solution_list[0].sample_set
@@ -62,36 +63,6 @@ class DnCMr2sSolver:
     )
 
   @staticmethod
-  def _apply_flow_balance(
-      direction: tuple[int, int],
-      weight: float,
-      balance: dict[int, float],
-  ) -> None:
-    source, target = direction
-    balance[source] = balance.get(source, 0.0) - weight
-    balance[target] = balance.get(target, 0.0) + weight
-
-  @classmethod
-  def _select_merge_direction(
-      cls,
-      candidates: set[tuple[int, int]],
-      weight: float,
-      balance: dict[int, float],
-  ) -> tuple[int, int]:
-    def flow_penalty(direction: tuple[int, int]) -> float:
-      source, target = direction
-      source_balance = balance.get(source, 0.0)
-      target_balance = balance.get(target, 0.0)
-      return (
-        (source_balance - weight) ** 2
-        + (target_balance + weight) ** 2
-        - source_balance ** 2
-        - target_balance ** 2
-      )
-
-    return min(candidates, key=lambda direction: (flow_penalty(direction), direction))
-
-  @staticmethod
   def _can_recurse(parent: Graph, sub_graphs: list[Graph]) -> bool:
     if not sub_graphs:
       return False
@@ -102,21 +73,71 @@ class DnCMr2sSolver:
       for sub_graph in sub_graphs
     )
 
-  def divide_graph(self, graph: Graph) -> list[Graph]:
+  def _can_embed(self, graph: Graph) -> bool:
     try:
       estimate_required_qubits(self.mr2s_solver.build_bqm(graph))
-      return [graph]
+      return True
     except RuntimeError:
-      result = self.face_cycle.run(graph)
+      return False
+
+  def _partition_with_target_k(
+      self,
+      graph: Graph,
+      target_k: int,
+  ) -> GraphPartitionResult:
+    previous_target_k = self.face_cycle.target_k
+    self.face_cycle.target_k = target_k
+    try:
+      return self.face_cycle.run(graph)
+    finally:
+      self.face_cycle.target_k = previous_target_k
+
+  def _find_partition_by_target_k(self, graph: Graph) -> list[Graph]:
+    left = 2
+    right = max(2, len(graph.edges))
+    best_sub_graphs: list[Graph] | None = None
+
+    while left <= right:
+      target_k = (left + right) // 2
+      result = self._partition_with_target_k(graph, target_k)
       sub_graphs = result.sub_graphs
-      if not self._can_recurse(graph, sub_graphs):
-        return [graph]
 
-      leaf_graphs = []
-      for sub_graph in sub_graphs:
-        leaf_graphs += self.divide_graph(sub_graph)
+      if self._can_recurse(graph, sub_graphs) and all(
+          self._can_embed(sub_graph)
+          for sub_graph in sub_graphs
+      ):
+        best_sub_graphs = sub_graphs
+        right = target_k - 1
+      else:
+        left = target_k + 1
 
-    return leaf_graphs
+    return best_sub_graphs or []
+
+  def divide_graph(self, graph: Graph) -> list[Graph]:
+    if self._can_embed(graph):
+      return [graph]
+
+    sub_graphs = self._find_partition_by_target_k(graph)
+    if not sub_graphs:
+      return [graph]
+    return sub_graphs
+
+  @staticmethod
+  def _apply_merged_directions(graph: Graph, solution: Solution) -> None:
+    weights_by_edge = {
+      edge.id: edge.weight
+      for edge in graph.edges
+    }
+    predefined_edges = {
+      Edge(
+        source,
+        target,
+        weights_by_edge[(min(source, target), max(source, target))],
+        True,
+      )
+      for source, target in solution.edges
+    }
+    graph.define_edge_direction(predefined_edges)
 
   def score_merged_solution(
       self,
@@ -136,6 +157,9 @@ class DnCMr2sSolver:
 
   def run(self, graph: Graph) -> Solution:
     sub_graphs = self.divide_graph(graph)
+    if len(sub_graphs) == 1 and sub_graphs[0] is graph:
+      return self.mr2s_solver.run(graph)
+
     solutions = []
     for sub_graph in sub_graphs:
       solution = self.mr2s_solver.run(sub_graph)
@@ -145,5 +169,7 @@ class DnCMr2sSolver:
       solutions=solutions,
       graph=graph
     )
-    merged_solution.score = self.score_merged_solution(merged_solution, solutions)
-    return merged_solution
+    self._apply_merged_directions(graph, merged_solution)
+    final_solution = self.mr2s_solver.run(graph)
+    final_solution.score = self.score_merged_solution(final_solution, solutions)
+    return final_solution
