@@ -25,29 +25,28 @@ class DnCMr2sSolver:
       graph: Graph
   ) -> Solution:
     solution_list = list(solutions)
-    candidate_edges: dict[tuple[int, int], tuple[int, int]] = {}
+    candidate_edges: dict[tuple[int, int], set[tuple[int, int]]] = {}
+    balance: dict[int, float] = {}
 
     for solution in solution_list:
       for source, target in solution.edges:
         edge_id = (min(source, target), max(source, target))
-        direction = (source, target)
-        previous_direction = candidate_edges.get(edge_id)
-        if previous_direction is not None and previous_direction != direction:
-          raise ValueError(
-            f"Conflicting directions for edge {edge_id}: "
-            f"{previous_direction} and {direction}"
-          )
-        candidate_edges[edge_id] = direction
+        candidate_edges.setdefault(edge_id, set()).add((source, target))
 
     merged_edges: set[tuple[int, int]] = set()
     for edge in graph.edges:
-      direction = candidate_edges.get(edge.id)
-      if direction is None:
+      candidates = candidate_edges.get(edge.id, set())
+      if not candidates:
         continue
       if edge.directed:
         direction = edge.vertices
+      elif len(candidates) == 1:
+        direction = next(iter(candidates))
+      else:
+        direction = self._select_merge_direction(candidates, edge.weight, balance)
 
       merged_edges.add(direction)
+      self._apply_flow_balance(direction, edge.weight, balance)
 
     sample_set = (
       solution_list[0].sample_set
@@ -61,6 +60,36 @@ class DnCMr2sSolver:
       sample_set=sample_set,
       score=None,
     )
+
+  @staticmethod
+  def _apply_flow_balance(
+      direction: tuple[int, int],
+      weight: float,
+      balance: dict[int, float],
+  ) -> None:
+    source, target = direction
+    balance[source] = balance.get(source, 0.0) - weight
+    balance[target] = balance.get(target, 0.0) + weight
+
+  @classmethod
+  def _select_merge_direction(
+      cls,
+      candidates: set[tuple[int, int]],
+      weight: float,
+      balance: dict[int, float],
+  ) -> tuple[int, int]:
+    def flow_penalty(direction: tuple[int, int]) -> float:
+      source, target = direction
+      source_balance = balance.get(source, 0.0)
+      target_balance = balance.get(target, 0.0)
+      return (
+        (source_balance - weight) ** 2
+        + (target_balance + weight) ** 2
+        - source_balance ** 2
+        - target_balance ** 2
+      )
+
+    return min(candidates, key=lambda direction: (flow_penalty(direction), direction))
 
   @staticmethod
   def _can_recurse(parent: Graph, sub_graphs: list[Graph]) -> bool:
@@ -167,7 +196,7 @@ class DnCMr2sSolver:
 
     merged_solution = self.merge_solutions(
       solutions=solutions,
-      graph=graph
+      graph=graph,
     )
     self._apply_merged_directions(graph, merged_solution)
     final_solution = self.mr2s_solver.run(graph)

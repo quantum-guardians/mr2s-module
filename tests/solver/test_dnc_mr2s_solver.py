@@ -123,29 +123,63 @@ def test_merge_solutions_combines_solution_edges() -> None:
   assert merged.score is None
 
 
-def test_merge_solutions_rejects_conflicting_directions() -> None:
+def test_merge_solutions_keeps_one_direction_per_input_edge() -> None:
   graph = Graph(edges=[
     Edge(1, 2, 1, False),
     Edge(2, 3, 1, False),
   ])
   solver = DnCMr2sSolver(mr2s_solver=object())
 
-  with pytest.raises(ValueError, match="Conflicting directions"):
-    solver.merge_solutions(
-      solutions=[
-        Solution(
-          edges={(1, 2), (2, 3)},
-          graph=graph,
-          sample_set=_empty_sample_set(),
-        ),
-        Solution(
-          edges={(2, 1), (3, 2)},
-          graph=graph,
-          sample_set=_empty_sample_set(),
-        ),
-      ],
-      graph=graph,
-    )
+  merged = solver.merge_solutions(
+    solutions=[
+      Solution(
+        edges={(1, 2), (2, 3)},
+        graph=graph,
+        sample_set=_empty_sample_set(),
+      ),
+      Solution(
+        edges={(2, 1), (3, 2)},
+        graph=graph,
+        sample_set=_empty_sample_set(),
+      ),
+    ],
+    graph=graph,
+  )
+
+  selected_undirected_edges = {
+    (min(source, target), max(source, target))
+    for source, target in merged.edges
+  }
+
+  assert len(merged.edges) == len(graph.edges)
+  assert selected_undirected_edges == {edge.id for edge in graph.edges}
+
+
+def test_merge_solutions_selects_direction_that_reduces_flow_imbalance() -> None:
+  graph = Graph(edges=[
+    Edge(1, 3, 2, False),
+    Edge(2, 3, 1, False),
+  ])
+  solver = DnCMr2sSolver(mr2s_solver=object())
+
+  merged = solver.merge_solutions(
+    solutions=[
+      Solution(
+        edges={(1, 3), (2, 3)},
+        graph=graph,
+        sample_set=_empty_sample_set(),
+      ),
+      Solution(
+        edges={(3, 2)},
+        graph=graph,
+        sample_set=_empty_sample_set(),
+      ),
+    ],
+    graph=graph,
+  )
+
+  assert (1, 3) in merged.edges
+  assert (3, 2) in merged.edges
 
 
 def test_score_merged_solution_multiplies_child_strong_connect_rates() -> None:
