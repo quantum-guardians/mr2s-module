@@ -215,6 +215,151 @@ def test_score_merged_solution_multiplies_child_strong_connect_rates() -> None:
   assert score.strong_connect_rate == pytest.approx(0.4)
 
 
+def test_subgraph_processes_must_be_positive() -> None:
+  with pytest.raises(ValueError, match="subgraph_processes"):
+    DnCMr2sSolver(mr2s_solver=StubMr2sSolver(), subgraph_processes=0)
+
+
+def test_resolve_subgraph_processes_uses_auto_cpu_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  solver = DnCMr2sSolver(mr2s_solver=StubMr2sSolver())
+  monkeypatch.setattr(dnc_mr2s_solver.os, "process_cpu_count", lambda: 8, raising=False)
+
+  assert solver._resolve_subgraph_processes(3) == 3
+
+
+def test_resolve_subgraph_processes_caps_configured_count() -> None:
+  solver = DnCMr2sSolver(
+    mr2s_solver=StubMr2sSolver(),
+    subgraph_processes=4,
+  )
+
+  assert solver._resolve_subgraph_processes(2) == 2
+
+
+def test_solve_subgraphs_uses_process_pool_for_multiple_workers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  graph_a = Graph(edges=[Edge(1, 2, 1, False)])
+  graph_b = Graph(edges=[Edge(3, 4, 1, False)])
+  created_workers: list[int | None] = []
+  contexts: list[object] = []
+
+  class FakeProcessPoolExecutor:
+    def __init__(self, max_workers: int | None = None, mp_context=None) -> None:
+      created_workers.append(max_workers)
+      contexts.append(mp_context)
+
+    def __enter__(self):
+      return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+      return None
+
+    def map(self, func, iterable):
+      return [func(item) for item in iterable]
+
+  monkeypatch.setattr(
+    dnc_mr2s_solver,
+    "ProcessPoolExecutor",
+    FakeProcessPoolExecutor,
+  )
+  solver = DnCMr2sSolver(
+    mr2s_solver=StubRunningMr2sSolver(),
+    subgraph_processes=2,
+  )
+
+  solutions = solver._solve_subgraphs([graph_a, graph_b])
+
+  assert created_workers == [2]
+  assert contexts == [None]
+  assert [solution.graph for solution in solutions] == [graph_a, graph_b]
+
+
+def test_solve_subgraphs_uses_spawn_context_on_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  graph_a = Graph(edges=[Edge(1, 2, 1, False)])
+  graph_b = Graph(edges=[Edge(3, 4, 1, False)])
+  start_methods: list[str] = []
+
+  class FakeProcessPoolExecutor:
+    def __init__(self, max_workers: int | None = None, mp_context=None) -> None:
+      start_methods.append(mp_context.get_start_method())
+
+    def __enter__(self):
+      return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+      return None
+
+    def map(self, func, iterable):
+      return [func(item) for item in iterable]
+
+  monkeypatch.setattr(dnc_mr2s_solver.os, "name", "nt")
+  monkeypatch.setattr(
+    dnc_mr2s_solver,
+    "ProcessPoolExecutor",
+    FakeProcessPoolExecutor,
+  )
+  solver = DnCMr2sSolver(
+    mr2s_solver=StubRunningMr2sSolver(),
+    subgraph_processes=2,
+  )
+
+  solver._solve_subgraphs([graph_a, graph_b])
+
+  assert start_methods == ["spawn"]
+
+
+def test_solve_subgraphs_falls_back_when_process_pool_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  graph_a = Graph(edges=[Edge(1, 2, 1, False)])
+  graph_b = Graph(edges=[Edge(3, 4, 1, False)])
+  mr2s_solver = StubRunningMr2sSolver()
+
+  class UnavailableProcessPoolExecutor:
+    def __init__(self, max_workers: int | None = None, mp_context=None) -> None:
+      raise PermissionError("semaphore unavailable")
+
+  monkeypatch.setattr(
+    dnc_mr2s_solver,
+    "ProcessPoolExecutor",
+    UnavailableProcessPoolExecutor,
+  )
+  solver = DnCMr2sSolver(
+    mr2s_solver=mr2s_solver,
+    subgraph_processes=2,
+  )
+
+  solutions = solver._solve_subgraphs([graph_a, graph_b])
+
+  assert mr2s_solver.run_graphs == [graph_a, graph_b]
+  assert [solution.graph for solution in solutions] == [graph_a, graph_b]
+
+
+def test_solve_subgraphs_skips_qubo_solver_for_directed_only_graph() -> None:
+  sub_graph = Graph(edges=[
+    Edge(1, 2, 1, True),
+    Edge(2, 3, 1, True),
+  ])
+  mr2s_solver = StubRunningMr2sSolver()
+  solver = DnCMr2sSolver(
+    mr2s_solver=mr2s_solver,
+    subgraph_processes=1,
+  )
+
+  solutions = solver._solve_subgraphs([sub_graph])
+
+  assert mr2s_solver.run_graphs == []
+  assert len(solutions) == 1
+  assert solutions[0].edges == {(1, 2), (2, 3)}
+  assert solutions[0].graph is sub_graph
+  assert solutions[0].score is not None
+
+
 def test_divide_graph_keeps_graph_when_embedding_estimate_succeeds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

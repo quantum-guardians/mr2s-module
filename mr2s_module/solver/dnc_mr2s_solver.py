@@ -1,4 +1,7 @@
 from dataclasses import dataclass, field
+from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
+import os
 from typing import Iterable
 
 from dimod import SampleSet
@@ -10,10 +13,37 @@ from mr2s_module.domain import Edge, Graph, GraphPartitionResult, Score, Solutio
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
 
 
+def _run_subgraph_solution(args: tuple[QuboMR2SSolver, Graph, SampleSet]) -> Solution:
+  mr2s_solver, sub_graph, empty_sample_set = args
+  return _solve_subgraph(mr2s_solver, sub_graph, empty_sample_set)
+
+
+def _solve_subgraph(
+    mr2s_solver: QuboMR2SSolver,
+    sub_graph: Graph,
+    empty_sample_set: SampleSet,
+) -> Solution:
+  if sub_graph.edges and all(edge.directed for edge in sub_graph.edges):
+    solution = Solution(
+      edges={edge.vertices for edge in sub_graph.edges},
+      graph=sub_graph,
+      sample_set=empty_sample_set,
+    )
+    solution.score = mr2s_solver.evaluator.run(solution)
+    return solution
+
+  return mr2s_solver.run(sub_graph)
+
+
 @dataclass
 class DnCMr2sSolver:
   mr2s_solver: QuboMR2SSolver
   face_cycle: FaceCycle = field(default_factory=lambda: FaceCycle(target_k=2, clusterer=KMeansFaceClusterer()))
+  subgraph_processes: int | None = None
+
+  def __post_init__(self) -> None:
+    if self.subgraph_processes is not None and self.subgraph_processes < 1:
+      raise ValueError("subgraph_processes must be None or at least 1")
 
   @staticmethod
   def _empty_sample_set() -> SampleSet:
@@ -184,15 +214,58 @@ class DnCMr2sSolver:
     score.strong_connect_rate = strong_connect_rate
     return score
 
+  def _resolve_subgraph_processes(self, subgraph_count: int) -> int:
+    if subgraph_count < 1:
+      return 1
+    if self.subgraph_processes is not None:
+      return min(self.subgraph_processes, subgraph_count)
+
+    process_cpu_count = getattr(os, "process_cpu_count", None)
+    cpu_count = (
+      process_cpu_count()
+      if process_cpu_count is not None
+      else os.cpu_count()
+    ) or 1
+    return max(1, min(cpu_count, subgraph_count))
+
+  def _solve_subgraphs(self, sub_graphs: list[Graph]) -> list[Solution]:
+    process_count = self._resolve_subgraph_processes(len(sub_graphs))
+    empty_sample_set = self._empty_sample_set()
+    if process_count == 1:
+      return [
+        _solve_subgraph(self.mr2s_solver, sub_graph, empty_sample_set)
+        for sub_graph in sub_graphs
+      ]
+
+    mp_context = (
+      multiprocessing.get_context("spawn")
+      if os.name == "nt"
+      else None
+    )
+    try:
+      with ProcessPoolExecutor(
+          max_workers=process_count,
+          mp_context=mp_context,
+      ) as executor:
+        return list(executor.map(
+          _run_subgraph_solution,
+          [
+            (self.mr2s_solver, sub_graph, empty_sample_set)
+            for sub_graph in sub_graphs
+          ],
+        ))
+    except (NotImplementedError, OSError, PermissionError):
+      return [
+        _solve_subgraph(self.mr2s_solver, sub_graph, empty_sample_set)
+        for sub_graph in sub_graphs
+      ]
+
   def run(self, graph: Graph) -> Solution:
     sub_graphs = self.divide_graph(graph)
     if len(sub_graphs) == 1 and sub_graphs[0] is graph:
       return self.mr2s_solver.run(graph)
 
-    solutions = []
-    for sub_graph in sub_graphs:
-      solution = self.mr2s_solver.run(sub_graph)
-      solutions.append(solution)
+    solutions = self._solve_subgraphs(sub_graphs)
 
     merged_solution = self.merge_solutions(
       solutions=solutions,
