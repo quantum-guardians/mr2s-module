@@ -416,6 +416,33 @@ def test_embedding_estimate_does_not_cache_failures(
   assert estimate_calls == 2
 
 
+def test_embedding_estimate_cache_reused_across_solver_instances(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+  estimate_calls = 0
+
+  def estimate_succeeds(bqm):
+    nonlocal estimate_calls
+    estimate_calls += 1
+    return _fake_embedding_estimate(bqm)
+
+  monkeypatch.setattr(dnc_mr2s_solver, "estimate_required_qubits", estimate_succeeds)
+  first_solver = DnCMr2sSolver(
+    mr2s_solver=StubMr2sSolver(),
+    cache_directory=str(tmp_path),
+  )
+  second_solver = DnCMr2sSolver(
+    mr2s_solver=StubMr2sSolver(),
+    cache_directory=str(tmp_path),
+  )
+
+  assert first_solver._embedding_estimate(graph) is not None
+  assert second_solver._embedding_estimate(graph) is not None
+  assert estimate_calls == 1
+
+
 def test_divide_graph_keeps_graph_when_embedding_estimate_succeeds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

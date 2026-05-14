@@ -20,6 +20,7 @@ from mr2s_module.util.planar_graph import (
   select_outer_face,
 )
 from mr2s_module.util.sample_set import empty_binary_sample_set
+from mr2s_module.util.caching import file_cache
 
 __all__ = [
   "get_indicator_function",
@@ -35,6 +36,7 @@ __all__ = [
   "clone_edge",
   "domain_graph_to_networkx",
   "empty_binary_sample_set",
+  "file_cache",
   "enumerate_faces",
   "face_edges",
   "inner_faces",
