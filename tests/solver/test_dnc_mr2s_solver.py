@@ -621,7 +621,7 @@ def test_embedding_estimate_calls_estimator_when_edge_count_matches_target_nodes
   def estimate_required_qubits_called(_bqm, target_graph=None):
     nonlocal called
     called = True
-    return _fake_embedding_estimate(graph)
+    return _fake_embedding_estimate(_bqm)
 
   monkeypatch.setattr(
     dnc_mr2s_solver,
