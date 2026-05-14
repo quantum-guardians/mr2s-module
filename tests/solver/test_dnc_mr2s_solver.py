@@ -1,3 +1,4 @@
+from pathlib import Path
 import pytest
 
 from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, GraphPartitionResult, Score, Solution
@@ -365,6 +366,81 @@ def test_solve_subgraphs_skips_qubo_solver_for_directed_only_graph() -> None:
   assert solutions[0].edges == {(1, 2), (2, 3)}
   assert solutions[0].graph is sub_graph
   assert solutions[0].score is not None
+
+
+def test_embedding_estimate_uses_file_cache(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+  estimate_calls = 0
+
+  def estimate_succeeds(bqm):
+    nonlocal estimate_calls
+    estimate_calls += 1
+    return _fake_embedding_estimate(bqm)
+
+  monkeypatch.setattr(dnc_mr2s_solver, "estimate_required_qubits", estimate_succeeds)
+  solver = DnCMr2sSolver(
+    mr2s_solver=StubMr2sSolver(),
+    cache_directory=str(tmp_path),
+  )
+
+  first = solver._embedding_estimate(graph)
+  second = solver._embedding_estimate(graph)
+
+  assert first == second
+  assert estimate_calls == 1
+
+
+def test_embedding_estimate_does_not_cache_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+  estimate_calls = 0
+
+  def estimate_fails(_bqm):
+    nonlocal estimate_calls
+    estimate_calls += 1
+    raise RuntimeError("too large")
+
+  monkeypatch.setattr(dnc_mr2s_solver, "estimate_required_qubits", estimate_fails)
+  solver = DnCMr2sSolver(
+    mr2s_solver=StubMr2sSolver(),
+    cache_directory=str(tmp_path),
+  )
+
+  assert solver._embedding_estimate(graph) is None
+  assert solver._embedding_estimate(graph) is None
+  assert estimate_calls == 2
+
+
+def test_embedding_estimate_cache_reused_across_solver_instances(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+  estimate_calls = 0
+
+  def estimate_succeeds(bqm):
+    nonlocal estimate_calls
+    estimate_calls += 1
+    return _fake_embedding_estimate(bqm)
+
+  monkeypatch.setattr(dnc_mr2s_solver, "estimate_required_qubits", estimate_succeeds)
+  first_solver = DnCMr2sSolver(
+    mr2s_solver=StubMr2sSolver(),
+    cache_directory=str(tmp_path),
+  )
+  second_solver = DnCMr2sSolver(
+    mr2s_solver=StubMr2sSolver(),
+    cache_directory=str(tmp_path),
+  )
+
+  assert first_solver._embedding_estimate(graph) is not None
+  assert second_solver._embedding_estimate(graph) is not None
+  assert estimate_calls == 1
 
 
 def test_divide_graph_keeps_graph_when_embedding_estimate_succeeds(

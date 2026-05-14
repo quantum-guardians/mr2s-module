@@ -24,6 +24,7 @@ dependencies = [
     "numpy",
     "minorminer",
     "dwave-networkx",
+    "diskcache",
 ]
 
 [project.optional-dependencies]

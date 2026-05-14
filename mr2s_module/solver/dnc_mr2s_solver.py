@@ -11,7 +11,7 @@ from mr2s_module.cycle import FaceCycle
 from mr2s_module.cycle.face_clusterer import KMeansFaceClusterer
 from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, GraphPartitionResult, Score, Solution
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
-from mr2s_module.util import empty_binary_sample_set
+from mr2s_module.util import empty_binary_sample_set, file_cache
 
 
 def _run_subgraph_solution(args: tuple[QuboMR2SSolver, Graph, SampleSet]) -> Solution:
@@ -53,10 +53,38 @@ class DnCMr2sSolver:
   mr2s_solver: QuboMR2SSolver
   face_cycle: FaceCycle = field(default_factory=lambda: FaceCycle(target_k=2, clusterer=KMeansFaceClusterer()))
   subgraph_processes: int | None = None
+  cache_directory: str | None = None
 
   def __post_init__(self) -> None:
     if self.subgraph_processes is not None and self.subgraph_processes < 1:
       raise ValueError("subgraph_processes must be None or at least 1")
+
+  def _resolve_embedding_cache_directory(self) -> str:
+    return self.cache_directory or os.path.join(
+      os.path.expanduser("~"),
+      ".cache",
+      "mr2s_module",
+      "embedding_estimate",
+    )
+
+  @staticmethod
+  def _build_embedding_cache_key(graph: Graph) -> tuple[tuple[int, int, float, bool], ...]:
+    return tuple(sorted(
+      (
+        edge.vertices[0],
+        edge.vertices[1],
+        float(edge.weight),
+        edge.directed,
+      )
+      for edge in graph.edges
+    ))
+
+  @staticmethod
+  def _embedding_estimator_identity() -> tuple[str, str]:
+    return (
+      getattr(estimate_required_qubits, "__module__", ""),
+      getattr(estimate_required_qubits, "__qualname__", ""),
+    )
 
   def merge_solutions(
       self,
@@ -141,11 +169,21 @@ class DnCMr2sSolver:
       for sub_graph in sub_graphs
     )
 
+  @file_cache(
+    cache_namespace="dnc_embedding_estimate",
+    cache_key_builder=lambda self, graph: (
+      self._embedding_estimator_identity(),
+      self._build_embedding_cache_key(graph),
+    ),
+    cache_directory_resolver=lambda self, graph: self._resolve_embedding_cache_directory(),
+    should_cache=lambda estimate: estimate is not None,
+  )
   def _embedding_estimate(self, graph: Graph) -> EmbeddingEstimate | None:
     try:
-      return estimate_required_qubits(self.mr2s_solver.build_bqm(graph))
+      estimate = estimate_required_qubits(self.mr2s_solver.build_bqm(graph))
     except RuntimeError:
       return None
+    return estimate
 
   def _can_embed(self, graph: Graph) -> bool:
     return self._embedding_estimate(graph) is not None
