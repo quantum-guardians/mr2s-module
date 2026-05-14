@@ -1,9 +1,13 @@
 from dataclasses import dataclass, field
 from concurrent.futures import ProcessPoolExecutor
+import logging
 import multiprocessing
 import os
+from time import perf_counter
 from typing import Iterable
 
+import dwave_networkx as dnx
+import networkx as nx
 from dimod import SampleSet
 
 from mr2s_module import estimate_required_qubits
@@ -12,6 +16,21 @@ from mr2s_module.cycle.face_clusterer import KMeansFaceClusterer
 from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, GraphPartitionResult, Score, Solution
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
 from mr2s_module.util import empty_binary_sample_set
+
+
+logger = logging.getLogger(__name__)
+
+
+def _elapsed_ms(start_time: float) -> float:
+  return (perf_counter() - start_time) * 1000
+
+
+def _graph_log_context(graph: Graph) -> dict[str, int]:
+  return {
+    "vertices": len(graph.get_vertices()),
+    "edges": len(graph.edges),
+    "directed_edges": sum(1 for edge in graph.edges if edge.directed),
+  }
 
 
 def _run_subgraph_solution(args: tuple[QuboMR2SSolver, Graph, SampleSet]) -> Solution:
@@ -24,6 +43,14 @@ def _solve_subgraph(
     sub_graph: Graph,
     empty_sample_set: SampleSet,
 ) -> Solution:
+  started_at = perf_counter()
+  graph_context = _graph_log_context(sub_graph)
+  logger.info(
+    "DnC solve subgraph started vertices=%d edges=%d directed_edges=%d",
+    graph_context["vertices"],
+    graph_context["edges"],
+    graph_context["directed_edges"],
+  )
   if sub_graph.edges and all(edge.directed for edge in sub_graph.edges):
     solution = Solution(
       edges={edge.vertices for edge in sub_graph.edges},
@@ -31,9 +58,19 @@ def _solve_subgraph(
       sample_set=empty_sample_set,
     )
     solution.score = mr2s_solver.evaluator.run(solution)
+    logger.info(
+      "DnC solve subgraph skipped QUBO for directed-only graph elapsed_ms=%.3f",
+      _elapsed_ms(started_at),
+    )
     return solution
 
-  return mr2s_solver.run(sub_graph)
+  solution = mr2s_solver.run(sub_graph)
+  logger.info(
+    "DnC solve subgraph finished elapsed_ms=%.3f solution_edges=%d",
+    _elapsed_ms(started_at),
+    len(solution.edges),
+  )
+  return solution
 
 
 @dataclass
@@ -53,6 +90,7 @@ class DnCMr2sSolver:
   mr2s_solver: QuboMR2SSolver
   face_cycle: FaceCycle = field(default_factory=lambda: FaceCycle(target_k=2, clusterer=KMeansFaceClusterer()))
   subgraph_processes: int | None = None
+  target_graph: nx.Graph = field(default_factory=lambda: dnx.pegasus_graph(16))
 
   def __post_init__(self) -> None:
     if self.subgraph_processes is not None and self.subgraph_processes < 1:
@@ -63,7 +101,13 @@ class DnCMr2sSolver:
       solutions: Iterable[Solution],
       graph: Graph
   ) -> Solution:
+    started_at = perf_counter()
     solution_list = list(solutions)
+    logger.info(
+      "DnC merge solutions started child_solutions=%d graph_edges=%d",
+      len(solution_list),
+      len(graph.edges),
+    )
     candidate_edges: dict[tuple[int, int], set[tuple[int, int]]] = {}
     balance: dict[int, float] = {}
 
@@ -93,12 +137,18 @@ class DnCMr2sSolver:
       else empty_binary_sample_set()
     )
 
-    return Solution(
+    merged_solution = Solution(
       edges=merged_edges,
       graph=graph,
       sample_set=sample_set,
       score=None,
     )
+    logger.info(
+      "DnC merge solutions finished elapsed_ms=%.3f merged_edges=%d",
+      _elapsed_ms(started_at),
+      len(merged_edges),
+    )
+    return merged_solution
 
   @staticmethod
   def _apply_flow_balance(
@@ -142,9 +192,66 @@ class DnCMr2sSolver:
     )
 
   def _embedding_estimate(self, graph: Graph) -> EmbeddingEstimate | None:
+    started_at = perf_counter()
+    graph_context = _graph_log_context(graph)
+    logger.info(
+      "DnC embedding estimate started vertices=%d edges=%d directed_edges=%d",
+      graph_context["vertices"],
+      graph_context["edges"],
+      graph_context["directed_edges"],
+    )
+    target_node_count = self.target_graph.number_of_nodes()
+    undirected_edge_count = sum(
+      1
+      for edge in graph.edges
+      if not edge.directed
+    )
+    if undirected_edge_count > target_node_count:
+      logger.info(
+        "DnC embedding estimate skipped by edge prefilter "
+        "elapsed_ms=%.3f undirected_edges=%d target_nodes=%d",
+        _elapsed_ms(started_at),
+        undirected_edge_count,
+        target_node_count,
+      )
+      return None
+
     try:
-      return estimate_required_qubits(self.mr2s_solver.build_bqm(graph))
+      build_started_at = perf_counter()
+      bqm = self.mr2s_solver.build_bqm(graph)
+      logger.info(
+        "DnC embedding estimate built BQM elapsed_ms=%.3f variables=%d",
+        _elapsed_ms(build_started_at),
+        len(bqm.variables),
+      )
+      if len(bqm.variables) > target_node_count:
+        logger.info(
+          "DnC embedding estimate skipped by variable prefilter "
+          "elapsed_ms=%.3f variables=%d target_nodes=%d",
+          _elapsed_ms(started_at),
+          len(bqm.variables),
+          target_node_count,
+        )
+        return None
+      estimate_started_at = perf_counter()
+      estimate = estimate_required_qubits(
+        bqm,
+        target_graph=self.target_graph,
+      )
+      logger.info(
+        "DnC embedding estimate finished elapsed_ms=%.3f "
+        "estimator_elapsed_ms=%.3f physical_qubits=%d max_chain_length=%d",
+        _elapsed_ms(started_at),
+        _elapsed_ms(estimate_started_at),
+        estimate.num_physical_qubits,
+        estimate.max_chain_length,
+      )
+      return estimate
     except RuntimeError:
+      logger.info(
+        "DnC embedding estimate failed elapsed_ms=%.3f",
+        _elapsed_ms(started_at),
+      )
       return None
 
   def _can_embed(self, graph: Graph) -> bool:
@@ -163,9 +270,18 @@ class DnCMr2sSolver:
     return estimates
 
   def _single_graph_partition(self, graph: Graph) -> _EmbeddablePartition | None:
+    started_at = perf_counter()
     estimate = self._embedding_estimate(graph)
     if estimate is None:
+      logger.info(
+        "DnC single-graph partition unavailable elapsed_ms=%.3f",
+        _elapsed_ms(started_at),
+      )
       return None
+    logger.info(
+      "DnC single-graph partition selected elapsed_ms=%.3f",
+      _elapsed_ms(started_at),
+    )
     return _EmbeddablePartition(
       sub_graphs=[graph],
       embedding_estimates=[estimate],
@@ -179,14 +295,35 @@ class DnCMr2sSolver:
     )
 
   def _divide_graph_with_embeddings(self, graph: Graph) -> _EmbeddablePartition:
+    started_at = perf_counter()
+    graph_context = _graph_log_context(graph)
+    logger.info(
+      "DnC divide graph started vertices=%d edges=%d directed_edges=%d",
+      graph_context["vertices"],
+      graph_context["edges"],
+      graph_context["directed_edges"],
+    )
     partition = self._single_graph_partition(graph)
     if partition is not None:
+      logger.info(
+        "DnC divide graph finished with single graph elapsed_ms=%.3f",
+        _elapsed_ms(started_at),
+      )
       return partition
 
     partition = self._find_partition_by_target_k(graph)
     if partition is None:
+      logger.info(
+        "DnC divide graph failed elapsed_ms=%.3f",
+        _elapsed_ms(started_at),
+      )
       self._raise_partition_failed(graph)
 
+    logger.info(
+      "DnC divide graph finished elapsed_ms=%.3f subgraphs=%d",
+      _elapsed_ms(started_at),
+      len(partition.sub_graphs),
+    )
     return partition
 
   def _attach_partition_metadata(
@@ -216,29 +353,67 @@ class DnCMr2sSolver:
       self.face_cycle.target_k = previous_target_k
 
   def _find_partition_by_target_k(self, graph: Graph) -> _EmbeddablePartition | None:
+    started_at = perf_counter()
     left = 2
     right = max(2, len(graph.edges))
     best_partition: _EmbeddablePartition | None = None
+    logger.info(
+      "DnC target_k search started left=%d right=%d graph_edges=%d",
+      left,
+      right,
+      len(graph.edges),
+    )
 
     while left <= right:
       target_k = (left + right) // 2
+      attempt_started_at = perf_counter()
+      logger.info(
+        "DnC target_k attempt started target_k=%d left=%d right=%d",
+        target_k,
+        left,
+        right,
+      )
       result = self._partition_with_target_k(graph, target_k)
+      partition_elapsed_ms = _elapsed_ms(attempt_started_at)
       sub_graphs = result.sub_graphs
+      estimate_started_at = perf_counter()
       embedding_estimates = (
         self._estimate_partition(sub_graphs)
         if self._is_progressing_partition(graph, sub_graphs)
         else None
       )
+      estimate_elapsed_ms = _elapsed_ms(estimate_started_at)
 
       if embedding_estimates is not None:
         best_partition = _EmbeddablePartition(
           sub_graphs=sub_graphs,
           embedding_estimates=embedding_estimates,
         )
+        logger.info(
+          "DnC target_k attempt succeeded target_k=%d subgraphs=%d "
+          "partition_elapsed_ms=%.3f estimate_elapsed_ms=%.3f",
+          target_k,
+          len(sub_graphs),
+          partition_elapsed_ms,
+          estimate_elapsed_ms,
+        )
         right = target_k - 1
       else:
+        logger.info(
+          "DnC target_k attempt failed target_k=%d subgraphs=%d "
+          "partition_elapsed_ms=%.3f estimate_elapsed_ms=%.3f",
+          target_k,
+          len(sub_graphs),
+          partition_elapsed_ms,
+          estimate_elapsed_ms,
+        )
         left = target_k + 1
 
+    logger.info(
+      "DnC target_k search finished elapsed_ms=%.3f found=%s",
+      _elapsed_ms(started_at),
+      best_partition is not None,
+    )
     return best_partition
 
   def divide_graph(self, graph: Graph) -> list[Graph]:
@@ -266,15 +441,27 @@ class DnCMr2sSolver:
       merged_solution: Solution,
       child_solutions: Iterable[Solution],
   ) -> Score:
+    started_at = perf_counter()
+    child_solution_list = list(child_solutions)
+    logger.info(
+      "DnC score merged solution started child_solutions=%d",
+      len(child_solution_list),
+    )
     score = self.mr2s_solver.evaluator.run(merged_solution)
     strong_connect_rate = 1.0
 
-    for child_solution in child_solutions:
+    for child_solution in child_solution_list:
       if child_solution.score is None:
         child_solution.score = self.mr2s_solver.evaluator.run(child_solution)
       strong_connect_rate *= child_solution.score.strong_connect_rate
 
     score.strong_connect_rate = strong_connect_rate
+    logger.info(
+      "DnC score merged solution finished elapsed_ms=%.3f "
+      "strong_connect_rate=%.6f",
+      _elapsed_ms(started_at),
+      score.strong_connect_rate,
+    )
     return score
 
   def _resolve_subgraph_processes(self, subgraph_count: int) -> int:
@@ -292,13 +479,24 @@ class DnCMr2sSolver:
     return max(1, min(cpu_count, subgraph_count))
 
   def _solve_subgraphs(self, sub_graphs: list[Graph]) -> list[Solution]:
+    started_at = perf_counter()
     process_count = self._resolve_subgraph_processes(len(sub_graphs))
     empty_sample_set = empty_binary_sample_set()
+    logger.info(
+      "DnC solve subgraphs started subgraphs=%d processes=%d",
+      len(sub_graphs),
+      process_count,
+    )
     if process_count == 1:
-      return [
+      solutions = [
         _solve_subgraph(self.mr2s_solver, sub_graph, empty_sample_set)
         for sub_graph in sub_graphs
       ]
+      logger.info(
+        "DnC solve subgraphs finished sequential elapsed_ms=%.3f",
+        _elapsed_ms(started_at),
+      )
+      return solutions
 
     mp_context = (
       multiprocessing.get_context("spawn")
@@ -310,35 +508,94 @@ class DnCMr2sSolver:
           max_workers=process_count,
           mp_context=mp_context,
       ) as executor:
-        return list(executor.map(
+        solutions = list(executor.map(
           _run_subgraph_solution,
           [
             (self.mr2s_solver, sub_graph, empty_sample_set)
             for sub_graph in sub_graphs
           ],
         ))
+        logger.info(
+          "DnC solve subgraphs finished parallel elapsed_ms=%.3f",
+          _elapsed_ms(started_at),
+        )
+        return solutions
     except (NotImplementedError, OSError, PermissionError):
-      return [
+      logger.info(
+        "DnC solve subgraphs falling back to sequential processes=%d",
+        process_count,
+      )
+      solutions = [
         _solve_subgraph(self.mr2s_solver, sub_graph, empty_sample_set)
         for sub_graph in sub_graphs
       ]
+      logger.info(
+        "DnC solve subgraphs finished fallback elapsed_ms=%.3f",
+        _elapsed_ms(started_at),
+      )
+      return solutions
 
   def run(self, graph: Graph) -> DnCSolution:
+    started_at = perf_counter()
+    logger.info("DnC solver run started")
+    partition_started_at = perf_counter()
     partition = self._divide_graph_with_embeddings(graph)
+    logger.info(
+      "DnC solver partition phase finished elapsed_ms=%.3f subgraphs=%d",
+      _elapsed_ms(partition_started_at),
+      len(partition.sub_graphs),
+    )
     sub_graphs = partition.sub_graphs
     if len(sub_graphs) == 1 and sub_graphs[0] is graph:
-      return self._attach_partition_metadata(
+      direct_started_at = perf_counter()
+      solution = self._attach_partition_metadata(
         self.mr2s_solver.run(graph),
         partition,
       )
+      logger.info(
+        "DnC solver direct solve finished elapsed_ms=%.3f total_elapsed_ms=%.3f",
+        _elapsed_ms(direct_started_at),
+        _elapsed_ms(started_at),
+      )
+      return solution
 
+    solve_started_at = perf_counter()
     solutions = self._solve_subgraphs(sub_graphs)
+    logger.info(
+      "DnC solver subgraph solve phase finished elapsed_ms=%.3f",
+      _elapsed_ms(solve_started_at),
+    )
 
+    merge_started_at = perf_counter()
     merged_solution = self.merge_solutions(
       solutions=solutions,
       graph=graph,
     )
+    logger.info(
+      "DnC solver merge phase finished elapsed_ms=%.3f",
+      _elapsed_ms(merge_started_at),
+    )
+    apply_started_at = perf_counter()
     self._apply_merged_directions(graph, merged_solution)
+    logger.info(
+      "DnC solver apply directions phase finished elapsed_ms=%.3f",
+      _elapsed_ms(apply_started_at),
+    )
+    final_solve_started_at = perf_counter()
     final_solution = self.mr2s_solver.run(graph)
+    logger.info(
+      "DnC solver final solve phase finished elapsed_ms=%.3f",
+      _elapsed_ms(final_solve_started_at),
+    )
+    score_started_at = perf_counter()
     final_solution.score = self.score_merged_solution(final_solution, solutions)
-    return self._attach_partition_metadata(final_solution, partition)
+    logger.info(
+      "DnC solver score phase finished elapsed_ms=%.3f",
+      _elapsed_ms(score_started_at),
+    )
+    solution = self._attach_partition_metadata(final_solution, partition)
+    logger.info(
+      "DnC solver run finished total_elapsed_ms=%.3f",
+      _elapsed_ms(started_at),
+    )
+    return solution
