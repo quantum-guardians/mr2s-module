@@ -606,3 +606,32 @@ def test_embedding_estimate_passes_solver_target_graph_to_estimator(
 
   assert solver._embedding_estimate(graph) is not None
   assert passed_target_graph is target_graph
+
+
+def test_embedding_estimate_calls_estimator_when_edge_count_matches_target_nodes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  graph = Graph(edges=[
+    Edge(1, 2, 1, False),
+    Edge(2, 3, 1, False),
+  ])
+  target_graph = nx.path_graph(2)
+  called = False
+
+  def estimate_required_qubits_called(_bqm, target_graph=None):
+    nonlocal called
+    called = True
+    return _fake_embedding_estimate(graph)
+
+  monkeypatch.setattr(
+    dnc_mr2s_solver,
+    "estimate_required_qubits",
+    estimate_required_qubits_called,
+  )
+  solver = DnCMr2sSolver(
+    mr2s_solver=StubMr2sSolver(),
+    target_graph=target_graph,
+  )
+
+  assert solver._embedding_estimate(graph) is not None
+  assert called is True
