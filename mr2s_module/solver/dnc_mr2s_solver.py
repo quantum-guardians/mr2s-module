@@ -2,8 +2,10 @@ from dataclasses import dataclass, field
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
 import os
+import tempfile
 from typing import Iterable
 
+from diskcache import Cache
 from dimod import SampleSet
 
 from mr2s_module import estimate_required_qubits
@@ -53,10 +55,32 @@ class DnCMr2sSolver:
   mr2s_solver: QuboMR2SSolver
   face_cycle: FaceCycle = field(default_factory=lambda: FaceCycle(target_k=2, clusterer=KMeansFaceClusterer()))
   subgraph_processes: int | None = None
+  cache_directory: str | None = None
+  _embedding_cache: Cache = field(init=False, repr=False)
+  _cache_directory_owner: tempfile.TemporaryDirectory[str] | None = field(init=False, default=None, repr=False)
 
   def __post_init__(self) -> None:
     if self.subgraph_processes is not None and self.subgraph_processes < 1:
       raise ValueError("subgraph_processes must be None or at least 1")
+    cache_directory = self.cache_directory
+    if cache_directory is None:
+      self._cache_directory_owner = tempfile.TemporaryDirectory(prefix="mr2s-embedding-cache-")
+      cache_directory = self._cache_directory_owner.name
+    self._embedding_cache = Cache(cache_directory)
+
+  @staticmethod
+  def _build_embedding_cache_key(graph: Graph) -> tuple[tuple[int, int, int, int, int, bool], ...]:
+    return tuple(sorted(
+      (
+        edge.id[0],
+        edge.id[1],
+        edge.vertices[0],
+        edge.vertices[1],
+        int(edge.weight),
+        edge.directed,
+      )
+      for edge in graph.edges
+    ))
 
   def merge_solutions(
       self,
@@ -142,10 +166,17 @@ class DnCMr2sSolver:
     )
 
   def _embedding_estimate(self, graph: Graph) -> EmbeddingEstimate | None:
+    cache_key = self._build_embedding_cache_key(graph)
+    cached_estimate = self._embedding_cache.get(cache_key)
+    if cached_estimate is not None:
+      return cached_estimate
+
     try:
-      return estimate_required_qubits(self.mr2s_solver.build_bqm(graph))
+      estimate = estimate_required_qubits(self.mr2s_solver.build_bqm(graph))
     except RuntimeError:
       return None
+    self._embedding_cache.set(cache_key, estimate)
+    return estimate
 
   def _can_embed(self, graph: Graph) -> bool:
     return self._embedding_estimate(graph) is not None
