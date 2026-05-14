@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 import mr2s_module.solver.dnc_mr2s_solver as dnc_mr2s_solver
 from mr2s_module.cycle import BalancedFaceGraphClusterer, FaceCycle
-from mr2s_module.domain import Edge, Graph, Solution
+from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, Solution
 from mr2s_module.evaluator import ApspSumRanker, Evaluator
 from mr2s_module.qubo import (
   FlowPolyGenerator,
@@ -37,6 +37,17 @@ from tests.util.graph_fixtures import delaunay_graph_with_pos
 _OUTPUT_DIR = Path(__file__).parent / "output"
 pytest.importorskip("scipy.spatial")
 _PALETTE = plt.colormaps.get_cmap("tab20")
+
+
+def _fake_embedding_estimate(bqm) -> EmbeddingEstimate:
+  variables = list(bqm.variables)
+  return EmbeddingEstimate(
+    num_logical_variables=len(variables),
+    num_quadratic_couplings=len(bqm.quadratic),
+    num_physical_qubits=len(variables),
+    max_chain_length=1,
+    embedding={variable: [variable] for variable in variables},
+  )
 
 
 class ConfiguredSAQuboSolver(SAQuboSolver):
@@ -191,9 +202,6 @@ def trace_division(
     return [_trace_entry(depth, graph, "embedded")], [graph]
 
   sub_graphs = solver.divide_graph(graph)
-  if len(sub_graphs) == 1 and sub_graphs[0] is graph:
-    return [_trace_entry(depth, graph, "fallback", sub_graphs)], [graph]
-
   return [_trace_entry(depth, graph, "divided", sub_graphs)], sub_graphs
 
 
@@ -217,6 +225,36 @@ def print_division_trace(trace: list[dict[str, object]]) -> None:
         f"undirected_edges={sub_graph['undirected_edges']}"
       )
   print()
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("num_points", [100, 200, 300, 400, 500])
+def test_divide_delaunay_graph_finds_embeddable_subgraphs(
+    num_points: int,
+) -> None:
+  graph, _positions = build_delaunay_planar_graph(
+    num_points=num_points,
+    seed=2026 + num_points,
+  )
+  solver = build_dnc_solver(num_reads=1)
+
+  partition = solver._find_partition_by_target_k(graph)
+
+  assert partition is not None
+  assert len(partition.sub_graphs) > 1
+  assert len(partition.embedding_estimates) == len(partition.sub_graphs)
+  assert all(
+    0 < len(sub_graph.edges) < len(graph.edges)
+    for sub_graph in partition.sub_graphs
+  )
+  assert all(
+    estimate.num_logical_variables == len(estimate.embedding)
+    for estimate in partition.embedding_estimates
+  )
+  assert all(
+    estimate.num_physical_qubits >= estimate.num_logical_variables
+    for estimate in partition.embedding_estimates
+  )
 
 
 def print_leaf_sub_graph_summary(sub_graphs: list[Graph]) -> None:
@@ -516,7 +554,7 @@ def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance(
   def estimate_with_test_limit(bqm):
     if len(bqm.variables) > 35:
       raise RuntimeError("test limit exceeded")
-    return None
+    return _fake_embedding_estimate(bqm)
 
   monkeypatch.setattr(
     dnc_mr2s_solver,
@@ -571,7 +609,7 @@ def test_run_dnc_mr2s_solver_on_planar_graph_with_removed_edges(
   def estimate_with_test_limit(bqm):
     if len(bqm.variables) > 100:
       raise RuntimeError("test limit exceeded")
-    return None
+    return _fake_embedding_estimate(bqm)
 
   monkeypatch.setattr(
     dnc_mr2s_solver,

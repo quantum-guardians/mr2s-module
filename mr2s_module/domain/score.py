@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -14,3 +14,4 @@ class EmbeddingEstimate:
   num_quadratic_couplings: int
   num_physical_qubits: int
   max_chain_length: int
+  embedding: dict[object, list[object]] = field(default_factory=dict)

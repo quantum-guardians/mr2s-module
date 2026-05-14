@@ -1,8 +1,8 @@
 import pytest
 
-from mr2s_module.domain import Edge, Graph, GraphPartitionResult, Score, Solution
+from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, GraphPartitionResult, Score, Solution
 import mr2s_module.solver.dnc_mr2s_solver as dnc_mr2s_solver
-from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver
+from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver, DnCSolution
 from mr2s_module.util import empty_binary_sample_set
 
 
@@ -85,6 +85,17 @@ class StubRunningMr2sSolver:
       graph=graph,
       sample_set=empty_binary_sample_set(),
     )
+
+
+def _fake_embedding_estimate(graph: Graph) -> EmbeddingEstimate:
+  variables = sorted(graph.get_vertices())
+  return EmbeddingEstimate(
+    num_logical_variables=len(variables),
+    num_quadratic_couplings=len(graph.edges),
+    num_physical_qubits=len(variables),
+    max_chain_length=1,
+    embedding={variable: [variable] for variable in variables},
+  )
 
 
 def test_merge_solutions_combines_solution_edges() -> None:
@@ -361,8 +372,8 @@ def test_divide_graph_keeps_graph_when_embedding_estimate_succeeds(
 ) -> None:
   graph = Graph(edges=[Edge(1, 2, 1, False)])
 
-  def estimate_succeeds(_bqm):
-    return None
+  def estimate_succeeds(bqm):
+    return _fake_embedding_estimate(bqm)
 
   monkeypatch.setattr(dnc_mr2s_solver, "estimate_required_qubits", estimate_succeeds)
   solver = DnCMr2sSolver(mr2s_solver=StubMr2sSolver())
@@ -377,8 +388,8 @@ def test_run_delegates_once_when_graph_is_not_divided(
 ) -> None:
   graph = Graph(edges=[Edge(1, 2, 1, False)])
 
-  def estimate_succeeds(_bqm):
-    return None
+  def estimate_succeeds(bqm):
+    return _fake_embedding_estimate(bqm)
 
   monkeypatch.setattr(dnc_mr2s_solver, "estimate_required_qubits", estimate_succeeds)
   mr2s_solver = StubRunningMr2sSolver()
@@ -386,8 +397,11 @@ def test_run_delegates_once_when_graph_is_not_divided(
 
   solution = solver.run(graph)
 
+  assert isinstance(solution, DnCSolution)
   assert mr2s_solver.run_graphs == [graph]
   assert solution.edges == {(1, 2)}
+  assert solution.sub_graphs == [graph]
+  assert len(solution.embedding_estimates) == 1
 
 
 def test_divide_graph_returns_binary_search_subgraphs(
@@ -402,7 +416,7 @@ def test_divide_graph_returns_binary_search_subgraphs(
   def estimate_fails_for_parent(bqm):
     if len(bqm.edges) > 1:
       raise RuntimeError("too large")
-    return None
+    return _fake_embedding_estimate(bqm)
 
   monkeypatch.setattr(
     dnc_mr2s_solver,
@@ -417,6 +431,31 @@ def test_divide_graph_returns_binary_search_subgraphs(
   sub_graphs = solver.divide_graph(graph)
 
   assert sub_graphs == [child]
+
+
+def test_divide_graph_raises_when_no_embeddable_partition_is_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  graph = Graph(edges=[
+    Edge(1, 2, 1, False),
+    Edge(2, 3, 1, False),
+  ])
+
+  def estimate_always_fails(_bqm):
+    raise RuntimeError("too large")
+
+  monkeypatch.setattr(
+    dnc_mr2s_solver,
+    "estimate_required_qubits",
+    estimate_always_fails,
+  )
+  solver = DnCMr2sSolver(
+    mr2s_solver=StubMr2sSolver(),
+    face_cycle=StubFaceCycle(sub_graphs=[]),
+  )
+
+  with pytest.raises(RuntimeError, match="no embeddable subgraph partition"):
+    solver.divide_graph(graph)
 
 
 def test_divide_graph_finds_target_k_with_binary_search(
@@ -445,7 +484,7 @@ def test_divide_graph_finds_target_k_with_binary_search(
   def estimate_fails_for_large_graphs(bqm):
     if len(bqm.edges) > 2:
       raise RuntimeError("too large")
-    return None
+    return _fake_embedding_estimate(bqm)
 
   monkeypatch.setattr(
     dnc_mr2s_solver,
@@ -483,7 +522,7 @@ def test_run_solves_full_graph_after_applying_merged_directions(
   def estimate_fails_for_parent(bqm):
     if len(bqm.edges) > 1:
       raise RuntimeError("too large")
-    return None
+    return _fake_embedding_estimate(bqm)
 
   monkeypatch.setattr(
     dnc_mr2s_solver,
@@ -501,9 +540,12 @@ def test_run_solves_full_graph_after_applying_merged_directions(
 
   solution = solver.run(graph)
 
+  assert isinstance(solution, DnCSolution)
   assert mr2s_solver.run_graphs == [child, graph]
   assert graph.edges[0].directed is True
   assert graph.edges[0].vertices == (1, 2)
   assert graph.edges[1].id == remaining.id
   assert graph.edges[1].directed is False
   assert solution.edges == {(1, 2), (2, 3)}
+  assert solution.sub_graphs == [child]
+  assert len(solution.embedding_estimates) == 1

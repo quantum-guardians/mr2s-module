@@ -1,4 +1,5 @@
 import pytest
+from dimod import BinaryQuadraticModel
 
 from mr2s_module import EmbeddingEstimate
 from mr2s_module.domain import Edge, Graph
@@ -55,6 +56,15 @@ class TestMapBinaryPolyToBqm:
 
 
 class TestEstimateRequiredQubits:
+    def test_returns_empty_embedding_estimate_for_constant_bqm(self) -> None:
+        result = estimate_required_qubits(BinaryQuadraticModel({}, {}, 0.0, "BINARY"))
+
+        assert result.num_logical_variables == 0
+        assert result.num_quadratic_couplings == 0
+        assert result.num_physical_qubits == 0
+        assert result.max_chain_length == 0
+        assert result.embedding == {}
+
     @pytest.mark.slow
     def test_returns_embedding_estimate_for_triangle(self) -> None:
         graph = _build_triangle_graph()
@@ -69,6 +79,8 @@ class TestEstimateRequiredQubits:
         assert result.num_quadratic_couplings == len(bqm.quadratic)
         assert result.num_physical_qubits >= result.num_logical_variables
         assert result.max_chain_length >= 1
+        assert set(result.embedding) == set(bqm.variables)
+        assert sum(len(chain) for chain in result.embedding.values()) == result.num_physical_qubits
 
     @pytest.mark.slow
     def test_returns_embedding_estimate_for_5node_graph(self) -> None:
@@ -83,3 +95,5 @@ class TestEstimateRequiredQubits:
         assert result.num_quadratic_couplings == len(bqm.quadratic)
         assert result.num_physical_qubits >= result.num_logical_variables
         assert result.max_chain_length >= 1
+        assert set(result.embedding) == set(bqm.variables)
+        assert sum(len(chain) for chain in result.embedding.values()) == result.num_physical_qubits

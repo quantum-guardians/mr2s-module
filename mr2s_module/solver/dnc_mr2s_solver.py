@@ -9,7 +9,7 @@ from dimod import SampleSet
 from mr2s_module import estimate_required_qubits
 from mr2s_module.cycle import FaceCycle
 from mr2s_module.cycle.face_clusterer import KMeansFaceClusterer
-from mr2s_module.domain import Edge, Graph, GraphPartitionResult, Score, Solution
+from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, GraphPartitionResult, Score, Solution
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
 from mr2s_module.util import empty_binary_sample_set
 
@@ -34,6 +34,18 @@ def _solve_subgraph(
     return solution
 
   return mr2s_solver.run(sub_graph)
+
+
+@dataclass
+class _EmbeddablePartition:
+  sub_graphs: list[Graph]
+  embedding_estimates: list[EmbeddingEstimate]
+
+
+@dataclass
+class DnCSolution(Solution):
+  sub_graphs: list[Graph] = field(default_factory=list)
+  embedding_estimates: list[EmbeddingEstimate] = field(default_factory=list)
 
 
 @dataclass
@@ -119,7 +131,7 @@ class DnCMr2sSolver:
     return min(candidates, key=lambda direction: (flow_penalty(direction), direction))
 
   @staticmethod
-  def _can_recurse(parent: Graph, sub_graphs: list[Graph]) -> bool:
+  def _is_progressing_partition(parent: Graph, sub_graphs: list[Graph]) -> bool:
     if not sub_graphs:
       return False
 
@@ -129,12 +141,67 @@ class DnCMr2sSolver:
       for sub_graph in sub_graphs
     )
 
-  def _can_embed(self, graph: Graph) -> bool:
+  def _embedding_estimate(self, graph: Graph) -> EmbeddingEstimate | None:
     try:
-      estimate_required_qubits(self.mr2s_solver.build_bqm(graph))
-      return True
+      return estimate_required_qubits(self.mr2s_solver.build_bqm(graph))
     except RuntimeError:
-      return False
+      return None
+
+  def _can_embed(self, graph: Graph) -> bool:
+    return self._embedding_estimate(graph) is not None
+
+  def _estimate_partition(
+      self,
+      sub_graphs: list[Graph],
+  ) -> list[EmbeddingEstimate] | None:
+    estimates: list[EmbeddingEstimate] = []
+    for sub_graph in sub_graphs:
+      estimate = self._embedding_estimate(sub_graph)
+      if estimate is None:
+        return None
+      estimates.append(estimate)
+    return estimates
+
+  def _single_graph_partition(self, graph: Graph) -> _EmbeddablePartition | None:
+    estimate = self._embedding_estimate(graph)
+    if estimate is None:
+      return None
+    return _EmbeddablePartition(
+      sub_graphs=[graph],
+      embedding_estimates=[estimate],
+    )
+
+  def _raise_partition_failed(self, graph: Graph) -> None:
+    raise RuntimeError(
+      "DnC partition failed: input graph is not embeddable and no "
+      "embeddable subgraph partition was found "
+      f"(vertices={len(graph.get_vertices())}, edges={len(graph.edges)})"
+    )
+
+  def _divide_graph_with_embeddings(self, graph: Graph) -> _EmbeddablePartition:
+    partition = self._single_graph_partition(graph)
+    if partition is not None:
+      return partition
+
+    partition = self._find_partition_by_target_k(graph)
+    if partition is None:
+      self._raise_partition_failed(graph)
+
+    return partition
+
+  def _attach_partition_metadata(
+      self,
+      solution: Solution,
+      partition: _EmbeddablePartition,
+  ) -> DnCSolution:
+    return DnCSolution(
+      edges=solution.edges,
+      graph=solution.graph,
+      sample_set=solution.sample_set,
+      score=solution.score,
+      sub_graphs=partition.sub_graphs,
+      embedding_estimates=partition.embedding_estimates,
+    )
 
   def _partition_with_target_k(
       self,
@@ -148,35 +215,34 @@ class DnCMr2sSolver:
     finally:
       self.face_cycle.target_k = previous_target_k
 
-  def _find_partition_by_target_k(self, graph: Graph) -> list[Graph]:
+  def _find_partition_by_target_k(self, graph: Graph) -> _EmbeddablePartition | None:
     left = 2
     right = max(2, len(graph.edges))
-    best_sub_graphs: list[Graph] | None = None
+    best_partition: _EmbeddablePartition | None = None
 
     while left <= right:
       target_k = (left + right) // 2
       result = self._partition_with_target_k(graph, target_k)
       sub_graphs = result.sub_graphs
+      embedding_estimates = (
+        self._estimate_partition(sub_graphs)
+        if self._is_progressing_partition(graph, sub_graphs)
+        else None
+      )
 
-      if self._can_recurse(graph, sub_graphs) and all(
-          self._can_embed(sub_graph)
-          for sub_graph in sub_graphs
-      ):
-        best_sub_graphs = sub_graphs
+      if embedding_estimates is not None:
+        best_partition = _EmbeddablePartition(
+          sub_graphs=sub_graphs,
+          embedding_estimates=embedding_estimates,
+        )
         right = target_k - 1
       else:
         left = target_k + 1
 
-    return best_sub_graphs or []
+    return best_partition
 
   def divide_graph(self, graph: Graph) -> list[Graph]:
-    if self._can_embed(graph):
-      return [graph]
-
-    sub_graphs = self._find_partition_by_target_k(graph)
-    if not sub_graphs:
-      return [graph]
-    return sub_graphs
+    return self._divide_graph_with_embeddings(graph).sub_graphs
 
   @staticmethod
   def _apply_merged_directions(graph: Graph, solution: Solution) -> None:
@@ -257,10 +323,14 @@ class DnCMr2sSolver:
         for sub_graph in sub_graphs
       ]
 
-  def run(self, graph: Graph) -> Solution:
-    sub_graphs = self.divide_graph(graph)
+  def run(self, graph: Graph) -> DnCSolution:
+    partition = self._divide_graph_with_embeddings(graph)
+    sub_graphs = partition.sub_graphs
     if len(sub_graphs) == 1 and sub_graphs[0] is graph:
-      return self.mr2s_solver.run(graph)
+      return self._attach_partition_metadata(
+        self.mr2s_solver.run(graph),
+        partition,
+      )
 
     solutions = self._solve_subgraphs(sub_graphs)
 
@@ -271,4 +341,4 @@ class DnCMr2sSolver:
     self._apply_merged_directions(graph, merged_solution)
     final_solution = self.mr2s_solver.run(graph)
     final_solution.score = self.score_merged_solution(final_solution, solutions)
-    return final_solution
+    return self._attach_partition_metadata(final_solution, partition)
