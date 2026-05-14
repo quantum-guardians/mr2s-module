@@ -65,10 +65,7 @@ class SAQuboSolver(QuboSolver):
         score=None,
       )
 
-      try:
-        return self.ranker.run(solution)
-      except AssertionError:
-        return float("inf")
+      return self.ranker.run(solution)
 
     return min(
       map(lambda sample: self._process_solution(sample, canonical_edges), sample_set.samples()),

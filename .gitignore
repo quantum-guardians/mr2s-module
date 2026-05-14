@@ -212,3 +212,7 @@ __marimo__/
 
 # Jetbrain
 .idea
+
+# image
+*.png
+*.jpg

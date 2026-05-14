@@ -57,6 +57,7 @@ def test_run_returns_score_for_solution_object() -> None:
   assert score.apsp_sum == 9.0
   assert score.strong_connect_rate == 1.0
   assert score.flow_score == 0.0
+  assert score.sample_score == 0.0
 
 
 def test_eval_strong_connect_rate_returns_fraction_of_strongly_connected_samples() -> None:
@@ -98,3 +99,15 @@ def test_eval_strong_connect_rate_counts_sample_occurrences() -> None:
   )
 
   assert evaluator.eval_strong_connect_rate(solution) == pytest.approx(2 / 3)
+
+
+def test_eval_sample_score_returns_minimum_energy() -> None:
+  evaluator = Evaluator()
+  solution = _build_solution(
+    edges=[Edge(1, 2, 1, False)],
+    directed_edges={(1, 2)},
+    samples=[{"e_1_2": 0}, {"e_1_2": 1}],
+    energies=[3.5, -2.0],
+  )
+
+  assert evaluator.eval_sample_score(solution) == -2.0

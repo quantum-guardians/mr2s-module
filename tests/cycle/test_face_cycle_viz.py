@@ -11,47 +11,33 @@
 """
 from __future__ import annotations
 
-import itertools
 from pathlib import Path
 
-import matplotlib
+import pytest
+
+matplotlib = pytest.importorskip("matplotlib")
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-import pytest
-from scipy.spatial import Delaunay
+
+pytest.importorskip("scipy.spatial")
 
 from mr2s_module.cycle import FaceCycle
-from mr2s_module.domain import Edge, Graph
+from mr2s_module.cycle.face_clusterer import SnowballFaceClusterer
+from mr2s_module.domain import Graph
+from mr2s_module.util import (
+    build_dual_base,
+    build_face_edges_map,
+    domain_graph_to_networkx,
+    enumerate_faces,
+    polygon_area,
+)
+from tests.util.graph_fixtures import delaunay_graph_with_pos
 
 _OUTPUT_DIR = Path(__file__).parent / "output"
 _PALETTE = ("#1f77b4", "#ff7f0e")
-
-
-def _delaunay_graph_with_pos(
-    n: int, seed: int
-) -> tuple[Graph, dict[int, np.ndarray]]:
-    rng = np.random.default_rng(seed)
-    points = rng.random((n, 2))
-    tri = Delaunay(points)
-
-    seen: set[tuple[int, int]] = set()
-    edges: list[Edge] = []
-    for simplex in tri.simplices:
-        for u, v in itertools.combinations(simplex, 2):
-            u, v = int(u), int(v)
-            if u == v:
-                continue
-            key = (min(u, v), max(u, v))
-            if key in seen:
-                continue
-            seen.add(key)
-            edges.append(Edge(key[0], key[1], 1, False))
-
-    pos = {i: np.array(points[i]) for i in range(n)}
-    return Graph(edges=edges), pos
 
 
 def _run_diagnostic(
@@ -59,21 +45,21 @@ def _run_diagnostic(
 ) -> dict:
     """`FaceCycle._partition_component` 와 동일한 흐름을 순수 함수로 재현,
     중간 산출물(면, 컴포넌트, 2-coloring) 을 함께 반환."""
-    nx_graph = FaceCycle._to_networkx(graph)
+    nx_graph = domain_graph_to_networkx(graph)
     is_planar, _ = nx.check_planarity(nx_graph)
     assert is_planar, "test fixture must be planar"
     assert nx.is_biconnected(nx_graph), "test fixture must be biconnected"
 
-    raw_faces = FaceCycle._enumerate_faces(nx_graph)
-    outer_idx = int(np.argmax([FaceCycle._face_area(f, pos) for f in raw_faces]))
+    raw_faces = enumerate_faces(nx_graph)
+    outer_idx = int(np.argmax([abs(polygon_area(f, pos)) for f in raw_faces]))
     inner_faces = [f for i, f in enumerate(raw_faces) if i != outer_idx]
 
-    face_edges_map = FaceCycle._build_face_edges_map(inner_faces)
+    face_edges_map = build_face_edges_map(inner_faces)
     centroids = [np.mean([pos[v] for v in f], axis=0) for f in inner_faces]
-    dual_base = FaceCycle._build_dual_base(face_edges_map)
+    dual_base = build_dual_base(face_edges_map)
 
     k = max(1, min(target_k, len(inner_faces)))
-    face_to_cluster = FaceCycle._snowball_cluster(centroids, dual_base, k)
+    face_to_cluster = SnowballFaceClusterer().run(centroids, dual_base, k)
 
     boundary, outer = FaceCycle._collect_boundary_edges(
         face_edges_map, face_to_cluster
@@ -201,7 +187,7 @@ def _draw_rotations(ax, diag: dict, pos: dict[int, np.ndarray]) -> None:
 @pytest.mark.parametrize("seed", [42])
 def test_face_cycle_visualization_renders_three_panels(seed: int) -> None:
     n_points, target_k = 60, 6
-    graph, pos = _delaunay_graph_with_pos(n=n_points, seed=seed)
+    graph, pos = delaunay_graph_with_pos(n=n_points, seed=seed)
 
     # 1. FaceCycle.run() 자체가 정상적으로 boundary 를 반환하는지.
     np.random.seed(seed)

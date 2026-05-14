@@ -71,6 +71,7 @@ graph = Graph(edges=[
 - `apsp_sum`: APSP-based score on the selected directed graph
 - `strong_connect_rate`: fraction of sampled solutions that are strongly connected
 - `flow_score`: sum of squared flow imbalance per vertex
+- `sample_score`: minimum energy among sampled solutions
 
 ## Architecture
 
@@ -104,6 +105,7 @@ Important separation:
 
 - `SAQuboSolver`
 - `QuboMR2SSolver`
+- `SAMr2sSolver` (direct simulated annealing on edge orientations)
 
 ### Ranking and evaluation
 

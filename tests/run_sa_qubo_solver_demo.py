@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import itertools
 import sys
 from pathlib import Path
 
 import networkx as nx
 import numpy as np
-from scipy.spatial import Delaunay
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -28,29 +26,11 @@ from mr2s_module import (
 from mr2s_module.domain import Solution
 from mr2s_module.util import add_polys
 from mr2s_module.util.qubo_util import map_binary_poly_to_bqm
+from tests.util.graph_fixtures import delaunay_graph
 
 
 def build_planar_graph(num_points: int, seed: int, weight: int = 1) -> Graph:
-  rng = np.random.default_rng(seed)
-  points = rng.random((num_points, 2))
-  tri = Delaunay(points)
-
-  seen: set[tuple[int, int]] = set()
-  edges: list[Edge] = []
-  for simplex in tri.simplices:
-    for u, v in itertools.combinations(simplex, 2):
-      u, v = int(u), int(v)
-      if u == v:
-        continue
-
-      edge_id = (min(u, v), max(u, v))
-      if edge_id in seen:
-        continue
-
-      seen.add(edge_id)
-      edges.append(Edge(edge_id[0], edge_id[1], weight, False))
-
-  return Graph(edges=edges)
+  return delaunay_graph(num_points, seed, weight=weight)
 
 
 def thin_planar_graph(
@@ -123,6 +103,7 @@ def describe_result(graph: Graph, score, solution: Solution) -> None:
   print(f"  apsp_sum: {score.apsp_sum}")
   print(f"  strong_connect_rate: {score.strong_connect_rate:.4f}")
   print(f"  flow_score: {score.flow_score}")
+  print(f"  sample_score: {score.sample_score}")
   print()
 
   print("Selected orientation")

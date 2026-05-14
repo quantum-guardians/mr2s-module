@@ -18,18 +18,15 @@ SA 가 stochastic 이라 결과가 환경별로 약간 다를 수 있지만, 핵
 """
 from __future__ import annotations
 
-import itertools
 import random
 import time
 
 import networkx as nx
 import numpy as np
 import pytest
-from scipy.spatial import Delaunay
 
 from mr2s_module import (
     ApspSumRanker,
-    Edge,
     Evaluator,
     FaceCycle,
     FlowPolyGenerator,
@@ -40,25 +37,16 @@ from mr2s_module import (
     SAQuboSolver,
     SmallWorldSpec,
 )
+from mr2s_module.domain import Solution
+from tests.util.graph_fixtures import (
+    delaunay_graph,
+    domain_graph_to_nx_graph,
+    nx_graph_to_domain_graph,
+)
 
 
 def _delaunay_nx(n: int, seed: int) -> nx.Graph:
-    rng = np.random.default_rng(seed)
-    pts = rng.random((n, 2))
-    tri = Delaunay(pts)
-    g = nx.Graph()
-    seen: set[tuple[int, int]] = set()
-    for simplex in tri.simplices:
-        for u, v in itertools.combinations(simplex, 2):
-            u, v = int(u), int(v)
-            if u == v:
-                continue
-            key = (min(u, v), max(u, v))
-            if key in seen:
-                continue
-            seen.add(key)
-            g.add_edge(*key)
-    return g
+    return domain_graph_to_nx_graph(delaunay_graph(n, seed))
 
 
 def _thinned_planar_biconnected(n: int, seed: int, keep_ratio: float) -> Graph:
@@ -76,7 +64,7 @@ def _thinned_planar_biconnected(n: int, seed: int, keep_ratio: float) -> Graph:
             g.add_edge(u, v)
     g.remove_nodes_from([v for v in g.nodes() if g.degree(v) == 0])
     assert nx.is_biconnected(g), "thinning should preserve biconnectedness"
-    return Graph(edges=[Edge(u, v, 1, False) for u, v in g.edges()])
+    return nx_graph_to_domain_graph(g)
 
 
 class _MultiReadSAQuboSolver(SAQuboSolver):
@@ -90,7 +78,12 @@ class _MultiReadSAQuboSolver(SAQuboSolver):
 
     def run(self, qubo, graph):
         sample_set = self.sampler.sample(qubo, num_reads=self.num_reads)
-        return self._select_best_sample(sample_set, graph.edges)
+        return Solution(
+            edges=self._select_best_sample(sample_set, graph.edges),
+            graph=graph,
+            sample_set=sample_set,
+            score=None,
+        )
 
 
 def _build_solver(use_face_cycle: bool, num_reads: int = 10) -> QuboMR2SSolver:
@@ -102,7 +95,7 @@ def _build_solver(use_face_cycle: bool, num_reads: int = 10) -> QuboMR2SSolver:
         face_cycle=FaceCycle(target_k=8) if use_face_cycle else None,
         qubo_solver=_MultiReadSAQuboSolver(ranker=ranker, num_reads=num_reads),
         evaluator=evaluator,
-        poly_generators={FlowPolyGenerator(), n_hop_gen},
+        poly_generators=[FlowPolyGenerator(), n_hop_gen],
     )
 
 
@@ -112,8 +105,12 @@ def _run_once(use_face_cycle: bool, graph: Graph, seed: int) -> dict:
     solver = _build_solver(use_face_cycle)
     t0 = time.time()
     try:
-        score = solver.run(graph)
-        return {"ok": True, "score": float(score), "elapsed": time.time() - t0}
+        solution = solver.run(graph)
+        return {
+            "ok": True,
+            "score": solution.score.apsp_sum if solution.score else 0.0,
+            "elapsed": time.time() - t0,
+        }
     except AssertionError as ex:
         return {"ok": False, "reason": str(ex), "elapsed": time.time() - t0}
 
@@ -162,22 +159,7 @@ def test_face_cycle_has_better_connectivity_rate_on_thinned_planar(
 @pytest.mark.slow
 def test_face_cycle_solver_runs_end_to_end_on_small_graph() -> None:
     """sanity — 작은 그래프 (40 vertices Delaunay) 에서 WITH_FC 정상 동작."""
-    rng = np.random.default_rng(7)
-    pts = rng.random((40, 2))
-    tri = Delaunay(pts)
-    seen: set[tuple[int, int]] = set()
-    edges: list[Edge] = []
-    for simplex in tri.simplices:
-        for u, v in itertools.combinations(simplex, 2):
-            u, v = int(u), int(v)
-            if u == v:
-                continue
-            key = (min(u, v), max(u, v))
-            if key in seen:
-                continue
-            seen.add(key)
-            edges.append(Edge(key[0], key[1], 1, False))
-    graph = Graph(edges=edges)
+    graph = delaunay_graph(40, seed=7)
 
     with_fc = _run_once(use_face_cycle=True, graph=graph, seed=7)
     assert with_fc["ok"], with_fc.get("reason")
