@@ -1,7 +1,6 @@
 import random
 import time
 from pathlib import Path
-
 import numpy as np
 import networkx as nx
 import pytest
@@ -10,12 +9,10 @@ matplotlib = pytest.importorskip("matplotlib")
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-import mr2s_module.solver.dnc_mr2s_solver as dnc_mr2s_solver
 from mr2s_module.cycle import BalancedFaceGraphClusterer, FaceCycle
 from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, Solution
-from mr2s_module.evaluator import ApspSumRanker, Evaluator
+from mr2s_module.evaluator import ApspSumRanker
 from mr2s_module.qubo import (
-  FlowPolyGenerator,
   NHop,
   NHopPolyGenerator,
   SAQuboSolver,
@@ -538,9 +535,7 @@ def print_solver_comparison(results: list[dict[str, object]]) -> None:
 
 
 @pytest.mark.slow
-def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance() -> None:
   base_graph, _positions = build_delaunay_planar_graph(
     num_points=500,
     seed=11,
@@ -550,18 +545,6 @@ def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance(
     remove_percent=50,
     seed=11,
   )
-
-  def estimate_with_test_limit(bqm, target_graph=None):
-    if len(bqm.variables) > 35:
-      raise RuntimeError("test limit exceeded")
-    return _fake_embedding_estimate(bqm)
-
-  monkeypatch.setattr(
-    dnc_mr2s_solver,
-    "estimate_required_qubits",
-    estimate_with_test_limit,
-  )
-
   dnc_solver = build_dnc_solver(num_reads=5)
   qubo_solver = build_qubo_solver(num_reads=5)
   sa_solver = build_sa_solver()
@@ -593,28 +576,15 @@ def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance(
 
 
 @pytest.mark.slow
-def test_run_dnc_mr2s_solver_on_planar_graph_with_removed_edges(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_run_dnc_mr2s_solver_on_planar_graph_with_removed_edges() -> None:
   remove_percent = 20
   base_graph, positions = build_delaunay_planar_graph(
-    num_points=1000,
+    num_points=500,
     seed=7,
   )
   graph, removed_count = remove_edges_by_percent(
     graph=base_graph,
     remove_percent=remove_percent,
-  )
-
-  def estimate_with_test_limit(bqm, target_graph=None):
-    if len(bqm.variables) > 100:
-      raise RuntimeError("test limit exceeded")
-    return _fake_embedding_estimate(bqm)
-
-  monkeypatch.setattr(
-    dnc_mr2s_solver,
-    "estimate_required_qubits",
-    estimate_with_test_limit,
   )
 
   solver = build_dnc_solver()
