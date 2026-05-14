@@ -145,17 +145,21 @@ class DnCMr2sSolver:
     )
 
   def _embedding_estimate(self, graph: Graph) -> EmbeddingEstimate | None:
+    target_node_count = self.target_graph.number_of_nodes()
     undirected_edge_count = sum(
       1
       for edge in graph.edges
       if not edge.directed
     )
-    if undirected_edge_count > self.target_graph.number_of_nodes():
+    if undirected_edge_count > target_node_count:
       return None
 
     try:
+      bqm = self.mr2s_solver.build_bqm(graph)
+      if len(bqm.variables) > target_node_count:
+        return None
       return estimate_required_qubits(
-        self.mr2s_solver.build_bqm(graph),
+        bqm,
         target_graph=self.target_graph,
       )
     except RuntimeError:

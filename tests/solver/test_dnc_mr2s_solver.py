@@ -9,7 +9,24 @@ from mr2s_module.util import empty_binary_sample_set
 
 class StubMr2sSolver:
   def build_bqm(self, graph: Graph):
-    return graph
+    return StubBqm(
+      variables=sorted(graph.get_vertices()),
+      edges=list(graph.edges),
+    )
+
+
+class StubBqm:
+  def __init__(self, variables: list[int], edges: list[Edge] | None = None) -> None:
+    self.variables = variables
+    self.edges = edges or []
+
+
+class StubBqmMr2sSolver:
+  def __init__(self, bqm: StubBqm) -> None:
+    self._bqm = bqm
+
+  def build_bqm(self, graph: Graph):
+    return self._bqm
 
 
 class StubFaceCycle:
@@ -77,7 +94,10 @@ class StubRunningMr2sSolver:
     self.run_graphs: list[Graph] = []
 
   def build_bqm(self, graph: Graph):
-    return graph
+    return StubBqm(
+      variables=sorted(graph.get_vertices()),
+      edges=list(graph.edges),
+    )
 
   def run(self, graph: Graph) -> Solution:
     self.run_graphs.append(graph)
@@ -88,11 +108,18 @@ class StubRunningMr2sSolver:
     )
 
 
-def _fake_embedding_estimate(graph: Graph) -> EmbeddingEstimate:
-  variables = sorted(graph.get_vertices())
+def _fake_embedding_estimate(bqm_or_graph) -> EmbeddingEstimate:
+  if hasattr(bqm_or_graph, "variables"):
+    variables = sorted(bqm_or_graph.variables)
+  else:
+    variables = sorted(bqm_or_graph.get_vertices())
+  if hasattr(bqm_or_graph, "edges"):
+    edge_count = len(bqm_or_graph.edges)
+  else:
+    edge_count = 0
   return EmbeddingEstimate(
     num_logical_variables=len(variables),
-    num_quadratic_couplings=len(graph.edges),
+    num_quadratic_couplings=edge_count,
     num_physical_qubits=len(variables),
     max_chain_length=1,
     embedding={variable: [variable] for variable in variables},
@@ -608,20 +635,27 @@ def test_embedding_estimate_passes_solver_target_graph_to_estimator(
   assert passed_target_graph is target_graph
 
 
-def test_embedding_estimate_calls_estimator_when_edge_count_matches_target_nodes(
+def test_embedding_estimate_calls_estimator_when_edge_count_and_bqm_variables_match_target_nodes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
   graph = Graph(edges=[
     Edge(1, 2, 1, False),
     Edge(2, 3, 1, False),
+    Edge(3, 1, 1, False),
   ])
-  target_graph = nx.path_graph(2)
+  target_graph = nx.path_graph(3)
   called = False
 
   def estimate_required_qubits_called(_bqm, target_graph=None):
     nonlocal called
     called = True
-    return _fake_embedding_estimate(_bqm)
+    return EmbeddingEstimate(
+      num_logical_variables=0,
+      num_quadratic_couplings=0,
+      num_physical_qubits=0,
+      max_chain_length=1,
+      embedding={},
+    )
 
   monkeypatch.setattr(
     dnc_mr2s_solver,
@@ -641,17 +675,23 @@ def test_embedding_estimate_counts_only_undirected_edges_for_prefilter(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
   graph = Graph(edges=[
-    Edge(1, 2, 1, False),
+    Edge(1, 2, 1, True),
     Edge(2, 1, 1, True),
-    Edge(3, 2, 1, True),
+    Edge(1, 2, 1, True),
   ])
-  target_graph = nx.path_graph(1)
+  target_graph = nx.path_graph(2)
   called = False
 
   def estimate_required_qubits_called(_bqm, target_graph=None):
     nonlocal called
     called = True
-    return _fake_embedding_estimate(_bqm)
+    return EmbeddingEstimate(
+      num_logical_variables=0,
+      num_quadratic_couplings=0,
+      num_physical_qubits=0,
+      max_chain_length=1,
+      embedding={},
+    )
 
   monkeypatch.setattr(
     dnc_mr2s_solver,
@@ -660,6 +700,64 @@ def test_embedding_estimate_counts_only_undirected_edges_for_prefilter(
   )
   solver = DnCMr2sSolver(
     mr2s_solver=StubMr2sSolver(),
+    target_graph=target_graph,
+  )
+
+  assert solver._embedding_estimate(graph) is not None
+  assert called is True
+
+
+def test_embedding_estimate_skips_estimator_when_bqm_variables_exceed_target_nodes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+  target_graph = nx.path_graph(2)
+  called = False
+
+  def estimate_required_qubits_should_not_be_called(_bqm, target_graph=None):
+    nonlocal called
+    called = True
+    raise AssertionError("estimate_required_qubits should not be called")
+
+  monkeypatch.setattr(
+    dnc_mr2s_solver,
+    "estimate_required_qubits",
+    estimate_required_qubits_should_not_be_called,
+  )
+  solver = DnCMr2sSolver(
+    mr2s_solver=StubBqmMr2sSolver(StubBqm(variables=[1, 2, 3])),
+    target_graph=target_graph,
+  )
+
+  assert solver._embedding_estimate(graph) is None
+  assert called is False
+
+
+def test_embedding_estimate_calls_estimator_when_bqm_variables_within_target_nodes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+  target_graph = nx.path_graph(2)
+  called = False
+
+  def estimate_required_qubits_called(_bqm, target_graph=None):
+    nonlocal called
+    called = True
+    return EmbeddingEstimate(
+      num_logical_variables=2,
+      num_quadratic_couplings=0,
+      num_physical_qubits=2,
+      max_chain_length=1,
+      embedding={1: [1], 2: [2]},
+    )
+
+  monkeypatch.setattr(
+    dnc_mr2s_solver,
+    "estimate_required_qubits",
+    estimate_required_qubits_called,
+  )
+  solver = DnCMr2sSolver(
+    mr2s_solver=StubBqmMr2sSolver(StubBqm(variables=[1, 2])),
     target_graph=target_graph,
   )
 
