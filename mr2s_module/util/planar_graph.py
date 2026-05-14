@@ -175,3 +175,11 @@ def build_dual_base(
 def clone_edge(edge: Edge) -> Edge:
   """Create a detached Edge with the same orientation and weight."""
   return Edge(edge.vertices[0], edge.vertices[1], edge.weight, edge.directed)
+
+
+def networkx_to_domain_graph(graph: nx.Graph, *, weight: int = 1) -> Graph:
+  """Convert a NetworkX graph to the project Graph model."""
+  return Graph(edges=[
+    Edge(u, v, int(data.get("weight", weight)), False)
+    for u, v, data in graph.edges(data=True)
+  ])

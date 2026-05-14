@@ -4,6 +4,7 @@ from mr2s_module.domain import Score, Solution
 from mr2s_module.evaluator.apsp_sum_ranker import ApspSumRanker
 
 
+
 class Evaluator:
 
   @staticmethod

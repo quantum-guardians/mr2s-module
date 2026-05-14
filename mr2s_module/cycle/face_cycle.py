@@ -11,6 +11,7 @@ from mr2s_module.cycle.face_clusterer import (
 from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.graph_partition_result import GraphPartitionResult
+from mr2s_module.protocols import FaceCycleProtocol
 from mr2s_module.util.planar_graph import (
     build_dual_base,
     build_face_edges_map,

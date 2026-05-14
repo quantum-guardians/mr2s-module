@@ -8,6 +8,7 @@ import numpy as np
 from scipy.spatial import Delaunay
 
 from mr2s_module.domain import Edge, Graph
+from mr2s_module.util import domain_graph_to_networkx, networkx_to_domain_graph
 
 
 def graph_from_pairs(
@@ -78,17 +79,9 @@ def random_planar_nx_graph(node_count: int, seed: int) -> nx.Graph:
 
 def nx_graph_to_domain_graph(graph: nx.Graph, *, weight: int = 1) -> Graph:
     """Convert a NetworkX graph fixture to the project Graph model."""
-    return Graph(edges=[
-        Edge(u, v, weight, False)
-        for u, v in graph.edges()
-    ])
+    return networkx_to_domain_graph(graph, weight=weight)
 
 
 def domain_graph_to_nx_graph(graph: Graph) -> nx.Graph:
     """Convert a project Graph fixture to an unweighted NetworkX graph."""
-    nx_graph = nx.Graph()
-    for edge in graph.edges:
-        u, v = edge.id
-        if u != v:
-            nx_graph.add_edge(u, v)
-    return nx_graph
+    return domain_graph_to_networkx(graph)

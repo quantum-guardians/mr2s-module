@@ -3,6 +3,7 @@ import networkx as nx
 from mr2s_module.domain import Solution
 
 
+
 class ApspSumRanker:
 
   @staticmethod
