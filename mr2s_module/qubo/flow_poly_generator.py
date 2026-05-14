@@ -1,11 +1,11 @@
 from dimod import BinaryPolynomial, Vartype
 
 from mr2s_module.domain import Edge
-from mr2s_module.protocols import Graph
+from mr2s_module.protocols import Graph, PolyGeneratorProtocol
 from mr2s_module.util import get_indicator_function, add_polys, multiply_polys
 
 
-class FlowPolyGenerator:
+class FlowPolyGenerator(PolyGeneratorProtocol):
 
   @staticmethod
   def _get_a_term(vertex: int, incident_edges: set[Edge]) -> BinaryPolynomial:

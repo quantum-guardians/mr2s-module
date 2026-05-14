@@ -1,6 +1,6 @@
-from mr2s_module.protocols import QuboMatrix, Solution, Graph
+from mr2s_module.protocols import QuboMatrix, Solution, Graph, QuboSolverProtocol
 
 
-class QuboSolver:
+class QuboSolver(QuboSolverProtocol):
     def run(self, qubo: QuboMatrix, graph: Graph) -> Solution:
         raise NotImplementedError
