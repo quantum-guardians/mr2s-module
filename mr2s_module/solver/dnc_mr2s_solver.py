@@ -145,7 +145,12 @@ class DnCMr2sSolver:
     )
 
   def _embedding_estimate(self, graph: Graph) -> EmbeddingEstimate | None:
-    if len(graph.edges) > self.target_graph.number_of_nodes():
+    undirected_edge_count = sum(
+      1
+      for edge in graph.edges
+      if not edge.directed
+    )
+    if undirected_edge_count > self.target_graph.number_of_nodes():
       return None
 
     try:
