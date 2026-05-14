@@ -186,3 +186,9 @@ Available arguments:
 - `--num-reads`: number of SA samples
 - `--use-face-cycle`: enable `FaceCycle` preprocessing
 - `--target-k`: `FaceCycle` target `k`
+
+## Performance Analysis
+
+DnC MR2S solver timing analysis is available at:
+
+- [docs/DNC_MR2S_SOLVER_PERFORMANCE_ANALYSIS.md](docs/DNC_MR2S_SOLVER_PERFORMANCE_ANALYSIS.md)

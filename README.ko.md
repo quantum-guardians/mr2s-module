@@ -186,3 +186,9 @@ python tests/run_sa_qubo_solver_demo.py \
 - `--num-reads`: simulated annealing sample 수
 - `--use-face-cycle`: `FaceCycle` 전처리 사용 여부
 - `--target-k`: `FaceCycle`의 target `k`
+
+## 성능 분석
+
+DnC MR2S solver 실행 로그 분석 보고서는 아래에서 확인할 수 있습니다.
+
+- [docs/DNC_MR2S_SOLVER_PERFORMANCE_ANALYSIS.md](docs/DNC_MR2S_SOLVER_PERFORMANCE_ANALYSIS.md)
