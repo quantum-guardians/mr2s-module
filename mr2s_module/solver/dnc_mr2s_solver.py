@@ -4,6 +4,8 @@ import multiprocessing
 import os
 from typing import Iterable
 
+import dwave_networkx as dnx
+import networkx as nx
 from dimod import SampleSet
 
 from mr2s_module import estimate_required_qubits
@@ -53,6 +55,7 @@ class DnCMr2sSolver:
   mr2s_solver: QuboMR2SSolver
   face_cycle: FaceCycle = field(default_factory=lambda: FaceCycle(target_k=2, clusterer=KMeansFaceClusterer()))
   subgraph_processes: int | None = None
+  target_graph: nx.Graph = field(default_factory=lambda: dnx.pegasus_graph(16))
 
   def __post_init__(self) -> None:
     if self.subgraph_processes is not None and self.subgraph_processes < 1:
@@ -142,8 +145,14 @@ class DnCMr2sSolver:
     )
 
   def _embedding_estimate(self, graph: Graph) -> EmbeddingEstimate | None:
+    if len(graph.edges) > self.target_graph.number_of_nodes():
+      return None
+
     try:
-      return estimate_required_qubits(self.mr2s_solver.build_bqm(graph))
+      return estimate_required_qubits(
+        self.mr2s_solver.build_bqm(graph),
+        target_graph=self.target_graph,
+      )
     except RuntimeError:
       return None
 

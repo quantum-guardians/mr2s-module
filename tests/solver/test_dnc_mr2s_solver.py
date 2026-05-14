@@ -1,4 +1,5 @@
 import pytest
+import networkx as nx
 
 from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, GraphPartitionResult, Score, Solution
 import mr2s_module.solver.dnc_mr2s_solver as dnc_mr2s_solver
@@ -372,7 +373,7 @@ def test_divide_graph_keeps_graph_when_embedding_estimate_succeeds(
 ) -> None:
   graph = Graph(edges=[Edge(1, 2, 1, False)])
 
-  def estimate_succeeds(bqm):
+  def estimate_succeeds(bqm, target_graph=None):
     return _fake_embedding_estimate(bqm)
 
   monkeypatch.setattr(dnc_mr2s_solver, "estimate_required_qubits", estimate_succeeds)
@@ -388,7 +389,7 @@ def test_run_delegates_once_when_graph_is_not_divided(
 ) -> None:
   graph = Graph(edges=[Edge(1, 2, 1, False)])
 
-  def estimate_succeeds(bqm):
+  def estimate_succeeds(bqm, target_graph=None):
     return _fake_embedding_estimate(bqm)
 
   monkeypatch.setattr(dnc_mr2s_solver, "estimate_required_qubits", estimate_succeeds)
@@ -413,7 +414,7 @@ def test_divide_graph_returns_binary_search_subgraphs(
   ])
   child = Graph(edges=[Edge(1, 2, 1, False)])
 
-  def estimate_fails_for_parent(bqm):
+  def estimate_fails_for_parent(bqm, target_graph=None):
     if len(bqm.edges) > 1:
       raise RuntimeError("too large")
     return _fake_embedding_estimate(bqm)
@@ -441,7 +442,7 @@ def test_divide_graph_raises_when_no_embeddable_partition_is_found(
     Edge(2, 3, 1, False),
   ])
 
-  def estimate_always_fails(_bqm):
+  def estimate_always_fails(_bqm, target_graph=None):
     raise RuntimeError("too large")
 
   monkeypatch.setattr(
@@ -481,7 +482,7 @@ def test_divide_graph_finds_target_k_with_binary_search(
     Graph(edges=[Edge(4, 5, 1, False), Edge(5, 6, 1, False)]),
   ]
 
-  def estimate_fails_for_large_graphs(bqm):
+  def estimate_fails_for_large_graphs(bqm, target_graph=None):
     if len(bqm.edges) > 2:
       raise RuntimeError("too large")
     return _fake_embedding_estimate(bqm)
@@ -519,7 +520,7 @@ def test_run_solves_full_graph_after_applying_merged_directions(
   child = Graph(edges=[Edge(1, 2, 1, False)])
   remaining = Edge(2, 3, 1, False)
 
-  def estimate_fails_for_parent(bqm):
+  def estimate_fails_for_parent(bqm, target_graph=None):
     if len(bqm.edges) > 1:
       raise RuntimeError("too large")
     return _fake_embedding_estimate(bqm)
@@ -549,3 +550,59 @@ def test_run_solves_full_graph_after_applying_merged_directions(
   assert solution.edges == {(1, 2), (2, 3)}
   assert solution.sub_graphs == [child]
   assert len(solution.embedding_estimates) == 1
+
+
+def test_embedding_estimate_returns_none_without_calling_estimator_when_edge_count_exceeds_target_nodes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  graph = Graph(edges=[
+    Edge(1, 2, 1, False),
+    Edge(2, 3, 1, False),
+    Edge(3, 4, 1, False),
+  ])
+  target_graph = nx.path_graph(2)
+  called = False
+
+  def estimate_required_qubits_should_not_be_called(_bqm, target_graph=None):
+    nonlocal called
+    called = True
+    raise AssertionError("estimate_required_qubits should not be called")
+
+  monkeypatch.setattr(
+    dnc_mr2s_solver,
+    "estimate_required_qubits",
+    estimate_required_qubits_should_not_be_called,
+  )
+  solver = DnCMr2sSolver(
+    mr2s_solver=StubMr2sSolver(),
+    target_graph=target_graph,
+  )
+
+  assert solver._embedding_estimate(graph) is None
+  assert called is False
+
+
+def test_embedding_estimate_passes_solver_target_graph_to_estimator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+  target_graph = nx.path_graph(3)
+  passed_target_graph = None
+
+  def estimate_required_qubits_with_target_graph(bqm, target_graph=None):
+    nonlocal passed_target_graph
+    passed_target_graph = target_graph
+    return _fake_embedding_estimate(bqm)
+
+  monkeypatch.setattr(
+    dnc_mr2s_solver,
+    "estimate_required_qubits",
+    estimate_required_qubits_with_target_graph,
+  )
+  solver = DnCMr2sSolver(
+    mr2s_solver=StubMr2sSolver(),
+    target_graph=target_graph,
+  )
+
+  assert solver._embedding_estimate(graph) is not None
+  assert passed_target_graph is target_graph

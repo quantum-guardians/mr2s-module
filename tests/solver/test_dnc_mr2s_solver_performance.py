@@ -551,7 +551,7 @@ def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance(
     seed=11,
   )
 
-  def estimate_with_test_limit(bqm):
+  def estimate_with_test_limit(bqm, target_graph=None):
     if len(bqm.variables) > 35:
       raise RuntimeError("test limit exceeded")
     return _fake_embedding_estimate(bqm)
@@ -606,7 +606,7 @@ def test_run_dnc_mr2s_solver_on_planar_graph_with_removed_edges(
     remove_percent=remove_percent,
   )
 
-  def estimate_with_test_limit(bqm):
+  def estimate_with_test_limit(bqm, target_graph=None):
     if len(bqm.variables) > 100:
       raise RuntimeError("test limit exceeded")
     return _fake_embedding_estimate(bqm)
