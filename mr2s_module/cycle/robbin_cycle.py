@@ -1,5 +1,4 @@
 from mr2s_module.domain.edge import Edge
-from mr2s_module.protocols import FaceCycleProtocol
 from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.graph_partition_result import GraphPartitionResult
 from mr2s_module.util import domain_graph_to_networkx
@@ -7,10 +6,9 @@ from mr2s_module.util import domain_graph_to_networkx
 import networkx as nx
 
 
-class RobbinCycle(FaceCycleProtocol):
+class RobbinCycle:
     """단순 dfs 순회하면서 부모관계 정립"""
     def __init__(self):
-        super().__init__()
         self.target_k = 1  # DnCMr2sSolver target_k binary search 호환용 (RobbinCycle은 사용 안 함)
 
     def run(self, graph: Graph) -> GraphPartitionResult:

@@ -1,14 +1,13 @@
 import itertools
 import networkx as nx
 
-from mr2s_module.protocols import FaceCycleProtocol
+
 from mr2s_module.domain import Graph, GraphPartitionResult
 from mr2s_module.util import domain_graph_to_networkx, clone_edge
 
 
-class TjoinCycle(FaceCycleProtocol):
+class TjoinCycle:
     def __init__(self):
-        super().__init__()
         self.target_k = 1  # DnCMr2sSolver target_k binary search 호환용 (TjoinCycle은 사용 안 함)
 
     def run(self, graph: Graph) -> GraphPartitionResult:

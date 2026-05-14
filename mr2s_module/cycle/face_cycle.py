@@ -33,7 +33,7 @@ class _ComponentPartition:
     directed_pairs: set[tuple[int, int]] = field(default_factory=set)
 
 
-class FaceCycle(FaceCycleProtocol):
+class FaceCycle:
     def __init__(
         self,
         target_k: int = 10,

@@ -1,10 +1,10 @@
 import networkx as nx
 
 from mr2s_module.domain import Solution
-from mr2s_module.protocols import SolutionRankerProtocol
 
 
-class ApspSumRanker(SolutionRankerProtocol):
+
+class ApspSumRanker:
 
   @staticmethod
   def _build_graph(solution: Solution) -> nx.DiGraph:

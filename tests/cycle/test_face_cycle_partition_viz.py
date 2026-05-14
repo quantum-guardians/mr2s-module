@@ -20,7 +20,6 @@ from mr2s_module.cycle import (
     BalancedFaceGraphClusterer,
     FaceCycle,
     KMeansFaceClusterer,
-    PlanarRegionFaceCycle,
     SnowballFaceClusterer,
 )
 
@@ -58,7 +57,6 @@ _OUTPUT_DIR = Path(__file__).parent / "output"
                 clusterer=BalancedFaceGraphClusterer(),
             ),
         ),
-        ("planar_region_face_cycle", PlanarRegionFaceCycle),
     ],
 )
 def test_face_cycle_partition_visualization_renders(

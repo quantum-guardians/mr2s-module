@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from dimod import BinaryPolynomial, Vartype
 
 from mr2s_module.domain import AdjEntry
-from mr2s_module.protocols import Graph, PolyGeneratorProtocol
+from mr2s_module.protocols import Graph
 from mr2s_module.util import get_indicator_function, add_polys, multiply_polys
 
 
@@ -17,7 +17,7 @@ class SmallWorldSpec:
   n_hops: list[NHop]
 
 @dataclass
-class NHopPolyGenerator(PolyGeneratorProtocol):
+class NHopPolyGenerator:
 
   small_world_spec: SmallWorldSpec = None
 

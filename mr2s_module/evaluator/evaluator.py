@@ -2,10 +2,10 @@ import networkx as nx
 
 from mr2s_module.domain import Score, Solution
 from mr2s_module.evaluator.apsp_sum_ranker import ApspSumRanker
-from mr2s_module.protocols import EvaluatorProtocol
 
 
-class Evaluator(EvaluatorProtocol):
+
+class Evaluator:
 
   @staticmethod
   def _build_graph_from_edges(
