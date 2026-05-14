@@ -3,6 +3,8 @@ from mr2s_module.cycle import (
     FaceCycle,
     KMeansFaceClusterer,
     SnowballFaceClusterer,
+    TjoinCycle,
+    RobbinCycle,
 )
 from mr2s_module.domain import AdjEntry, Edge, EmbeddingEstimate, Graph
 from mr2s_module.evaluator import ApspSumRanker, Evaluator
@@ -59,6 +61,8 @@ __all__ = [
     "SmallWorldSpec",
     "SnowballFaceClusterer",
     "Solution",
+    "TjoinCycle",
+    "RobbinCycle",
     "SolutionRankerProtocol",
     "estimate_required_qubits",
     "map_binary_poly_to_bqm",

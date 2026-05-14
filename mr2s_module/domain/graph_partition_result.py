@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.edge import Edge
 
@@ -12,8 +12,8 @@ class GraphPartitionResult:
                             inner undirected edge는 중복되지 않아야한다.
     - `remaining_edges`   : 어떤 macro 에도 속하지 않은 간선 — 브리지, 외톨이, 고아 directed.
     """
-    sub_graphs: list[Graph]
-    remaining_edges: list[Edge]
+    sub_graphs: list[Graph] = field(default_factory=list)
+    remaining_edges: list[Edge] = field(default_factory=list)
 
     def outline_of(self, index: int) -> list[Edge]:
         """macro `index` 의 외각선 (directed) 만 필터링해 반환."""
