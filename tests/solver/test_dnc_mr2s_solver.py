@@ -1,7 +1,15 @@
 import pytest
 import networkx as nx
 
-from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, GraphPartitionResult, Score, Solution
+from mr2s_module.domain import (
+  Edge,
+  EmbeddableGraphPartition,
+  EmbeddingEstimate,
+  Graph,
+  GraphPartitionResult,
+  Score,
+  Solution,
+)
 import mr2s_module.solver.dnc_mr2s_solver as dnc_mr2s_solver
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver, DnCSolution
 from mr2s_module.solver.partition import (
@@ -52,6 +60,14 @@ class StubFaceCycle:
         "remaining_edges": self.remaining_edges,
       },
     )()
+
+
+class StubPartitionStrategy:
+  def __init__(self, partition: EmbeddableGraphPartition) -> None:
+    self.partition = partition
+
+  def run(self, graph: Graph) -> EmbeddableGraphPartition:
+    return self.partition
 
 
 class TargetKFaceCycle:
@@ -592,6 +608,22 @@ def test_degeneracy_pruning_partition_strategy_does_not_call_embedding_estimator
   assert partition.embedding_estimates[0].num_logical_variables == 2
   assert partition.embedding_estimates[0].max_chain_length == 1
   assert len(partition.embedding_estimates[0].embedding) == 2
+
+
+def test_replacing_default_partition_strategy_after_init_does_not_sync_or_raise() -> None:
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+  replacement_partition = EmbeddableGraphPartition(
+    sub_graphs=[graph],
+    embedding_estimates=[],
+    target_k=7,
+  )
+  solver = DnCMr2sSolver(mr2s_solver=StubMr2sSolver())
+  solver.graph_partition_strategy = StubPartitionStrategy(replacement_partition)
+
+  partition = solver._divide_graph_with_embeddings(graph)
+
+  assert partition is replacement_partition
+  assert solver._owns_graph_partition_strategy is False
 
 
 def test_run_solves_full_graph_after_applying_merged_directions(

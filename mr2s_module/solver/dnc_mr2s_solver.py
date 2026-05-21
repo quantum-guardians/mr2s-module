@@ -108,6 +108,10 @@ class DnCMr2sSolver:
   target_graph: nx.Graph = field(default_factory=lambda: dnx.pegasus_graph(16))
   graph_partition_strategy: DnCGraphPartitionStrategyProtocol | None = None
   _owns_graph_partition_strategy: bool = field(default=False, init=False)
+  _owned_graph_partition_strategy: DnCGraphPartitionStrategyProtocol | None = field(
+    default=None,
+    init=False,
+  )
 
   def __post_init__(self) -> None:
     if self.subgraph_processes is not None and self.subgraph_processes < 1:
@@ -119,11 +123,23 @@ class DnCMr2sSolver:
         face_cycle=self.face_cycle,
         target_graph=self.target_graph,
       )
+      self._owned_graph_partition_strategy = self.graph_partition_strategy
 
   def _sync_default_partition_strategy(self) -> None:
     if not self._owns_graph_partition_strategy:
       return
-    strategy = self._default_partition_strategy(sync=False)
+    if self.graph_partition_strategy is not self._owned_graph_partition_strategy:
+      self._owns_graph_partition_strategy = False
+      self._owned_graph_partition_strategy = None
+      return
+    if not isinstance(
+        self.graph_partition_strategy,
+        EmbeddingAwareFaceCyclePartitionStrategy,
+    ):
+      self._owns_graph_partition_strategy = False
+      self._owned_graph_partition_strategy = None
+      return
+    strategy = self.graph_partition_strategy
     strategy.mr2s_solver = self.mr2s_solver
     strategy.face_cycle = self.face_cycle
     strategy.target_graph = self.target_graph

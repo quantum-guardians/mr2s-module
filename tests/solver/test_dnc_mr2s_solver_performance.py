@@ -599,6 +599,15 @@ def build_solver_comparison_entries(
   return entries
 
 
+def select_dnc_trace_solver(
+    solver_entries: list[tuple[str, object]],
+) -> tuple[str, DnCMr2sSolver] | None:
+  for name, solver in solver_entries:
+    if isinstance(solver, DnCMr2sSolver):
+      return name, solver
+  return None
+
+
 def print_solver_comparison(results: list[dict[str, object]]) -> None:
   print()
   print("MR2S solver comparison")
@@ -635,8 +644,17 @@ def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance(
   )
   selected_names = selected_solver_names(request)
   solver_entries = build_solver_comparison_entries(selected_names)
-  dnc_solver = build_embedding_aware_dnc_solver(num_reads=5)
-  division_trace, leaf_sub_graphs = trace_division(dnc_solver, clone_graph(graph))
+  dnc_trace_solver = select_dnc_trace_solver(solver_entries)
+  if dnc_trace_solver is None:
+    traced_solver_name = None
+    division_trace = []
+    leaf_sub_graphs = []
+  else:
+    traced_solver_name, dnc_solver = dnc_trace_solver
+    division_trace, leaf_sub_graphs = trace_division(
+      dnc_solver,
+      clone_graph(graph),
+    )
   results = [
     run_timed_solver(name, solver, clone_graph(graph))
     for name, solver in solver_entries
@@ -647,13 +665,15 @@ def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance(
   for name in sorted(selected_names):
     print(f"    {name}")
   print("  dnc_division")
+  print(f"    traced_solver: {traced_solver_name}")
   print(f"    original_edges: {len(base_graph.edges)}")
   print(f"    removed_edges: {removed_count}")
   print(f"    leaf_count: {len(leaf_sub_graphs)}")
   print(f"    trace_entries: {len(division_trace)}")
 
   assert len(graph.edges) == len(base_graph.edges) - removed_count
-  assert len(leaf_sub_graphs) >= 1
+  if dnc_trace_solver is not None:
+    assert len(leaf_sub_graphs) >= 1
   assert len(results) == len(selected_names)
   assert all(result["elapsed_seconds"] >= 0.0 for result in results)
   assert all(result["selected_edges"] > 0 for result in results)
