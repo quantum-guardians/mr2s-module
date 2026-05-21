@@ -8,13 +8,13 @@ from dimod import SampleSet
 
 from mr2s_module.domain import Edge, Graph, Solution
 from mr2s_module.evaluator import Evaluator
-from mr2s_module.protocols import EvaluatorProtocol, FaceCycleProtocol
+from mr2s_module.protocols import EdgeOrientationProtocol, EvaluatorProtocol
 
 
 class SAMR2SSolver:
   def __init__(
       self,
-      face_cycle: FaceCycleProtocol | None = None,
+      edge_orienter: EdgeOrientationProtocol | None = None,
       evaluator: EvaluatorProtocol = Evaluator(),
       *,
       apsp_weight: float = 1.0,
@@ -46,7 +46,7 @@ class SAMR2SSolver:
     if disconnected_pair_penalty < 0.0:
       raise ValueError("disconnected_pair_penalty must be non-negative")
 
-    self.face_cycle = face_cycle
+    self.edge_orienter = edge_orienter
     self.evaluator = evaluator
     self.apsp_weight = apsp_weight
     self.flow_weight = flow_weight
@@ -250,9 +250,8 @@ class SAMR2SSolver:
     return best_bits, best_objective
 
   def run(self, graph: Graph) -> Solution:
-    if self.face_cycle is not None:
-      partition = self.face_cycle.run(graph)
-      graph.define_edge_direction(set(partition.directed_edges()))
+    if self.edge_orienter is not None:
+      graph.define_edge_direction(set(self.edge_orienter.orient(graph)))
 
     fixed_edges = {
       edge.vertices

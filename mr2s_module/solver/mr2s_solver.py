@@ -1,6 +1,6 @@
 from mr2s_module.protocols import (
+    EdgeOrientationProtocol,
     EvaluatorProtocol,
-    FaceCycleProtocol,
     Graph,
     QuboSolverProtocol,
     Score,
@@ -10,11 +10,11 @@ from mr2s_module.protocols import (
 class MR2SSolver:
     def __init__(
         self,
-        face_cycle: FaceCycleProtocol,
+        edge_orienter: EdgeOrientationProtocol,
         qubo_solver: QuboSolverProtocol,
         evaluator: EvaluatorProtocol,
     ) -> None:
-        self.face_cycle = face_cycle
+        self.edge_orienter = edge_orienter
         self.qubo_solver = qubo_solver
         self.evaluator = evaluator
 
