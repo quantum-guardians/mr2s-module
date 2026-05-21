@@ -251,7 +251,7 @@ class SAMR2SSolver:
 
   def run(self, graph: Graph) -> Solution:
     if self.edge_orienter is not None:
-      graph.define_edge_direction(set(self.edge_orienter.orient(graph)))
+      graph.define_edge_direction(set(self.edge_orienter.run(graph)))
 
     fixed_edges = {
       edge.vertices

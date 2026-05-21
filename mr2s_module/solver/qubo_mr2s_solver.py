@@ -50,7 +50,7 @@ class QuboMR2SSolver:
 
   def build_bqm(self, graph) -> BinaryQuadraticModel:
     if self.edge_orienter is not None:
-      graph.define_edge_direction(set(self.edge_orienter.orient(graph)))
+      graph.define_edge_direction(set(self.edge_orienter.run(graph)))
 
     # build qubo
     binary_polynomial = self._build_polynomial(graph)

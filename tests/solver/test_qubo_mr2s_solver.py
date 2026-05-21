@@ -10,9 +10,10 @@ class StubEdgeOrienter:
         self.predefined_edges = predefined_edges
         self.calls = 0
 
-    def orient(self, graph: Graph) -> list[Edge]:
+    def run(self, graph: Graph) -> list[Edge]:
         self.calls += 1
         return list(self.predefined_edges)
+
 
 
 class StubPolyGenerator:

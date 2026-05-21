@@ -1,5 +1,6 @@
 import pytest
 import networkx as nx
+import os
 
 from mr2s_module.domain import (
   Edge,
@@ -349,7 +350,10 @@ def test_solve_subgraphs_uses_process_pool_for_multiple_workers(
   solutions = solver._solve_subgraphs([graph_a, graph_b])
 
   assert created_workers == [2]
-  assert contexts == [None]
+  if os.name == "nt":
+    assert contexts[0] is not None
+  else:
+    assert contexts == [None]
   assert [solution.graph for solution in solutions] == [graph_a, graph_b]
 
 
