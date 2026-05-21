@@ -2,17 +2,14 @@ import itertools
 import networkx as nx
 
 
-from mr2s_module.domain import Graph, GraphPartitionResult
+from mr2s_module.domain import Edge, Graph
 from mr2s_module.util import domain_graph_to_networkx, clone_edge
 
 
 class TjoinCycle:
-    def __init__(self):
-        self.target_k = 1  # DnCMr2sSolver target_k binary search 호환용 (TjoinCycle은 사용 안 함)
-
-    def run(self, graph: Graph) -> GraphPartitionResult:
+    def orient(self, graph: Graph) -> list[Edge]:
         if graph.is_empty():
-            return GraphPartitionResult()
+            return []
 
         nx_graph = domain_graph_to_networkx(graph)
 
@@ -55,27 +52,19 @@ class TjoinCycle:
             g_eulerian.add_edge(u, v)
 
         # 4. Orient edges
-        oriented_edges = []
+        oriented_edges: list[Edge] = []
         for component in nx.connected_components(g_eulerian):
             sub = g_eulerian.subgraph(component)
             if sub.number_of_edges() == 0:
                 continue
 
-            # Eulerian circuit (may contain multiple cycles if component is Eulerian)
             circuit = list(nx.eulerian_circuit(sub))
             for u, v in circuit:
                 e_key = tuple(sorted((u, v)))
                 orig_edge = edge_map[e_key]
-                # Create directed edge
                 new_edge = clone_edge(orig_edge)
                 new_edge.directed = True
                 new_edge.vertices = (u, v)
                 oriented_edges.append(new_edge)
 
-        # 5. Remaining edges (the T-join edges)
-        remaining_edges = [edge_map[e_key] for e_key in j_edges_keys]
-
-        return GraphPartitionResult(
-            sub_graphs=[Graph(edges=oriented_edges)],
-            remaining_edges=remaining_edges
-        )
+        return oriented_edges

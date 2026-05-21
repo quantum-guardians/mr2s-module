@@ -46,6 +46,9 @@ class FaceCycle:
             raise ValueError("repair_mode must be either 'toggle' or 'remove'")
         self.repair_mode = repair_mode
 
+    def orient(self, graph: Graph) -> list[Edge]:
+        return self.run(graph).directed_edges()
+
     def run(self, graph: Graph) -> GraphPartitionResult:
         if any(edge.directed for edge in graph.edges):
             raise ValueError("FaceCycle requires an undirected input graph")
