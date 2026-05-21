@@ -10,7 +10,6 @@ import dwave_networkx as dnx
 import networkx as nx
 from dimod import SampleSet
 
-from mr2s_module import estimate_required_qubits
 from mr2s_module.cycle import FaceCycle
 from mr2s_module.cycle.face_clusterer import KMeansFaceClusterer
 from mr2s_module.domain import (
