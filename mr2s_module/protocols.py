@@ -34,6 +34,10 @@ class FaceCycleProtocol(Protocol):
     def run(self, graph: Graph) -> GraphPartitionResult: ...
 
 
+class EdgeOrientationProtocol(Protocol):
+    def orient(self, graph: Graph) -> list[Edge]: ...
+
+
 class DnCGraphPartitionStrategyProtocol(Protocol):
     def run(self, graph: Graph) -> EmbeddableGraphPartition: ...
 

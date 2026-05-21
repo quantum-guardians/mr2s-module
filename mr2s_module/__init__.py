@@ -17,6 +17,7 @@ from mr2s_module.evaluator import ApspSumRanker, Evaluator
 from mr2s_module.protocols import (
     DnCGraphPartitionStrategyProtocol,
     Edge as EdgeType,
+    EdgeOrientationProtocol,
     EvaluatorProtocol,
     FaceCycleProtocol,
     Graph as GraphType,
@@ -48,6 +49,7 @@ __all__ = [
     "ApspSumRanker",
     "BalancedFaceGraphClusterer",
     "Edge",
+    "EdgeOrientationProtocol",
     "EdgeType",
     "EmbeddableGraphPartition",
     "EmbeddingEstimate",
