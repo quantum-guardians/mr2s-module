@@ -4,6 +4,10 @@ import networkx as nx
 from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, GraphPartitionResult, Score, Solution
 import mr2s_module.solver.dnc_mr2s_solver as dnc_mr2s_solver
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver, DnCSolution
+from mr2s_module.solver.partition import (
+  DegeneracyPruningFaceCyclePartitionStrategy,
+  EmbeddingAwareFaceCyclePartitionStrategy,
+)
 from mr2s_module.util import empty_binary_sample_set
 
 
@@ -123,6 +127,26 @@ def _fake_embedding_estimate(bqm_or_graph) -> EmbeddingEstimate:
     num_physical_qubits=len(variables),
     max_chain_length=1,
     embedding={variable: [variable] for variable in variables},
+  )
+
+
+def _embedding_aware_dnc_solver(
+    mr2s_solver,
+    face_cycle=None,
+    target_graph=None,
+) -> DnCMr2sSolver:
+  face_cycle = face_cycle or StubFaceCycle(sub_graphs=[])
+  target_graph = target_graph or nx.path_graph(100)
+  return DnCMr2sSolver(
+    mr2s_solver=mr2s_solver,
+    face_cycle=face_cycle,
+    target_graph=target_graph,
+    graph_partition_strategy=EmbeddingAwareFaceCyclePartitionStrategy(
+      mr2s_solver=mr2s_solver,
+      face_cycle=face_cycle,
+      target_graph=target_graph,
+      embedding_estimator=dnc_mr2s_solver.estimate_required_qubits,
+    ),
   )
 
 
@@ -258,7 +282,7 @@ def test_subgraph_processes_must_be_positive() -> None:
 def test_resolve_subgraph_processes_uses_auto_cpu_count(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-  solver = DnCMr2sSolver(mr2s_solver=StubMr2sSolver())
+  solver = _embedding_aware_dnc_solver(StubMr2sSolver())
   monkeypatch.setattr(dnc_mr2s_solver.os, "process_cpu_count", lambda: 8, raising=False)
 
   assert solver._resolve_subgraph_processes(3) == 3
@@ -421,7 +445,7 @@ def test_run_delegates_once_when_graph_is_not_divided(
 
   monkeypatch.setattr(dnc_mr2s_solver, "estimate_required_qubits", estimate_succeeds)
   mr2s_solver = StubRunningMr2sSolver()
-  solver = DnCMr2sSolver(mr2s_solver=mr2s_solver)
+  solver = _embedding_aware_dnc_solver(mr2s_solver)
 
   solution = solver.run(graph)
 
@@ -451,8 +475,8 @@ def test_divide_graph_returns_binary_search_subgraphs(
     "estimate_required_qubits",
     estimate_fails_for_parent,
   )
-  solver = DnCMr2sSolver(
-    mr2s_solver=StubMr2sSolver(),
+  solver = _embedding_aware_dnc_solver(
+    StubMr2sSolver(),
     face_cycle=StubFaceCycle(sub_graphs=[child]),
   )
 
@@ -477,8 +501,8 @@ def test_divide_graph_raises_when_no_embeddable_partition_is_found(
     "estimate_required_qubits",
     estimate_always_fails,
   )
-  solver = DnCMr2sSolver(
-    mr2s_solver=StubMr2sSolver(),
+  solver = _embedding_aware_dnc_solver(
+    StubMr2sSolver(),
     face_cycle=StubFaceCycle(sub_graphs=[]),
   )
 
@@ -524,8 +548,8 @@ def test_divide_graph_finds_target_k_with_binary_search(
     invalid_sub_graphs=[invalid_child],
     valid_sub_graphs=valid_sub_graphs,
   )
-  solver = DnCMr2sSolver(
-    mr2s_solver=StubMr2sSolver(),
+  solver = _embedding_aware_dnc_solver(
+    StubMr2sSolver(),
     face_cycle=face_cycle,
   )
 
@@ -535,6 +559,39 @@ def test_divide_graph_finds_target_k_with_binary_search(
   assert [target_k for target_k, _ in face_cycle.calls] == [5, 3, 4]
   assert all(called_graph is graph for _, called_graph in face_cycle.calls)
   assert face_cycle.target_k == 2
+
+
+def test_degeneracy_pruning_partition_strategy_does_not_call_embedding_estimator() -> None:
+  graph = Graph(edges=[
+    Edge(1, 2, 1, False),
+    Edge(2, 3, 1, False),
+    Edge(1, 3, 1, False),
+  ])
+  child = Graph(edges=[Edge(1, 2, 1, False)])
+
+  def fail_if_called(*_args, **_kwargs):
+    raise AssertionError("embedding estimator should not be called")
+
+  face_cycle = StubFaceCycle(sub_graphs=[child])
+  strategy = DegeneracyPruningFaceCyclePartitionStrategy(
+    mr2s_solver=StubMr2sSolver(),
+    face_cycle=face_cycle,
+    target_graph=nx.path_graph(10),
+    embedding_estimator=fail_if_called,
+    max_degeneracy=1,
+  )
+  solver = DnCMr2sSolver(
+    mr2s_solver=StubMr2sSolver(),
+    graph_partition_strategy=strategy,
+  )
+
+  partition = solver._divide_graph_with_embeddings(graph)
+
+  assert partition.sub_graphs == [child]
+  assert len(partition.embedding_estimates) == 1
+  assert partition.embedding_estimates[0].num_logical_variables == 2
+  assert partition.embedding_estimates[0].max_chain_length == 1
+  assert len(partition.embedding_estimates[0].embedding) == 2
 
 
 def test_run_solves_full_graph_after_applying_merged_directions(
@@ -558,12 +615,13 @@ def test_run_solves_full_graph_after_applying_merged_directions(
     estimate_fails_for_parent,
   )
   mr2s_solver = StubRunningMr2sSolver()
-  solver = DnCMr2sSolver(
-    mr2s_solver=mr2s_solver,
-    face_cycle=StubFaceCycle(
+  face_cycle = StubFaceCycle(
       sub_graphs=[child],
       remaining_edges=[remaining],
-    ),
+  )
+  solver = _embedding_aware_dnc_solver(
+    mr2s_solver,
+    face_cycle=face_cycle,
   )
 
   solution = solver.run(graph)
@@ -600,13 +658,46 @@ def test_embedding_estimate_returns_none_without_calling_estimator_when_edge_cou
     "estimate_required_qubits",
     estimate_required_qubits_should_not_be_called,
   )
-  solver = DnCMr2sSolver(
-    mr2s_solver=StubMr2sSolver(),
+  solver = _embedding_aware_dnc_solver(
+    StubMr2sSolver(),
     target_graph=target_graph,
   )
 
   assert solver._embedding_estimate(graph) is None
   assert called is False
+
+
+def test_embedding_estimate_uses_mutated_target_graph() -> None:
+  graph = Graph(edges=[
+    Edge(1, 2, 1, False),
+    Edge(2, 3, 1, False),
+    Edge(3, 4, 1, False),
+  ])
+  solver = DnCMr2sSolver(
+    mr2s_solver=StubMr2sSolver(),
+    target_graph=nx.path_graph(10),
+  )
+  solver.target_graph = nx.path_graph(2)
+
+  assert solver._embedding_estimate(graph) is None
+
+
+def test_divide_graph_uses_mutated_face_cycle() -> None:
+  graph = Graph(edges=[
+    Edge(1, 2, 1, False),
+    Edge(2, 3, 1, False),
+  ])
+  old_child = Graph(edges=[Edge(1, 2, 1, False)])
+  new_child = Graph(edges=[Edge(2, 3, 1, False)])
+
+  solver = DnCMr2sSolver(
+    mr2s_solver=StubMr2sSolver(),
+    face_cycle=StubFaceCycle(sub_graphs=[old_child]),
+    target_graph=nx.path_graph(2),
+  )
+  solver.face_cycle = StubFaceCycle(sub_graphs=[new_child])
+
+  assert solver.divide_graph(graph) == [new_child]
 
 
 def test_embedding_estimate_passes_solver_target_graph_to_estimator(
@@ -626,8 +717,8 @@ def test_embedding_estimate_passes_solver_target_graph_to_estimator(
     "estimate_required_qubits",
     estimate_required_qubits_with_target_graph,
   )
-  solver = DnCMr2sSolver(
-    mr2s_solver=StubMr2sSolver(),
+  solver = _embedding_aware_dnc_solver(
+    StubMr2sSolver(),
     target_graph=target_graph,
   )
 
@@ -662,8 +753,8 @@ def test_embedding_estimate_calls_estimator_when_edge_count_and_bqm_variables_ma
     "estimate_required_qubits",
     estimate_required_qubits_called,
   )
-  solver = DnCMr2sSolver(
-    mr2s_solver=StubMr2sSolver(),
+  solver = _embedding_aware_dnc_solver(
+    StubMr2sSolver(),
     target_graph=target_graph,
   )
 
@@ -698,8 +789,8 @@ def test_embedding_estimate_counts_only_undirected_edges_for_prefilter(
     "estimate_required_qubits",
     estimate_required_qubits_called,
   )
-  solver = DnCMr2sSolver(
-    mr2s_solver=StubMr2sSolver(),
+  solver = _embedding_aware_dnc_solver(
+    StubMr2sSolver(),
     target_graph=target_graph,
   )
 
@@ -724,8 +815,8 @@ def test_embedding_estimate_skips_estimator_when_bqm_variables_exceed_target_nod
     "estimate_required_qubits",
     estimate_required_qubits_should_not_be_called,
   )
-  solver = DnCMr2sSolver(
-    mr2s_solver=StubBqmMr2sSolver(StubBqm(variables=[1, 2, 3])),
+  solver = _embedding_aware_dnc_solver(
+    StubBqmMr2sSolver(StubBqm(variables=[1, 2, 3])),
     target_graph=target_graph,
   )
 
@@ -756,8 +847,8 @@ def test_embedding_estimate_calls_estimator_when_bqm_variables_within_target_nod
     "estimate_required_qubits",
     estimate_required_qubits_called,
   )
-  solver = DnCMr2sSolver(
-    mr2s_solver=StubBqmMr2sSolver(StubBqm(variables=[1, 2])),
+  solver = _embedding_aware_dnc_solver(
+    StubBqmMr2sSolver(StubBqm(variables=[1, 2])),
     target_graph=target_graph,
   )
 

@@ -1,7 +1,9 @@
+import os
 import random
 import time
 from pathlib import Path
 import numpy as np
+import dwave_networkx as dnx
 import networkx as nx
 import pytest
 
@@ -13,12 +15,13 @@ from mr2s_module.cycle import BalancedFaceGraphClusterer, FaceCycle
 from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, Solution
 from mr2s_module.evaluator import ApspSumRanker
 from mr2s_module.qubo import (
-  NHop,
-  NHopPolyGenerator,
   SAQuboSolver,
-  SmallWorldSpec,
 )
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver
+from mr2s_module.solver.partition import (
+  DegeneracyPruningFaceCyclePartitionStrategy,
+  EmbeddingAwareFaceCyclePartitionStrategy,
+)
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
 from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver
 from mr2s_module.util import (
@@ -34,6 +37,12 @@ from tests.util.graph_fixtures import delaunay_graph_with_pos
 _OUTPUT_DIR = Path(__file__).parent / "output"
 pytest.importorskip("scipy.spatial")
 _PALETTE = plt.colormaps.get_cmap("tab20")
+_ALL_COMPARISON_SOLVERS = {
+  "dnc_embedding_aware",
+  "dnc_degeneracy_pruning",
+  "qubo_mr2s_solver",
+  "sa_mr2s_solver",
+}
 
 
 def _fake_embedding_estimate(bqm) -> EmbeddingEstimate:
@@ -123,16 +132,43 @@ def remove_edges_by_percent(
 
 
 def build_dnc_solver(num_reads: int = 20) -> DnCMr2sSolver:
-  n_hop_generator = NHopPolyGenerator()
-  n_hop_generator.small_world_spec = SmallWorldSpec(
-    n_hops=[NHop(n=2, weight=1)]
+  return DnCMr2sSolver(
+    mr2s_solver=build_qubo_solver(num_reads),
+    face_cycle=build_dnc_face_cycle(),
   )
+
+
+def build_dnc_face_cycle() -> FaceCycle:
+  return FaceCycle(
+    target_k=4,
+    clusterer=BalancedFaceGraphClusterer(),
+  )
+
+
+def build_embedding_aware_dnc_solver(num_reads: int = 20) -> DnCMr2sSolver:
   mr2s_solver = build_qubo_solver(num_reads)
+  face_cycle = build_dnc_face_cycle()
   return DnCMr2sSolver(
     mr2s_solver=mr2s_solver,
-    face_cycle=FaceCycle(
-      target_k=4,
-      clusterer=BalancedFaceGraphClusterer(),
+    face_cycle=face_cycle,
+    graph_partition_strategy=EmbeddingAwareFaceCyclePartitionStrategy(
+      mr2s_solver=mr2s_solver,
+      face_cycle=face_cycle,
+      target_graph=dnx.pegasus_graph(16),
+    ),
+  )
+
+
+def build_degeneracy_pruning_dnc_solver(num_reads: int = 20) -> DnCMr2sSolver:
+  mr2s_solver = build_qubo_solver(num_reads)
+  face_cycle = build_dnc_face_cycle()
+  return DnCMr2sSolver(
+    mr2s_solver=mr2s_solver,
+    face_cycle=face_cycle,
+    graph_partition_strategy=DegeneracyPruningFaceCyclePartitionStrategy(
+      mr2s_solver=mr2s_solver,
+      face_cycle=face_cycle,
+      target_graph=dnx.pegasus_graph(16),
     ),
   )
 
@@ -499,6 +535,8 @@ def run_timed_solver(name: str, solver, graph: Graph) -> dict[str, object]:
     "elapsed_seconds": elapsed_seconds,
     "vertices": len(graph.get_vertices()),
     "edges": len(graph.edges),
+    "dnc_subgraph_count": len(getattr(solution, "sub_graphs", [])),
+    "dnc_partition_target_k": getattr(solution, "partition_target_k", None),
     "selected_edges": len(solution.edges),
     "selected_undirected_edges": len(selected_undirected_edges),
     "reverse_direction_conflicts": (
@@ -515,6 +553,52 @@ def run_timed_solver(name: str, solver, graph: Graph) -> dict[str, object]:
   }
 
 
+def selected_solver_names(request: pytest.FixtureRequest) -> set[str]:
+  raw_names = (
+    request.config.getoption("--mr2s-solvers")
+    or os.environ.get("MR2S_SOLVERS")
+  )
+  if raw_names is None:
+    return set(_ALL_COMPARISON_SOLVERS)
+
+  names = {
+    name.strip()
+    for name in raw_names.split(",")
+    if name.strip()
+  }
+  unknown_names = names - _ALL_COMPARISON_SOLVERS
+  if unknown_names:
+    raise ValueError(
+      "Unknown MR2S solver names: "
+      f"{sorted(unknown_names)}. "
+      f"Available names: {sorted(_ALL_COMPARISON_SOLVERS)}"
+    )
+  if not names:
+    raise ValueError("At least one MR2S solver name must be selected")
+  return names
+
+
+def build_solver_comparison_entries(
+    selected_names: set[str],
+) -> list[tuple[str, object]]:
+  entries: list[tuple[str, object]] = []
+  if "dnc_embedding_aware" in selected_names:
+    entries.append((
+      "dnc_embedding_aware",
+      build_embedding_aware_dnc_solver(num_reads=5),
+    ))
+  if "dnc_degeneracy_pruning" in selected_names:
+    entries.append((
+      "dnc_degeneracy_pruning",
+      build_degeneracy_pruning_dnc_solver(num_reads=5),
+    ))
+  if "qubo_mr2s_solver" in selected_names:
+    entries.append(("qubo_mr2s_solver", build_qubo_solver(num_reads=5)))
+  if "sa_mr2s_solver" in selected_names:
+    entries.append(("sa_mr2s_solver", build_sa_solver()))
+  return entries
+
+
 def print_solver_comparison(results: list[dict[str, object]]) -> None:
   print()
   print("MR2S solver comparison")
@@ -523,6 +607,8 @@ def print_solver_comparison(results: list[dict[str, object]]) -> None:
     print(f"    elapsed_seconds: {result['elapsed_seconds']:.4f}")
     print(f"    vertices: {result['vertices']}")
     print(f"    edges: {result['edges']}")
+    print(f"    dnc_subgraph_count: {result['dnc_subgraph_count']}")
+    print(f"    dnc_partition_target_k: {result['dnc_partition_target_k']}")
     print(f"    selected_edges: {result['selected_edges']}")
     print(f"    selected_undirected_edges: {result['selected_undirected_edges']}")
     print(f"    reverse_direction_conflicts: {result['reverse_direction_conflicts']}")
@@ -535,7 +621,9 @@ def print_solver_comparison(results: list[dict[str, object]]) -> None:
 
 
 @pytest.mark.slow
-def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance() -> None:
+def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance(
+    request: pytest.FixtureRequest,
+) -> None:
   base_graph, _positions = build_delaunay_planar_graph(
     num_points=500,
     seed=11,
@@ -545,17 +633,19 @@ def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance() -> None:
     remove_percent=50,
     seed=11,
   )
-  dnc_solver = build_dnc_solver(num_reads=5)
-  qubo_solver = build_qubo_solver(num_reads=5)
-  sa_solver = build_sa_solver()
+  selected_names = selected_solver_names(request)
+  solver_entries = build_solver_comparison_entries(selected_names)
+  dnc_solver = build_embedding_aware_dnc_solver(num_reads=5)
   division_trace, leaf_sub_graphs = trace_division(dnc_solver, clone_graph(graph))
   results = [
-    run_timed_solver("dnc_mr2s_solver", dnc_solver, clone_graph(graph)),
-    run_timed_solver("qubo_mr2s_solver", qubo_solver, clone_graph(graph)),
-    run_timed_solver("sa_mr2s_solver", sa_solver, clone_graph(graph)),
+    run_timed_solver(name, solver, clone_graph(graph))
+    for name, solver in solver_entries
   ]
 
   print_solver_comparison(results)
+  print("  selected_solvers")
+  for name in sorted(selected_names):
+    print(f"    {name}")
   print("  dnc_division")
   print(f"    original_edges: {len(base_graph.edges)}")
   print(f"    removed_edges: {removed_count}")
@@ -564,6 +654,7 @@ def test_compare_dnc_mr2s_solver_and_qubo_mr2s_solver_performance() -> None:
 
   assert len(graph.edges) == len(base_graph.edges) - removed_count
   assert len(leaf_sub_graphs) >= 1
+  assert len(results) == len(selected_names)
   assert all(result["elapsed_seconds"] >= 0.0 for result in results)
   assert all(result["selected_edges"] > 0 for result in results)
   assert all(result["reverse_direction_conflicts"] == 0 for result in results)

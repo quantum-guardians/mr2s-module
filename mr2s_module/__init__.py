@@ -6,9 +6,16 @@ from mr2s_module.cycle import (
     TjoinCycle,
     RobbinCycle,
 )
-from mr2s_module.domain import AdjEntry, Edge, EmbeddingEstimate, Graph
+from mr2s_module.domain import (
+    AdjEntry,
+    Edge,
+    EmbeddableGraphPartition,
+    EmbeddingEstimate,
+    Graph,
+)
 from mr2s_module.evaluator import ApspSumRanker, Evaluator
 from mr2s_module.protocols import (
+    DnCGraphPartitionStrategyProtocol,
     Edge as EdgeType,
     EvaluatorProtocol,
     FaceCycleProtocol,
@@ -29,6 +36,10 @@ from mr2s_module.qubo import (
     SmallWorldSpec,
 )
 from mr2s_module.solver import MR2SSolver, QuboMR2SSolver
+from mr2s_module.solver.partition import (
+    DegeneracyPruningFaceCyclePartitionStrategy,
+    EmbeddingAwareFaceCyclePartitionStrategy,
+)
 from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver
 from mr2s_module.util import estimate_required_qubits, map_binary_poly_to_bqm
 
@@ -38,9 +49,13 @@ __all__ = [
     "BalancedFaceGraphClusterer",
     "Edge",
     "EdgeType",
+    "EmbeddableGraphPartition",
     "EmbeddingEstimate",
+    "EmbeddingAwareFaceCyclePartitionStrategy",
+    "DegeneracyPruningFaceCyclePartitionStrategy",
     "Evaluator",
     "EvaluatorProtocol",
+    "DnCGraphPartitionStrategyProtocol",
     "FaceCycle",
     "FaceCycleProtocol",
     "FlowPolyGenerator",
@@ -56,7 +71,7 @@ __all__ = [
     "QuboSolver",
     "QuboSolverProtocol",
     "SAQuboSolver",
-  "SAMR2SSolver",
+    "SAMR2SSolver",
     "Score",
     "SmallWorldSpec",
     "SnowballFaceClusterer",
