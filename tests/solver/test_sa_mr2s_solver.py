@@ -1,4 +1,5 @@
 from mr2s_module.domain import Edge, Graph
+from mr2s_module.domain.orientation_result import OrientedEdges
 from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver
 
 
@@ -7,9 +8,9 @@ class StubEdgeOrienter:
     self.predefined_edges = predefined_edges
     self.calls = 0
 
-  def run(self, graph: Graph) -> list[Edge]:
+  def run(self, graph: Graph) -> OrientedEdges:
     self.calls += 1
-    return list(self.predefined_edges)
+    return OrientedEdges(edges=list(self.predefined_edges))
 
 
 def test_run_finds_strongly_connected_triangle_orientation() -> None:

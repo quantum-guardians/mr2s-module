@@ -1,6 +1,7 @@
 from dimod import BinaryPolynomial, Vartype
 
 from mr2s_module.domain import Edge, Graph, Solution
+from mr2s_module.domain.orientation_result import OrientedEdges
 from mr2s_module.solver import QuboMR2SSolver
 from mr2s_module.util import empty_binary_sample_set
 
@@ -10,9 +11,9 @@ class StubEdgeOrienter:
         self.predefined_edges = predefined_edges
         self.calls = 0
 
-    def run(self, graph: Graph) -> list[Edge]:
+    def run(self, graph: Graph) -> OrientedEdges:
         self.calls += 1
-        return list(self.predefined_edges)
+        return OrientedEdges(edges=list(self.predefined_edges))
 
 
 

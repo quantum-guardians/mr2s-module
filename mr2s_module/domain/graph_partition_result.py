@@ -1,12 +1,12 @@
 from dataclasses import dataclass, field
-from typing import List
 
 from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.edge import Edge
+from mr2s_module.domain.orientation_result import OrientationResult
 
 
 @dataclass
-class GraphPartitionResult(List[Edge]):
+class GraphPartitionResult(OrientationResult):
     """Face Cycle 결과.
 
     - `sub_graphs[i]`     : macro `i` 의 full subgraph (inner undirected + outline directed).
@@ -16,25 +16,28 @@ class GraphPartitionResult(List[Edge]):
     """
     sub_graphs: list[Graph] = field(default_factory=list)
     remaining_edges: list[Edge] = field(default_factory=list)
+    _directed_edges: list[Edge] = field(init=False, default_factory=list, repr=False)
 
-    def __post_init__(self):
-        """EdgeOrient를 위하여 사용하는 post init. 자기 자신을 List[Edge]로 사용"""
+    def __post_init__(self) -> None:
         # 공유 boundary 는 양쪽 macro 의 sub_graphs 에 같은 Edge 인스턴스로 등장하므로
         # 인스턴스 dedup 이 필요하다 (Edge 는 identity hash 라 set 으로 충분).
         seen: set[Edge] = set()
         for sg in self.sub_graphs:
             seen.update(e for e in sg.edges if e.directed)
         seen.update(e for e in self.remaining_edges if e.directed)
+        self._directed_edges = list(seen)
 
-        super().__init__(seen)
+    def get_edges(self) -> list[Edge]:
+        """외부 변경을 막기위해 객체 복사 후 제시"""
+        return list(self._directed_edges)
 
     def outline_of(self, index: int) -> list[Edge]:
         """macro `index` 의 외각선 (directed) 만 필터링해 반환."""
         return [e for e in self.sub_graphs[index].edges if e.directed]
 
     def directed_edges(self) -> list[Edge]:
-        """외부 변경을 막기위해 객체 복사 후 제시"""
-        return list(self)
+        """`get_edges()` 의 호환 별칭."""
+        return self.get_edges()
 
     def get_inner_subgraph(self, index: int) -> Graph:
         """macro `index` 의 내부 간선 (undirected) 만 담은 Graph."""

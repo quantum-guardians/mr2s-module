@@ -155,7 +155,7 @@ def main() -> None:
     )
 
   if args.use_face_cycle:
-    directed_edges = FaceClusterPartition(target_k=args.target_k).orient(graph)
+    directed_edges = FaceClusterPartition(target_k=args.target_k).run(graph).get_edges()
     graph.define_edge_direction(set(directed_edges))
 
   polynomial = build_polynomial(graph)

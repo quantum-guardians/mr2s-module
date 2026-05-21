@@ -3,13 +3,14 @@ import networkx as nx
 
 
 from mr2s_module.domain import Edge, Graph
+from mr2s_module.domain.orientation_result import OrientedEdges
 from mr2s_module.util import domain_graph_to_networkx, clone_edge
 
 
 class Tjoin:
-    def orient(self, graph: Graph) -> list[Edge]:
+    def run(self, graph: Graph) -> OrientedEdges:
         if graph.is_empty():
-            return []
+            return OrientedEdges()
 
         nx_graph = domain_graph_to_networkx(graph)
 
@@ -67,4 +68,4 @@ class Tjoin:
                 new_edge.vertices = (u, v)
                 oriented_edges.append(new_edge)
 
-        return oriented_edges
+        return OrientedEdges(edges=oriented_edges)

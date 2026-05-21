@@ -1,5 +1,6 @@
 from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
+from mr2s_module.domain.orientation_result import OrientedEdges
 from mr2s_module.util import domain_graph_to_networkx
 
 import networkx as nx
@@ -8,15 +9,15 @@ import networkx as nx
 class Robbin:
     """단순 dfs 순회하면서 부모관계 정립"""
 
-    def orient(self, graph: Graph) -> list[Edge]:
+    def run(self, graph: Graph) -> OrientedEdges:
         if graph.is_empty():
-            return []
+            return OrientedEdges()
 
         nx_graph = domain_graph_to_networkx(graph)
 
         # 브릿지 존재 시 강한 방향성 불가능 → 방향 결정 포기.
         if nx.has_bridges(nx_graph):
-            return []
+            return OrientedEdges()
 
         adj = graph.get_adjacency_dict()
         visited: set[int] = set()
@@ -50,4 +51,4 @@ class Robbin:
             elif parent.get(u) != v and order[v] < order[u]:
                 directed_edges.append(Edge(u, v, entry.weight, True))
 
-        return directed_edges
+        return OrientedEdges(edges=directed_edges)

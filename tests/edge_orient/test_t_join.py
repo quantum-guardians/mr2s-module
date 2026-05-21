@@ -14,19 +14,19 @@ from tests.util.graph_fixtures import delaunay_graph, graph_from_pairs
 
 def _apply_cycle_directions(graph: Graph, cycle: Tjoin) -> None:
     """Cycle 이 결정한 방향을 graph 에 박아 solver 가 보존하도록 강제한다."""
-    graph.define_edge_direction(set(cycle.orient(graph)))
+    graph.define_edge_direction(set(cycle.run(graph).get_edges()))
 
 
 def test_t_join_basic_cases():
     # Triangle: 모든 차수 짝수 → 전부 oriented.
     graph = graph_from_pairs([(0, 1), (1, 2), (0, 2)])
-    directed_edges = Tjoin().orient(graph)
+    directed_edges = Tjoin().run(graph).get_edges()
     assert len(directed_edges) == 3
     assert all(e.directed for e in directed_edges)
 
     # Path: 모든 간선이 T-join 으로 빠져 oriented 없음.
     graph = graph_from_pairs([(0, 1), (1, 2)])
-    directed_edges = Tjoin().orient(graph)
+    directed_edges = Tjoin().run(graph).get_edges()
     assert directed_edges == []
 
 
@@ -60,7 +60,7 @@ def test_t_join_performance_and_apsp(num_points, remove_percent):
     cycle = Tjoin()
 
     start_time = time.perf_counter()
-    directed_edges = cycle.orient(graph)
+    directed_edges = cycle.run(graph).get_edges()
     elapsed = time.perf_counter() - start_time
 
     oriented_ids = {e.id for e in directed_edges}
