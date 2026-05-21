@@ -33,7 +33,7 @@ class _ComponentPartition:
     directed_pairs: set[tuple[int, int]] = field(default_factory=set)
 
 
-class FaceCycle:
+class FaceClusterPartition:
     def __init__(
         self,
         target_k: int = 10,
@@ -48,7 +48,7 @@ class FaceCycle:
 
     def run(self, graph: Graph) -> GraphPartitionResult:
         if any(edge.directed for edge in graph.edges):
-            raise ValueError("FaceCycle requires an undirected input graph")
+            raise ValueError("FaceClusterPartition requires an undirected input graph")
 
         nx_graph = domain_graph_to_networkx(graph)
         is_planar, _ = nx.check_planarity(nx_graph)

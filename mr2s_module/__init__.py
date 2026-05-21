@@ -1,10 +1,12 @@
 from mr2s_module.cycle import (
     BalancedFaceGraphClusterer,
-    FaceCycle,
+    FaceClusterPartition,
     KMeansFaceClusterer,
     SnowballFaceClusterer,
-    TjoinCycle,
-    RobbinCycle,
+)
+from mr2s_module.edge_orient import (
+    Robbin,
+    Tjoin,
 )
 from mr2s_module.domain import (
     AdjEntry,
@@ -17,6 +19,7 @@ from mr2s_module.evaluator import ApspSumRanker, Evaluator
 from mr2s_module.protocols import (
     DnCGraphPartitionStrategyProtocol,
     Edge as EdgeType,
+    EdgeOrientationProtocol,
     EvaluatorProtocol,
     FaceCycleProtocol,
     Graph as GraphType,
@@ -48,6 +51,7 @@ __all__ = [
     "ApspSumRanker",
     "BalancedFaceGraphClusterer",
     "Edge",
+    "EdgeOrientationProtocol",
     "EdgeType",
     "EmbeddableGraphPartition",
     "EmbeddingEstimate",
@@ -56,7 +60,7 @@ __all__ = [
     "Evaluator",
     "EvaluatorProtocol",
     "DnCGraphPartitionStrategyProtocol",
-    "FaceCycle",
+    "FaceClusterPartition",
     "FaceCycleProtocol",
     "FlowPolyGenerator",
     "Graph",
@@ -76,8 +80,8 @@ __all__ = [
     "SmallWorldSpec",
     "SnowballFaceClusterer",
     "Solution",
-    "TjoinCycle",
-    "RobbinCycle",
+    "Tjoin",
+    "Robbin",
     "SolutionRankerProtocol",
     "estimate_required_qubits",
     "map_binary_poly_to_bqm",

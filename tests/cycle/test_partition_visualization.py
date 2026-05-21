@@ -18,7 +18,7 @@ pytest.importorskip("scipy.spatial")
 
 from mr2s_module.cycle import (
     BalancedFaceGraphClusterer,
-    FaceCycle,
+    FaceClusterPartition,
     KMeansFaceClusterer,
     SnowballFaceClusterer,
 )
@@ -38,21 +38,21 @@ _OUTPUT_DIR = Path(__file__).parent / "output"
     [
         (
             "face_cycle_snowball",
-            lambda target_k: FaceCycle(
+            lambda target_k: FaceClusterPartition(
                 target_k=target_k,
                 clusterer=SnowballFaceClusterer(),
             ),
         ),
         (
             "face_cycle_kmeans",
-            lambda target_k: FaceCycle(
+            lambda target_k: FaceClusterPartition(
                 target_k=target_k,
                 clusterer=KMeansFaceClusterer(),
             ),
         ),
         (
             "face_cycle_balanced",
-            lambda target_k: FaceCycle(
+            lambda target_k: FaceClusterPartition(
                 target_k=target_k,
                 clusterer=BalancedFaceGraphClusterer(),
             ),

@@ -1,25 +1,23 @@
 from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
-from mr2s_module.domain.graph_partition_result import GraphPartitionResult
+from mr2s_module.domain.orientation_result import OrientedEdges
 from mr2s_module.util import domain_graph_to_networkx
 
 import networkx as nx
 
 
-class RobbinCycle:
+class Robbin:
     """단순 dfs 순회하면서 부모관계 정립"""
-    def __init__(self):
-        self.target_k = 1  # DnCMr2sSolver target_k binary search 호환용 (RobbinCycle은 사용 안 함)
 
-    def run(self, graph: Graph) -> GraphPartitionResult:
+    def run(self, graph: Graph) -> OrientedEdges:
         if graph.is_empty():
-            return GraphPartitionResult()
+            return OrientedEdges()
 
         nx_graph = domain_graph_to_networkx(graph)
 
-        # 브릿지 존재 시: 강한 방향성 불가능 → 무방향 그대로 remaining_edges 로 반환.
+        # 브릿지 존재 시 강한 방향성 불가능 → 방향 결정 포기.
         if nx.has_bridges(nx_graph):
-            return GraphPartitionResult(remaining_edges=list(graph.edges))
+            return OrientedEdges()
 
         adj = graph.get_adjacency_dict()
         visited: set[int] = set()
@@ -53,4 +51,4 @@ class RobbinCycle:
             elif parent.get(u) != v and order[v] < order[u]:
                 directed_edges.append(Edge(u, v, entry.weight, True))
 
-        return GraphPartitionResult(sub_graphs=[Graph(edges=directed_edges)])
+        return OrientedEdges(edges=directed_edges)

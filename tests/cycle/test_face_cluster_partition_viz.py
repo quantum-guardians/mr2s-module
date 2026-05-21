@@ -1,12 +1,12 @@
 """
-시각화 테스트 — `FaceCycle` 파이프라인이 잘 도는지 눈으로 확인하기 위한 테스트.
+시각화 테스트 — `FaceClusterPartition` 파이프라인이 잘 도는지 눈으로 확인하기 위한 테스트.
 
 세 개의 패널을 그려 PNG 로 저장한다.
   1. 원본 (Delaunay) 그래프
   2. 추출된 면 — 외벽 보호 후 2-coloring 한 면들 + final_boundary
   3. 회전 방향 — 각 면을 2-color 에 따라 CCW(파랑) 또는 CW(주황) 화살표로 표시
 
-`FaceCycle.run` 결과와 진단용으로 재현한 파이프라인의 final_boundary 가
+`FaceClusterPartition.run` 결과와 진단용으로 재현한 파이프라인의 final_boundary 가
 일치해야 한다 (같은 numpy seed 하에서).
 """
 from __future__ import annotations
@@ -24,7 +24,7 @@ import numpy as np
 
 pytest.importorskip("scipy.spatial")
 
-from mr2s_module.cycle import FaceCycle
+from mr2s_module.cycle import FaceClusterPartition
 from mr2s_module.cycle.face_clusterer import SnowballFaceClusterer
 from mr2s_module.domain import Graph
 from mr2s_module.util import (
@@ -43,7 +43,7 @@ _PALETTE = ("#1f77b4", "#ff7f0e")
 def _run_diagnostic(
     graph: Graph, pos: dict[int, np.ndarray], target_k: int
 ) -> dict:
-    """`FaceCycle._partition_component` 와 동일한 흐름을 순수 함수로 재현,
+    """`FaceClusterPartition._partition_component` 와 동일한 흐름을 순수 함수로 재현,
     중간 산출물(면, 컴포넌트, 2-coloring) 을 함께 반환."""
     nx_graph = domain_graph_to_networkx(graph)
     is_planar, _ = nx.check_planarity(nx_graph)
@@ -61,10 +61,10 @@ def _run_diagnostic(
     k = max(1, min(target_k, len(inner_faces)))
     face_to_cluster = SnowballFaceClusterer().run(centroids, dual_base, k)
 
-    boundary, outer = FaceCycle._collect_boundary_edges(
+    boundary, outer = FaceClusterPartition._collect_boundary_edges(
         face_edges_map, face_to_cluster
     )
-    repair = FaceCycle._wall_protected_repair(nx_graph, boundary, outer)
+    repair = FaceClusterPartition._wall_protected_repair(nx_graph, boundary, outer)
     final_boundary = boundary.symmetric_difference(repair)
 
     face_graph = nx.Graph()
@@ -72,11 +72,11 @@ def _run_diagnostic(
     for e, f_idxs in face_edges_map.items():
         if len(f_idxs) == 2 and e not in final_boundary:
             face_graph.add_edge(f_idxs[0], f_idxs[1])
-    components = FaceCycle._filter_ghost_components(
+    components = FaceClusterPartition._filter_ghost_components(
         face_graph, inner_faces, outer, final_boundary
     )
 
-    merged = FaceCycle._build_merged_dual(
+    merged = FaceClusterPartition._build_merged_dual(
         components, inner_faces, face_edges_map, final_boundary
     )
     if merged.number_of_nodes() > 0 and nx.is_bipartite(merged):
@@ -189,15 +189,15 @@ def test_face_cycle_visualization_renders_three_panels(seed: int) -> None:
     n_points, target_k = 60, 6
     graph, pos = delaunay_graph_with_pos(n=n_points, seed=seed)
 
-    # 1. FaceCycle.run() 자체가 정상적으로 boundary 를 반환하는지.
+    # 1. FaceClusterPartition.run() 자체가 정상적으로 boundary 를 반환하는지.
     np.random.seed(seed)
-    partition = FaceCycle(target_k=target_k).run(graph)
+    partition = FaceClusterPartition(target_k=target_k).run(graph)
     boundary_run = {e.id for e in partition.directed_edges()}
     input_ids = {e.id for e in graph.edges}
     assert boundary_run, "run() should produce non-empty directed boundary edges"
     assert boundary_run.issubset(input_ids)
 
-    # 2. 시각화용 진단 파이프라인 — FaceCycle 의 내부 planar_layout 대신
+    # 2. 시각화용 진단 파이프라인 — FaceClusterPartition 의 내부 planar_layout 대신
     #    원본 Delaunay 좌표를 그대로 써서 외곽/centroid 를 계산.
     #    그래서 run() 과 boundary 가 정확히 일치하지는 않지만,
     #    동일한 정점/평면 임베딩 위에서의 또 다른 valid 한 2-coloring 을 그린다.
@@ -215,7 +215,7 @@ def test_face_cycle_visualization_renders_three_panels(seed: int) -> None:
     _draw_faces(axes[1], diag, pos)
     _draw_rotations(axes[2], diag, pos)
     fig.suptitle(
-        f"FaceCycle visualization — n={n_points}, target_k={target_k}, seed={seed}",
+        f"FaceClusterPartition visualization — n={n_points}, target_k={target_k}, seed={seed}",
         fontsize=15,
         y=0.995,
     )

@@ -15,7 +15,7 @@ from mr2s_module import (
   ApspSumRanker,
   Edge,
   Evaluator,
-  FaceCycle,
+  FaceClusterPartition,
   FlowPolyGenerator,
   Graph,
   NHop,
@@ -133,9 +133,9 @@ def main() -> None:
   parser.add_argument("--remove-ratio", type=float, default=0.0)
   # Number of simulated annealing reads (samples) to draw.
   parser.add_argument("--num-reads", type=int, default=100)
-  # FaceCycle target k used when preprocessing is enabled.
+  # FaceClusterPartition target k used when preprocessing is enabled.
   parser.add_argument("--target-k", type=int, default=8)
-  # Apply FaceCycle preprocessing before building the QUBO.
+  # Apply FaceClusterPartition preprocessing before building the QUBO.
   parser.add_argument("--use-face-cycle", action="store_true")
   args = parser.parse_args()
 
@@ -155,8 +155,8 @@ def main() -> None:
     )
 
   if args.use_face_cycle:
-    predefined_edges = FaceCycle(target_k=args.target_k).run(graph)
-    graph.define_edge_direction(predefined_edges)
+    directed_edges = FaceClusterPartition(target_k=args.target_k).run(graph).get_edges()
+    graph.define_edge_direction(set(directed_edges))
 
   polynomial = build_polynomial(graph)
   bqm = map_binary_poly_to_bqm(polynomial)

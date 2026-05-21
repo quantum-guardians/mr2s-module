@@ -8,6 +8,9 @@ if TYPE_CHECKING:
     from mr2s_module.domain.graph_partition_result import (
         GraphPartitionResult as GraphPartitionResultModel,
     )
+    from mr2s_module.domain.orientation_result import (
+        OrientationResult as OrientationResultModel,
+    )
     from mr2s_module.domain.embeddable_graph_partition import (
         EmbeddableGraphPartition as EmbeddableGraphPartitionModel,
     )
@@ -17,6 +20,7 @@ else:
     EdgeModel = Any
     GraphModel = Any
     GraphPartitionResultModel = Any
+    OrientationResultModel = Any
     EmbeddableGraphPartitionModel = Any
     ScoreModel = Any
     SolutionModel = Any
@@ -24,6 +28,7 @@ else:
 Graph: TypeAlias = GraphModel
 Edge: TypeAlias = EdgeModel
 GraphPartitionResult: TypeAlias = GraphPartitionResultModel
+OrientationResult: TypeAlias = OrientationResultModel
 EmbeddableGraphPartition: TypeAlias = EmbeddableGraphPartitionModel
 QuboMatrix: TypeAlias = BinaryQuadraticModel
 Solution: TypeAlias = SolutionModel
@@ -32,6 +37,10 @@ Score: TypeAlias = ScoreModel
 
 class FaceCycleProtocol(Protocol):
     def run(self, graph: Graph) -> GraphPartitionResult: ...
+
+
+class EdgeOrientationProtocol(Protocol):
+    def run(self, graph: Graph) -> OrientationResult: ...
 
 
 class DnCGraphPartitionStrategyProtocol(Protocol):
