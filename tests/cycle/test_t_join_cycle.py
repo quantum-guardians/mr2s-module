@@ -14,23 +14,20 @@ from tests.util.graph_fixtures import delaunay_graph, graph_from_pairs
 
 def _apply_cycle_directions(graph: Graph, cycle: TjoinCycle) -> None:
     """Cycle 이 결정한 방향을 graph 에 박아 solver 가 보존하도록 강제한다."""
-    result = cycle.run(graph)
-    graph.define_edge_direction({e for e in result.directed_edges()})
+    graph.define_edge_direction(set(cycle.orient(graph)))
 
 
 def test_t_join_cycle_basic_cases():
     # Triangle: 모든 차수 짝수 → 전부 oriented.
     graph = graph_from_pairs([(0, 1), (1, 2), (0, 2)])
-    result = TjoinCycle().run(graph)
-    assert len(result.sub_graphs) == 1
-    assert len(result.sub_graphs[0].edges) == 3
-    assert len(result.remaining_edges) == 0
+    directed_edges = TjoinCycle().orient(graph)
+    assert len(directed_edges) == 3
+    assert all(e.directed for e in directed_edges)
 
     # Path: 모든 간선이 T-join 으로 빠져 oriented 없음.
     graph = graph_from_pairs([(0, 1), (1, 2)])
-    result = TjoinCycle().run(graph)
-    assert len(result.sub_graphs[0].edges) == 0
-    assert len(result.remaining_edges) == 2
+    directed_edges = TjoinCycle().orient(graph)
+    assert directed_edges == []
 
 
 def test_t_join_cycle_integration_with_real_solver():
@@ -42,7 +39,7 @@ def test_t_join_cycle_integration_with_real_solver():
     expected_directions = {e.vertices for e in graph.edges if e.directed}
     assert len(expected_directions) == 4
 
-    solver = DnCMr2sSolver(mr2s_solver=QuboMR2SSolver(), face_cycle=cycle)
+    solver = DnCMr2sSolver(mr2s_solver=QuboMR2SSolver())
     solution = solver.run(graph)
 
     assert isinstance(solution, DnCSolution)
@@ -63,19 +60,20 @@ def test_t_join_cycle_performance_and_apsp(num_points, remove_percent):
     cycle = TjoinCycle()
 
     start_time = time.perf_counter()
-    result = cycle.run(graph)
+    directed_edges = cycle.orient(graph)
     elapsed = time.perf_counter() - start_time
 
-    directed_edges = [e for sg in result.sub_graphs for e in sg.edges]
+    oriented_ids = {e.id for e in directed_edges}
+    remaining_edges = [e for e in graph.edges if e.id not in oriented_ids]
 
-    graph.define_edge_direction({e for e in result.directed_edges()})
-    solver = DnCMr2sSolver(mr2s_solver=QuboMR2SSolver(), face_cycle=cycle)
+    graph.define_edge_direction(set(directed_edges))
+    solver = DnCMr2sSolver(mr2s_solver=QuboMR2SSolver())
     solution = solver.run(graph)
 
     evaluator = Evaluator()
     partial_sol = Solution(
         edges={(e.vertices[0], e.vertices[1]) for e in directed_edges},
-        graph=Graph(edges=directed_edges + result.remaining_edges),
+        graph=Graph(edges=directed_edges + remaining_edges),
         sample_set=empty_binary_sample_set(),
     )
     partial_apsp = evaluator.eval_apsp_sum(partial_sol)
@@ -87,7 +85,7 @@ def test_t_join_cycle_performance_and_apsp(num_points, remove_percent):
     print(f"  removed_edges: {removed_count}")
     print(f"  final_edges: {len(graph.edges)}")
     print(f"  directed_by_algo: {len(directed_edges)}")
-    print(f"  remaining_undirected: {len(result.remaining_edges)}")
+    print(f"  remaining_undirected: {len(remaining_edges)}")
     print(f"  partial_apsp: {partial_apsp}")
     print(f"  final_apsp (after solver): {final_apsp}")
 

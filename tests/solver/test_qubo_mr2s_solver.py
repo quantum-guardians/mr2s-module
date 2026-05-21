@@ -1,21 +1,18 @@
 from dimod import BinaryPolynomial, Vartype
 
-from mr2s_module.domain import Edge, Graph, GraphPartitionResult, Solution
+from mr2s_module.domain import Edge, Graph, Solution
 from mr2s_module.solver import QuboMR2SSolver
 from mr2s_module.util import empty_binary_sample_set
 
 
-class StubFaceCycle:
+class StubEdgeOrienter:
     def __init__(self, predefined_edges: set[Edge]) -> None:
         self.predefined_edges = predefined_edges
         self.calls = 0
 
-    def run(self, graph: Graph) -> GraphPartitionResult:
+    def orient(self, graph: Graph) -> list[Edge]:
         self.calls += 1
-        return GraphPartitionResult(
-            sub_graphs=[],
-            remaining_edges=list(self.predefined_edges),
-        )
+        return list(self.predefined_edges)
 
 
 class StubPolyGenerator:
@@ -50,13 +47,13 @@ class StubEvaluator:
         return float(len(solution.edges))
 
 
-def test_run_skips_preprocessing_when_face_cycle_is_none() -> None:
+def test_run_skips_preprocessing_when_edge_orienter_is_none() -> None:
     graph = Graph(edges=[Edge(1, 2, 1, False)])
     poly_generator = StubPolyGenerator()
     qubo_solver = StubQuboSolver()
     evaluator = StubEvaluator()
     solver = QuboMR2SSolver(
-        face_cycle=None,
+        edge_orienter=None,
         qubo_solver=qubo_solver,
         evaluator=evaluator,
         poly_generators={poly_generator},
@@ -72,15 +69,15 @@ def test_run_skips_preprocessing_when_face_cycle_is_none() -> None:
     assert evaluator.received_solution.score == 1.0
 
 
-def test_run_applies_preprocessing_when_face_cycle_is_provided() -> None:
+def test_run_applies_preprocessing_when_edge_orienter_is_provided() -> None:
     graph = Graph(edges=[Edge(1, 2, 1, False)])
     predefined_edge = Edge(1, 2, 1, True)
-    face_cycle = StubFaceCycle(predefined_edges={predefined_edge})
+    edge_orienter = StubEdgeOrienter(predefined_edges={predefined_edge})
     poly_generator = StubPolyGenerator()
     qubo_solver = StubQuboSolver()
     evaluator = StubEvaluator()
     solver = QuboMR2SSolver(
-        face_cycle=face_cycle,
+        edge_orienter=edge_orienter,
         qubo_solver=qubo_solver,
         evaluator=evaluator,
         poly_generators={poly_generator},
@@ -90,7 +87,7 @@ def test_run_applies_preprocessing_when_face_cycle_is_provided() -> None:
 
     assert result.score == 1.0
     assert result.edges == {(1, 2)}
-    assert face_cycle.calls == 1
+    assert edge_orienter.calls == 1
     assert graph.edges == [predefined_edge]
     assert qubo_solver.received_graph is graph
     assert evaluator.received_solution.score == 1.0

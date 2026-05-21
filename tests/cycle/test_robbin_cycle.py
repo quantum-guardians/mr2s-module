@@ -15,29 +15,24 @@ from tests.util.graph_fixtures import delaunay_graph, graph_from_pairs
 
 def _apply_cycle_directions(graph: Graph, cycle: RobbinCycle) -> None:
     """Cycle 이 결정한 방향을 graph 에 박아 solver 가 보존하도록 강제한다."""
-    result = cycle.run(graph)
-    graph.define_edge_direction({e for e in result.directed_edges()})
+    graph.define_edge_direction(set(cycle.orient(graph)))
 
 
 def test_robbin_cycle_basic_cases():
     graph = graph_from_pairs([(0, 1), (1, 2), (0, 2)])
-    result = RobbinCycle().run(graph)
-    assert len(result.sub_graphs) == 1
-    sub_graph = result.sub_graphs[0]
-    assert len(sub_graph.edges) == 3
-    assert all(e.directed for e in sub_graph.edges)
+    directed_edges = RobbinCycle().orient(graph)
+    assert len(directed_edges) == 3
+    assert all(e.directed for e in directed_edges)
     dg = nx.DiGraph()
-    for e in sub_graph.edges:
+    for e in directed_edges:
         dg.add_edge(*e.vertices)
     assert nx.is_strongly_connected(dg)
 
 
-def test_robbin_cycle_bridge_falls_back_to_remaining_edges():
+def test_robbin_cycle_bridge_falls_back_to_no_orientation():
     graph = graph_from_pairs([(0, 1), (1, 2)])
-    result = RobbinCycle().run(graph)
-    assert result.sub_graphs == []
-    assert len(result.remaining_edges) == 2
-    assert all(not e.directed for e in result.remaining_edges)
+    directed_edges = RobbinCycle().orient(graph)
+    assert directed_edges == []
 
 
 def test_robbin_cycle_integration_with_real_solver():
@@ -49,7 +44,7 @@ def test_robbin_cycle_integration_with_real_solver():
     expected_directions = {e.vertices for e in graph.edges if e.directed}
     assert len(expected_directions) == 3
 
-    solver = DnCMr2sSolver(mr2s_solver=QuboMR2SSolver(), face_cycle=cycle)
+    solver = DnCMr2sSolver(mr2s_solver=QuboMR2SSolver())
     solution = solver.run(graph)
 
     assert isinstance(solution, DnCSolution)
@@ -69,18 +64,16 @@ def test_robbin_cycle_performance_and_apsp(num_points, remove_percent):
     cycle = RobbinCycle()
 
     start_time = time.perf_counter()
-    result = cycle.run(graph)
+    directed_edges = cycle.orient(graph)
     elapsed = time.perf_counter() - start_time
 
-    directed_edges = [e for sg in result.sub_graphs for e in sg.edges]
     oriented_edges = [e for e in directed_edges if e.directed]
-    undirected_edges = (
-        [e for e in directed_edges if not e.directed] + list(result.remaining_edges)
-    )
+    oriented_ids = {e.id for e in oriented_edges}
+    undirected_edges = [e for e in graph.edges if e.id not in oriented_ids]
 
     # Cycle 방향을 graph 에 박은 뒤 실제 솔버 통과.
-    graph.define_edge_direction({e for e in result.directed_edges()})
-    solver = DnCMr2sSolver(mr2s_solver=QuboMR2SSolver(), face_cycle=cycle)
+    graph.define_edge_direction(set(directed_edges))
+    solver = DnCMr2sSolver(mr2s_solver=QuboMR2SSolver())
     solution = solver.run(graph)
 
     evaluator = Evaluator()

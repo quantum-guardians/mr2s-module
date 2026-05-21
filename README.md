@@ -140,7 +140,7 @@ n_hop_generator.small_world_spec = SmallWorldSpec(
 )
 
 solver = QuboMR2SSolver(
-    face_cycle=None,
+    edge_orienter=None,
     qubo_solver=SAQuboSolver(ranker=ApspSumRanker()),
     evaluator=Evaluator(),
     poly_generators={FlowPolyGenerator(), n_hop_generator},

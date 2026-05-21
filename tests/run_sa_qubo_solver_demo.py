@@ -155,8 +155,8 @@ def main() -> None:
     )
 
   if args.use_face_cycle:
-    predefined_edges = FaceCycle(target_k=args.target_k).run(graph)
-    graph.define_edge_direction(predefined_edges)
+    directed_edges = FaceCycle(target_k=args.target_k).orient(graph)
+    graph.define_edge_direction(set(directed_edges))
 
   polynomial = build_polynomial(graph)
   bqm = map_binary_poly_to_bqm(polynomial)

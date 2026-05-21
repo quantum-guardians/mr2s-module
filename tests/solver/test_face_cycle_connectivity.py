@@ -92,7 +92,7 @@ def _build_solver(use_face_cycle: bool, num_reads: int = 10) -> QuboMR2SSolver:
     evaluator = Evaluator()
     ranker = ApspSumRanker()
     return QuboMR2SSolver(
-        face_cycle=FaceCycle(target_k=8) if use_face_cycle else None,
+        edge_orienter=FaceCycle(target_k=8) if use_face_cycle else None,
         qubo_solver=_MultiReadSAQuboSolver(ranker=ranker, num_reads=num_reads),
         evaluator=evaluator,
         poly_generators=[FlowPolyGenerator(), n_hop_gen],
