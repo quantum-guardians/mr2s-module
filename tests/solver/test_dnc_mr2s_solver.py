@@ -11,6 +11,7 @@ from mr2s_module.domain import (
   Solution,
 )
 import mr2s_module.solver.dnc_mr2s_solver as dnc_mr2s_solver
+import mr2s_module.solver.partition.embedding_aware as embedding_aware
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver, DnCSolution
 from mr2s_module.solver.partition import (
   DegeneracyPruningFaceCyclePartitionStrategy,
@@ -161,7 +162,7 @@ def _embedding_aware_dnc_solver(
       mr2s_solver=mr2s_solver,
       face_cycle=face_cycle,
       target_graph=target_graph,
-      embedding_estimator=dnc_mr2s_solver.estimate_required_qubits,
+      embedding_estimator=embedding_aware.estimate_required_qubits,
     ),
   )
 
@@ -443,7 +444,7 @@ def test_divide_graph_keeps_graph_when_embedding_estimate_succeeds(
   def estimate_succeeds(bqm, target_graph=None):
     return _fake_embedding_estimate(bqm)
 
-  monkeypatch.setattr(dnc_mr2s_solver, "estimate_required_qubits", estimate_succeeds)
+  monkeypatch.setattr(embedding_aware, "estimate_required_qubits", estimate_succeeds)
   solver = DnCMr2sSolver(mr2s_solver=StubMr2sSolver())
 
   sub_graphs = solver.divide_graph(graph)
@@ -459,7 +460,7 @@ def test_run_delegates_once_when_graph_is_not_divided(
   def estimate_succeeds(bqm, target_graph=None):
     return _fake_embedding_estimate(bqm)
 
-  monkeypatch.setattr(dnc_mr2s_solver, "estimate_required_qubits", estimate_succeeds)
+  monkeypatch.setattr(embedding_aware, "estimate_required_qubits", estimate_succeeds)
   mr2s_solver = StubRunningMr2sSolver()
   solver = _embedding_aware_dnc_solver(mr2s_solver)
 
@@ -487,7 +488,7 @@ def test_divide_graph_returns_binary_search_subgraphs(
     return _fake_embedding_estimate(bqm)
 
   monkeypatch.setattr(
-    dnc_mr2s_solver,
+    embedding_aware,
     "estimate_required_qubits",
     estimate_fails_for_parent,
   )
@@ -513,7 +514,7 @@ def test_divide_graph_raises_when_no_embeddable_partition_is_found(
     raise RuntimeError("too large")
 
   monkeypatch.setattr(
-    dnc_mr2s_solver,
+    embedding_aware,
     "estimate_required_qubits",
     estimate_always_fails,
   )
@@ -555,7 +556,7 @@ def test_divide_graph_finds_target_k_with_binary_search(
     return _fake_embedding_estimate(bqm)
 
   monkeypatch.setattr(
-    dnc_mr2s_solver,
+    embedding_aware,
     "estimate_required_qubits",
     estimate_fails_for_large_graphs,
   )
@@ -642,7 +643,7 @@ def test_run_solves_full_graph_after_applying_merged_directions(
     return _fake_embedding_estimate(bqm)
 
   monkeypatch.setattr(
-    dnc_mr2s_solver,
+    embedding_aware,
     "estimate_required_qubits",
     estimate_fails_for_parent,
   )
@@ -686,7 +687,7 @@ def test_embedding_estimate_returns_none_without_calling_estimator_when_edge_cou
     raise AssertionError("estimate_required_qubits should not be called")
 
   monkeypatch.setattr(
-    dnc_mr2s_solver,
+    embedding_aware,
     "estimate_required_qubits",
     estimate_required_qubits_should_not_be_called,
   )
@@ -745,7 +746,7 @@ def test_embedding_estimate_passes_solver_target_graph_to_estimator(
     return _fake_embedding_estimate(bqm)
 
   monkeypatch.setattr(
-    dnc_mr2s_solver,
+    embedding_aware,
     "estimate_required_qubits",
     estimate_required_qubits_with_target_graph,
   )
@@ -781,7 +782,7 @@ def test_embedding_estimate_calls_estimator_when_edge_count_and_bqm_variables_ma
     )
 
   monkeypatch.setattr(
-    dnc_mr2s_solver,
+    embedding_aware,
     "estimate_required_qubits",
     estimate_required_qubits_called,
   )
@@ -817,7 +818,7 @@ def test_embedding_estimate_counts_only_undirected_edges_for_prefilter(
     )
 
   monkeypatch.setattr(
-    dnc_mr2s_solver,
+    embedding_aware,
     "estimate_required_qubits",
     estimate_required_qubits_called,
   )
@@ -843,7 +844,7 @@ def test_embedding_estimate_skips_estimator_when_bqm_variables_exceed_target_nod
     raise AssertionError("estimate_required_qubits should not be called")
 
   monkeypatch.setattr(
-    dnc_mr2s_solver,
+    embedding_aware,
     "estimate_required_qubits",
     estimate_required_qubits_should_not_be_called,
   )
@@ -875,7 +876,7 @@ def test_embedding_estimate_calls_estimator_when_bqm_variables_within_target_nod
     )
 
   monkeypatch.setattr(
-    dnc_mr2s_solver,
+    embedding_aware,
     "estimate_required_qubits",
     estimate_required_qubits_called,
   )
