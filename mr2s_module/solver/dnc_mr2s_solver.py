@@ -10,10 +10,22 @@ import dwave_networkx as dnx
 import networkx as nx
 from dimod import SampleSet
 
-from mr2s_module import estimate_required_qubits
 from mr2s_module.cycle import FaceCycle
 from mr2s_module.cycle.face_clusterer import KMeansFaceClusterer
-from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, GraphPartitionResult, Score, Solution
+from mr2s_module.domain import (
+  Edge,
+  EmbeddableGraphPartition,
+  EmbeddingEstimate,
+  Graph,
+  GraphPartitionResult,
+  Score,
+  Solution,
+)
+from mr2s_module.protocols import DnCGraphPartitionStrategyProtocol
+from mr2s_module.solver.partition import (
+  DegeneracyPruningFaceCyclePartitionStrategy,
+  EmbeddingAwareFaceCyclePartitionStrategy,
+)
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
 from mr2s_module.util import empty_binary_sample_set
 
@@ -73,28 +85,82 @@ def _solve_subgraph(
   return solution
 
 
-@dataclass
-class _EmbeddablePartition:
-  sub_graphs: list[Graph]
-  embedding_estimates: list[EmbeddingEstimate]
+_EmbeddablePartition = EmbeddableGraphPartition
 
 
 @dataclass
 class DnCSolution(Solution):
   sub_graphs: list[Graph] = field(default_factory=list)
   embedding_estimates: list[EmbeddingEstimate] = field(default_factory=list)
+  partition_target_k: int | None = None
 
 
 @dataclass
 class DnCMr2sSolver:
   mr2s_solver: QuboMR2SSolver
-  face_cycle: FaceCycle = field(default_factory=lambda: FaceCycle(target_k=2, clusterer=KMeansFaceClusterer()))
+  face_cycle: FaceCycle = field(
+    default_factory=lambda: FaceCycle(
+      target_k=2,
+      clusterer=KMeansFaceClusterer(),
+    )
+  )
   subgraph_processes: int | None = None
   target_graph: nx.Graph = field(default_factory=lambda: dnx.pegasus_graph(16))
+  graph_partition_strategy: DnCGraphPartitionStrategyProtocol | None = None
+  _owns_graph_partition_strategy: bool = field(default=False, init=False)
+  _owned_graph_partition_strategy: DnCGraphPartitionStrategyProtocol | None = field(
+    default=None,
+    init=False,
+  )
 
   def __post_init__(self) -> None:
     if self.subgraph_processes is not None and self.subgraph_processes < 1:
       raise ValueError("subgraph_processes must be None or at least 1")
+    if self.graph_partition_strategy is None:
+      self._owns_graph_partition_strategy = True
+      self.graph_partition_strategy = DegeneracyPruningFaceCyclePartitionStrategy(
+        mr2s_solver=self.mr2s_solver,
+        face_cycle=self.face_cycle,
+        target_graph=self.target_graph,
+      )
+      self._owned_graph_partition_strategy = self.graph_partition_strategy
+
+  def _sync_default_partition_strategy(self) -> None:
+    if not self._owns_graph_partition_strategy:
+      return
+    if self.graph_partition_strategy is not self._owned_graph_partition_strategy:
+      self._owns_graph_partition_strategy = False
+      self._owned_graph_partition_strategy = None
+      return
+    if not isinstance(
+        self.graph_partition_strategy,
+        EmbeddingAwareFaceCyclePartitionStrategy,
+    ):
+      self._owns_graph_partition_strategy = False
+      self._owned_graph_partition_strategy = None
+      return
+    strategy = self.graph_partition_strategy
+    strategy.mr2s_solver = self.mr2s_solver
+    strategy.face_cycle = self.face_cycle
+    strategy.target_graph = self.target_graph
+    if hasattr(strategy, "_resolved_target_degeneracy"):
+      strategy._resolved_target_degeneracy = None
+
+  def _default_partition_strategy(
+      self,
+      sync: bool = True,
+  ) -> EmbeddingAwareFaceCyclePartitionStrategy:
+    if not isinstance(
+        self.graph_partition_strategy,
+        EmbeddingAwareFaceCyclePartitionStrategy,
+    ):
+      raise TypeError(
+        "This compatibility method requires "
+        "EmbeddingAwareFaceCyclePartitionStrategy"
+      )
+    if sync:
+      self._sync_default_partition_strategy()
+    return self.graph_partition_strategy
 
   def merge_solutions(
       self,
@@ -182,77 +248,13 @@ class DnCMr2sSolver:
 
   @staticmethod
   def _is_progressing_partition(parent: Graph, sub_graphs: list[Graph]) -> bool:
-    if not sub_graphs:
-      return False
-
-    parent_edge_count = len(parent.edges)
-    return all(
-      0 < len(sub_graph.edges) < parent_edge_count
-      for sub_graph in sub_graphs
+    return EmbeddingAwareFaceCyclePartitionStrategy._is_progressing_partition(
+      parent,
+      sub_graphs,
     )
 
   def _embedding_estimate(self, graph: Graph) -> EmbeddingEstimate | None:
-    started_at = perf_counter()
-    graph_context = _graph_log_context(graph)
-    logger.info(
-      "DnC embedding estimate started vertices=%d edges=%d directed_edges=%d",
-      graph_context["vertices"],
-      graph_context["edges"],
-      graph_context["directed_edges"],
-    )
-    target_node_count = self.target_graph.number_of_nodes()
-    undirected_edge_count = sum(
-      1
-      for edge in graph.edges
-      if not edge.directed
-    )
-    if undirected_edge_count > target_node_count:
-      logger.info(
-        "DnC embedding estimate skipped by edge prefilter "
-        "elapsed_ms=%.3f undirected_edges=%d target_nodes=%d",
-        _elapsed_ms(started_at),
-        undirected_edge_count,
-        target_node_count,
-      )
-      return None
-
-    try:
-      build_started_at = perf_counter()
-      bqm = self.mr2s_solver.build_bqm(graph)
-      logger.info(
-        "DnC embedding estimate built BQM elapsed_ms=%.3f variables=%d",
-        _elapsed_ms(build_started_at),
-        len(bqm.variables),
-      )
-      if len(bqm.variables) > target_node_count:
-        logger.info(
-          "DnC embedding estimate skipped by variable prefilter "
-          "elapsed_ms=%.3f variables=%d target_nodes=%d",
-          _elapsed_ms(started_at),
-          len(bqm.variables),
-          target_node_count,
-        )
-        return None
-      estimate_started_at = perf_counter()
-      estimate = estimate_required_qubits(
-        bqm,
-        target_graph=self.target_graph,
-      )
-      logger.info(
-        "DnC embedding estimate finished elapsed_ms=%.3f "
-        "estimator_elapsed_ms=%.3f physical_qubits=%d max_chain_length=%d",
-        _elapsed_ms(started_at),
-        _elapsed_ms(estimate_started_at),
-        estimate.num_physical_qubits,
-        estimate.max_chain_length,
-      )
-      return estimate
-    except RuntimeError:
-      logger.info(
-        "DnC embedding estimate failed elapsed_ms=%.3f",
-        _elapsed_ms(started_at),
-      )
-      return None
+    return self._default_partition_strategy()._embedding_estimate(graph)
 
   def _can_embed(self, graph: Graph) -> bool:
     return self._embedding_estimate(graph) is not None
@@ -261,70 +263,19 @@ class DnCMr2sSolver:
       self,
       sub_graphs: list[Graph],
   ) -> list[EmbeddingEstimate] | None:
-    estimates: list[EmbeddingEstimate] = []
-    for sub_graph in sub_graphs:
-      estimate = self._embedding_estimate(sub_graph)
-      if estimate is None:
-        return None
-      estimates.append(estimate)
-    return estimates
+    return self._default_partition_strategy()._estimate_partition(sub_graphs)
 
   def _single_graph_partition(self, graph: Graph) -> _EmbeddablePartition | None:
-    started_at = perf_counter()
-    estimate = self._embedding_estimate(graph)
-    if estimate is None:
-      logger.info(
-        "DnC single-graph partition unavailable elapsed_ms=%.3f",
-        _elapsed_ms(started_at),
-      )
-      return None
-    logger.info(
-      "DnC single-graph partition selected elapsed_ms=%.3f",
-      _elapsed_ms(started_at),
-    )
-    return _EmbeddablePartition(
-      sub_graphs=[graph],
-      embedding_estimates=[estimate],
-    )
+    return self._default_partition_strategy()._single_graph_partition(graph)
 
   def _raise_partition_failed(self, graph: Graph) -> None:
-    raise RuntimeError(
-      "DnC partition failed: input graph is not embeddable and no "
-      "embeddable subgraph partition was found "
-      f"(vertices={len(graph.get_vertices())}, edges={len(graph.edges)})"
-    )
+    self._default_partition_strategy()._raise_partition_failed(graph)
 
   def _divide_graph_with_embeddings(self, graph: Graph) -> _EmbeddablePartition:
-    started_at = perf_counter()
-    graph_context = _graph_log_context(graph)
-    logger.info(
-      "DnC divide graph started vertices=%d edges=%d directed_edges=%d",
-      graph_context["vertices"],
-      graph_context["edges"],
-      graph_context["directed_edges"],
-    )
-    partition = self._single_graph_partition(graph)
-    if partition is not None:
-      logger.info(
-        "DnC divide graph finished with single graph elapsed_ms=%.3f",
-        _elapsed_ms(started_at),
-      )
-      return partition
-
-    partition = self._find_partition_by_target_k(graph)
-    if partition is None:
-      logger.info(
-        "DnC divide graph failed elapsed_ms=%.3f",
-        _elapsed_ms(started_at),
-      )
-      self._raise_partition_failed(graph)
-
-    logger.info(
-      "DnC divide graph finished elapsed_ms=%.3f subgraphs=%d",
-      _elapsed_ms(started_at),
-      len(partition.sub_graphs),
-    )
-    return partition
+    if self.graph_partition_strategy is None:
+      raise RuntimeError("graph_partition_strategy is not configured")
+    self._sync_default_partition_strategy()
+    return self.graph_partition_strategy.run(graph)
 
   def _attach_partition_metadata(
       self,
@@ -338,6 +289,7 @@ class DnCMr2sSolver:
       score=solution.score,
       sub_graphs=partition.sub_graphs,
       embedding_estimates=partition.embedding_estimates,
+      partition_target_k=partition.target_k,
     )
 
   def _partition_with_target_k(
@@ -345,76 +297,13 @@ class DnCMr2sSolver:
       graph: Graph,
       target_k: int,
   ) -> GraphPartitionResult:
-    previous_target_k = self.face_cycle.target_k
-    self.face_cycle.target_k = target_k
-    try:
-      return self.face_cycle.run(graph)
-    finally:
-      self.face_cycle.target_k = previous_target_k
+    return self._default_partition_strategy()._partition_with_target_k(
+      graph,
+      target_k,
+    )
 
   def _find_partition_by_target_k(self, graph: Graph) -> _EmbeddablePartition | None:
-    started_at = perf_counter()
-    left = 2
-    right = max(2, len(graph.edges))
-    best_partition: _EmbeddablePartition | None = None
-    logger.info(
-      "DnC target_k search started left=%d right=%d graph_edges=%d",
-      left,
-      right,
-      len(graph.edges),
-    )
-
-    while left <= right:
-      target_k = (left + right) // 2
-      attempt_started_at = perf_counter()
-      logger.info(
-        "DnC target_k attempt started target_k=%d left=%d right=%d",
-        target_k,
-        left,
-        right,
-      )
-      result = self._partition_with_target_k(graph, target_k)
-      partition_elapsed_ms = _elapsed_ms(attempt_started_at)
-      sub_graphs = result.sub_graphs
-      estimate_started_at = perf_counter()
-      embedding_estimates = (
-        self._estimate_partition(sub_graphs)
-        if self._is_progressing_partition(graph, sub_graphs)
-        else None
-      )
-      estimate_elapsed_ms = _elapsed_ms(estimate_started_at)
-
-      if embedding_estimates is not None:
-        best_partition = _EmbeddablePartition(
-          sub_graphs=sub_graphs,
-          embedding_estimates=embedding_estimates,
-        )
-        logger.info(
-          "DnC target_k attempt succeeded target_k=%d subgraphs=%d "
-          "partition_elapsed_ms=%.3f estimate_elapsed_ms=%.3f",
-          target_k,
-          len(sub_graphs),
-          partition_elapsed_ms,
-          estimate_elapsed_ms,
-        )
-        right = target_k - 1
-      else:
-        logger.info(
-          "DnC target_k attempt failed target_k=%d subgraphs=%d "
-          "partition_elapsed_ms=%.3f estimate_elapsed_ms=%.3f",
-          target_k,
-          len(sub_graphs),
-          partition_elapsed_ms,
-          estimate_elapsed_ms,
-        )
-        left = target_k + 1
-
-    logger.info(
-      "DnC target_k search finished elapsed_ms=%.3f found=%s",
-      _elapsed_ms(started_at),
-      best_partition is not None,
-    )
-    return best_partition
+    return self._default_partition_strategy()._find_partition_by_target_k(graph)
 
   def divide_graph(self, graph: Graph) -> list[Graph]:
     return self._divide_graph_with_embeddings(graph).sub_graphs
