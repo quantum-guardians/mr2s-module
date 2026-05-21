@@ -5,7 +5,7 @@ from mr2s_module.util import domain_graph_to_networkx
 import networkx as nx
 
 
-class RobbinCycle:
+class Robbin:
     """단순 dfs 순회하면서 부모관계 정립"""
 
     def orient(self, graph: Graph) -> list[Edge]:

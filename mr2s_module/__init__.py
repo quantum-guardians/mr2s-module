@@ -1,10 +1,12 @@
 from mr2s_module.cycle import (
     BalancedFaceGraphClusterer,
-    FaceCycle,
+    FaceClusterPartition,
     KMeansFaceClusterer,
     SnowballFaceClusterer,
-    TjoinCycle,
-    RobbinCycle,
+)
+from mr2s_module.edge_orient import (
+    Robbin,
+    Tjoin,
 )
 from mr2s_module.domain import (
     AdjEntry,
@@ -58,7 +60,7 @@ __all__ = [
     "Evaluator",
     "EvaluatorProtocol",
     "DnCGraphPartitionStrategyProtocol",
-    "FaceCycle",
+    "FaceClusterPartition",
     "FaceCycleProtocol",
     "FlowPolyGenerator",
     "Graph",
@@ -78,8 +80,8 @@ __all__ = [
     "SmallWorldSpec",
     "SnowballFaceClusterer",
     "Solution",
-    "TjoinCycle",
-    "RobbinCycle",
+    "Tjoin",
+    "Robbin",
     "SolutionRankerProtocol",
     "estimate_required_qubits",
     "map_binary_poly_to_bqm",

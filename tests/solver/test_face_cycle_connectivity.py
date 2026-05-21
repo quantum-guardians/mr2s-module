@@ -1,7 +1,7 @@
 """
 연결성 회복 테스트 — sparse 평면 biconnected 그래프 위에서 single QUBO 는
 strongly connected 솔루션을 못 찾아 evaluator 가 AssertionError 를
-던지는 반면, FaceCycle 로 boundary 사이클 방향을 미리 박은 본은 같은 SA 로도
+던지는 반면, FaceClusterPartition 로 boundary 사이클 방향을 미리 박은 본은 같은 SA 로도
 살아남음을 확인.
 
 설계 포인트
@@ -28,7 +28,7 @@ import pytest
 from mr2s_module import (
     ApspSumRanker,
     Evaluator,
-    FaceCycle,
+    FaceClusterPartition,
     FlowPolyGenerator,
     Graph,
     NHop,
@@ -92,7 +92,7 @@ def _build_solver(use_face_cycle: bool, num_reads: int = 10) -> QuboMR2SSolver:
     evaluator = Evaluator()
     ranker = ApspSumRanker()
     return QuboMR2SSolver(
-        edge_orienter=FaceCycle(target_k=8) if use_face_cycle else None,
+        edge_orienter=FaceClusterPartition(target_k=8) if use_face_cycle else None,
         qubo_solver=_MultiReadSAQuboSolver(ranker=ranker, num_reads=num_reads),
         evaluator=evaluator,
         poly_generators=[FlowPolyGenerator(), n_hop_gen],
@@ -121,7 +121,7 @@ def test_face_cycle_has_better_connectivity_rate_on_thinned_planar(
     n: int, keep_ratio: float
 ) -> None:
     """sparse 평면 biconnected 에서 NO_FC 는 strongly connected 솔루션을
-    잘 못 찾는데, FaceCycle 로 boundary 사이클을 미리 박은 본은 더 자주 찾는다.
+    잘 못 찾는데, FaceClusterPartition 로 boundary 사이클을 미리 박은 본은 더 자주 찾는다.
 
     SA 가 stochastic 이라 단일 (seed) 비교는 진동한다. 따라서 여러 seed 를 돌려
     success rate 를 비교한다: WITH_FC 의 성공률 >= NO_FC 의 성공률 + margin.
@@ -151,7 +151,7 @@ def test_face_cycle_has_better_connectivity_rate_on_thinned_planar(
 
     # 핵심 주장: WITH_FC 의 성공률이 NO_FC 보다 같거나 더 높아야 한다.
     assert with_fc_ok >= no_fc_ok, (
-        f"FaceCycle should not hurt strong-connectivity rate "
+        f"FaceClusterPartition should not hurt strong-connectivity rate "
         f"(WITH_FC {with_fc_ok}/{len(seeds)} vs NO_FC {no_fc_ok}/{len(seeds)})"
     )
 

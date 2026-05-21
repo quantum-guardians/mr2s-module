@@ -10,7 +10,7 @@ import dwave_networkx as dnx
 import networkx as nx
 from dimod import SampleSet
 
-from mr2s_module.cycle import FaceCycle
+from mr2s_module.cycle import FaceClusterPartition
 from mr2s_module.cycle.face_clusterer import KMeansFaceClusterer
 from mr2s_module.domain import (
   Edge,
@@ -98,8 +98,8 @@ class DnCSolution(Solution):
 @dataclass
 class DnCMr2sSolver:
   mr2s_solver: QuboMR2SSolver
-  face_cycle: FaceCycle = field(
-    default_factory=lambda: FaceCycle(
+  face_cycle: FaceClusterPartition = field(
+    default_factory=lambda: FaceClusterPartition(
       target_k=2,
       clusterer=KMeansFaceClusterer(),
     )

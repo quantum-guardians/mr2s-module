@@ -9,7 +9,7 @@
 
 이 라이브러리는 위 문제를 위해 다음 기능을 제공합니다.
 
-- `FaceCycle` 기반 전처리
+- `FaceClusterPartition` 기반 전처리
 - QUBO 다항식 생성
 - simulated annealing 기반 해 탐색
 - 샘플 랭킹
@@ -92,7 +92,7 @@ graph = Graph(edges=[
 
 ### 전처리
 
-- `FaceCycle`
+- `FaceClusterPartition`
 
 ### QUBO 생성기
 
@@ -162,7 +162,7 @@ print(solution.score)
 
 - Delaunay triangulation 기반 평면 그래프 생성
 - biconnected 성질을 유지하면서 일부 edge 제거
-- `FaceCycle` 적용 여부 선택
+- `FaceClusterPartition` 적용 여부 선택
 - `SAQuboSolver` 실행
 - 선택된 방향과 최종 점수 출력
 
@@ -184,8 +184,8 @@ python tests/run_sa_qubo_solver_demo.py \
 - `--weight`: 모든 간선에 공통으로 부여할 가중치
 - `--remove-ratio`: biconnected 성질을 유지하며 제거할 edge 비율
 - `--num-reads`: simulated annealing sample 수
-- `--use-face-cycle`: `FaceCycle` 전처리 사용 여부
-- `--target-k`: `FaceCycle`의 target `k`
+- `--use-face-cycle`: `FaceClusterPartition` 전처리 사용 여부
+- `--target-k`: `FaceClusterPartition`의 target `k`
 
 ## 성능 분석
 

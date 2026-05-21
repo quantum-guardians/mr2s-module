@@ -3,7 +3,7 @@ import numpy as np
 
 from mr2s_module.cycle import (
     BalancedFaceGraphClusterer,
-    FaceCycle,
+    FaceClusterPartition,
     KMeansFaceClusterer,
 )
 from mr2s_module.domain import Edge, Graph
@@ -31,7 +31,7 @@ def test_face_cycle_uses_injected_clusterer() -> None:
         Edge(3, 1, 1, False),
     ])
 
-    FaceCycle(clusterer=clusterer).run(graph)
+    FaceClusterPartition(clusterer=clusterer).run(graph)
 
     assert clusterer.calls == 1
 
@@ -40,11 +40,11 @@ def test_face_cycle_boundary_repair_mode_can_remove_only() -> None:
     boundary_edges = {(1, 2), (2, 3)}
     repair_edges = {(2, 3), (3, 4)}
 
-    toggle = FaceCycle(repair_mode="toggle")._apply_boundary_repair(
+    toggle = FaceClusterPartition(repair_mode="toggle")._apply_boundary_repair(
         boundary_edges,
         repair_edges,
     )
-    remove = FaceCycle(repair_mode="remove")._apply_boundary_repair(
+    remove = FaceClusterPartition(repair_mode="remove")._apply_boundary_repair(
         boundary_edges,
         repair_edges,
     )

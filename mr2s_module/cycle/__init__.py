@@ -4,15 +4,11 @@ from mr2s_module.cycle.face_clusterer import (
     KMeansFaceClusterer,
     SnowballFaceClusterer,
 )
-from mr2s_module.cycle.face_cycle import FaceCycle
-from mr2s_module.cycle.robbin_cycle import RobbinCycle
-from mr2s_module.cycle.t_join_cycle import TjoinCycle
+from mr2s_module.cycle.face_cluster_partition import FaceClusterPartition
 
 __all__ = [
     "FaceClusterer",
-    "FaceCycle",
-    "RobbinCycle",
-    "TjoinCycle",
+    "FaceClusterPartition",
     "BalancedFaceGraphClusterer",
     "KMeansFaceClusterer",
     "SnowballFaceClusterer",

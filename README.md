@@ -10,7 +10,7 @@ Given an undirected graph, the goal is to assign a direction to each edge so tha
 The library provides preprocessing, QUBO construction, simulated annealing based search, sample ranking, and final evaluation for that problem.
 It includes:
 
-- planar graph preprocessing with `FaceCycle`
+- planar graph preprocessing with `FaceClusterPartition`
 - QUBO polynomial generation
 - simulated annealing based QUBO solving
 - final solution evaluation with multiple metrics
@@ -92,7 +92,7 @@ Important separation:
 
 ### Preprocessing
 
-- `FaceCycle`
+- `FaceClusterPartition`
 
 ### QUBO generators
 
@@ -162,7 +162,7 @@ It can:
 
 - generate a planar graph with Delaunay triangulation
 - remove a percentage of edges while keeping the graph biconnected
-- optionally apply `FaceCycle`
+- optionally apply `FaceClusterPartition`
 - run `SAQuboSolver`
 - print the selected orientation and final score
 
@@ -184,8 +184,8 @@ Available arguments:
 - `--weight`: uniform edge weight
 - `--remove-ratio`: fraction of edges to remove while preserving biconnectedness
 - `--num-reads`: number of SA samples
-- `--use-face-cycle`: enable `FaceCycle` preprocessing
-- `--target-k`: `FaceCycle` target `k`
+- `--use-face-cycle`: enable `FaceClusterPartition` preprocessing
+- `--target-k`: `FaceClusterPartition` target `k`
 
 ## Performance Analysis
 

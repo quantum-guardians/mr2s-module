@@ -11,7 +11,7 @@ matplotlib = pytest.importorskip("matplotlib")
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from mr2s_module.cycle import BalancedFaceGraphClusterer, FaceCycle
+from mr2s_module.cycle import BalancedFaceGraphClusterer, FaceClusterPartition
 from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, Solution
 from mr2s_module.evaluator import ApspSumRanker
 from mr2s_module.qubo import (
@@ -138,8 +138,8 @@ def build_dnc_solver(num_reads: int = 20) -> DnCMr2sSolver:
   )
 
 
-def build_dnc_face_cycle() -> FaceCycle:
-  return FaceCycle(
+def build_dnc_face_cycle() -> FaceClusterPartition:
+  return FaceClusterPartition(
     target_k=4,
     clusterer=BalancedFaceGraphClusterer(),
   )
@@ -409,7 +409,7 @@ def _save_face_groups_png(
   plt.close(fig)
 
 
-def build_partition_diagnostic(graph: Graph, face_cycle: FaceCycle) -> dict:
+def build_partition_diagnostic(graph: Graph, face_cycle: FaceClusterPartition) -> dict:
   nx_graph = domain_graph_to_networkx(graph)
   component = face_cycle._extract_biconnected_components(nx_graph)[0]
   planar_positions = nx.planar_layout(component)
@@ -428,11 +428,11 @@ def build_partition_diagnostic(graph: Graph, face_cycle: FaceCycle) -> dict:
 
   target_k = max(1, min(face_cycle.target_k, len(inner_faces)))
   face_to_cluster = face_cycle.clusterer.run(centroids, dual_base, target_k)
-  boundary_edges, outer_edges = FaceCycle._collect_boundary_edges(
+  boundary_edges, outer_edges = FaceClusterPartition._collect_boundary_edges(
     face_edges_map,
     face_to_cluster,
   )
-  repair_edges = FaceCycle._wall_protected_repair(
+  repair_edges = FaceClusterPartition._wall_protected_repair(
     component,
     boundary_edges,
     outer_edges,
@@ -447,7 +447,7 @@ def build_partition_diagnostic(graph: Graph, face_cycle: FaceCycle) -> dict:
   for edge, face_indices in face_edges_map.items():
     if len(face_indices) == 2 and edge not in final_boundary:
       face_graph.add_edge(face_indices[0], face_indices[1])
-  true_components = FaceCycle._filter_ghost_components(
+  true_components = FaceClusterPartition._filter_ghost_components(
     face_graph,
     inner_faces,
     outer_edges,
@@ -466,7 +466,7 @@ def build_partition_diagnostic(graph: Graph, face_cycle: FaceCycle) -> dict:
 def write_partition_pngs(
     graph: Graph,
     sub_graphs: list[Graph],
-    face_cycle: FaceCycle,
+    face_cycle: FaceClusterPartition,
     positions,
 ) -> list[Path]:
   _OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

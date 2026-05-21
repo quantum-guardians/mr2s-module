@@ -6,7 +6,7 @@ from mr2s_module.domain import Edge, Graph
 from mr2s_module.util import domain_graph_to_networkx, clone_edge
 
 
-class TjoinCycle:
+class Tjoin:
     def orient(self, graph: Graph) -> list[Edge]:
         if graph.is_empty():
             return []
