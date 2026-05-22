@@ -10,8 +10,10 @@ Use Python 3.11 or newer.
 - `pip install -e .`: install the package in editable mode with runtime dependencies such as `dwave-ocean-sdk`.
 - `python -m build`: build source and wheel distributions from `pyproject.toml`.
 - `pytest`: run the test suite once tests are added.
+- `pytest -m "not slow"`: run the release validation test subset without slow tests.
 
 If you add new tooling, document the exact command here rather than assuming contributors will infer it.
+See `docs/CI_CD_PIPELINE.md` for the release and PyPI publishing workflow.
 
 ## Coding Style & Naming Conventions
 Follow PEP 8 with 4-space indentation, `snake_case` for modules and functions, `PascalCase` for classes, and explicit type hints on public APIs. Prefer small dataclasses and protocol-driven interfaces, matching files such as `domain/graph.py` and `protocols.py`. Keep imports absolute from `mr2s_module`. No formatter or linter is configured yet, so keep style changes narrow and consistent with surrounding code.
