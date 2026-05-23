@@ -4,6 +4,7 @@ from mr2s_module.domain.adj_entry import AdjEntry
 from mr2s_module.domain.score import Score, EmbeddingEstimate
 from mr2s_module.domain.solution import Solution
 from mr2s_module.domain.graph_partition_result import GraphPartitionResult
+from mr2s_module.domain.orientation import Orientation
 from mr2s_module.domain.orientation_result import OrientationResult, OrientedEdges
 from mr2s_module.domain.embeddable_graph_partition import EmbeddableGraphPartition
 
@@ -14,6 +15,7 @@ __all__ = [
   "Score",
   "Solution",
   "GraphPartitionResult",
+  "Orientation",
   "OrientationResult",
   "OrientedEdges",
   "EmbeddingEstimate",

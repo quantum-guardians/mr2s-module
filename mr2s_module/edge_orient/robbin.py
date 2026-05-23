@@ -1,8 +1,7 @@
 from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.orientation_result import OrientedEdges
-from mr2s_module.edge_orient.orientation import robbins_orient
-from mr2s_module.util import domain_graph_to_networkx
+from mr2s_module.util import domain_graph_to_networkx, robbins_orient
 
 import networkx as nx
 

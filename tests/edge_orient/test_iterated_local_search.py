@@ -12,7 +12,7 @@ from mr2s_module.edge_orient.iterated_local_search import (
     n2_search,
     n3_search,
 )
-from mr2s_module.edge_orient.orientation import Orientation
+from mr2s_module.domain.orientation import Orientation
 from mr2s_module.evaluator import Evaluator
 from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver
 from tests.cycle.conftest import remove_edges_by_percent

@@ -5,9 +5,9 @@ import numpy as np
 
 from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
+from mr2s_module.domain.orientation import EdgeKey, Orientation
 from mr2s_module.domain.orientation_result import OrientedEdges
-from mr2s_module.edge_orient.orientation import EdgeKey, Orientation, robbins_orient
-from mr2s_module.util import domain_graph_to_networkx
+from mr2s_module.util import domain_graph_to_networkx, robbins_orient
 
 
 class IteratedLocalSearch:

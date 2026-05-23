@@ -20,6 +20,7 @@ from mr2s_module.util.planar_graph import (
   polygon_area,
   select_outer_face,
 )
+from mr2s_module.util.graph_orient import robbins_orient
 from mr2s_module.util.sample_set import empty_binary_sample_set
 
 __all__ = [
@@ -42,5 +43,6 @@ __all__ = [
   "inner_faces",
   "normalize_planar_input",
   "polygon_area",
+  "robbins_orient",
   "select_outer_face",
 ]
