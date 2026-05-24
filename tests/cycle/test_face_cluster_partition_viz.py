@@ -124,7 +124,7 @@ def _draw_faces(ax, diag: dict, pos: dict[int, np.ndarray]) -> None:
         diag["nx_graph"],
         pos,
         ax=ax,
-        edgelist=list(diag["final_boundary"]),
+        edgelist=[tuple(sorted(e)) for e in diag["final_boundary"]],
         edge_color="black",
         width=2.5,
     )
@@ -163,7 +163,7 @@ def _draw_rotations(ax, diag: dict, pos: dict[int, np.ndarray]) -> None:
         traversal = face if color_idx == 0 else list(reversed(face))
         for i in range(len(traversal)):
             a, b = traversal[i], traversal[(i + 1) % len(traversal)]
-            if tuple(sorted((a, b))) not in final_boundary:
+            if frozenset({a, b}) not in final_boundary:
                 continue
             if (a, b) in drawn:
                 continue
@@ -193,7 +193,7 @@ def test_face_cycle_visualization_renders_three_panels(seed: int) -> None:
     np.random.seed(seed)
     partition = FaceClusterPartition(target_k=target_k).run(graph)
     boundary_run = {e.id for e in partition.directed_edges()}
-    input_ids = {e.id for e in graph.edges}
+    input_ids = set(graph.edges.keys())
     assert boundary_run, "run() should produce non-empty directed boundary edges"
     assert boundary_run.issubset(input_ids)
 
@@ -207,7 +207,7 @@ def test_face_cycle_visualization_renders_three_panels(seed: int) -> None:
     assert len(diag["components"]) > 0
     assert len(diag["inner_faces"]) >= len(diag["components"])
     assert set(diag["final_boundary"]).issubset(
-        {tuple(sorted(e)) for e in diag["nx_graph"].edges()}
+        {frozenset(e) for e in diag["nx_graph"].edges()}
     )
 
     fig, axes = plt.subplots(1, 3, figsize=(21, 7.5))

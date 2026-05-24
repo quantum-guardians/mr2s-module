@@ -33,7 +33,7 @@ class StubQuboSolver:
     def run(self, qubo, graph: Graph):
         self.received_graph = graph
         return Solution(
-            edges={(edge.vertices[0], edge.vertices[1]) for edge in graph.edges},
+            edges={(edge.vertices[0], edge.vertices[1]) for edge in graph.edges.values()},
             graph=graph,
             sample_set=empty_binary_sample_set(),
             score=None,
@@ -67,7 +67,7 @@ def test_run_skips_preprocessing_when_edge_orienter_is_none() -> None:
     assert result.edges == {(1, 2)}
     assert poly_generator.seen_graphs == [graph]
     assert qubo_solver.received_graph is graph
-    assert graph.edges[0].directed is False
+    assert graph.edges[frozenset({1, 2})].directed is False
     assert evaluator.received_solution.score == 1.0
 
 
@@ -90,6 +90,6 @@ def test_run_applies_preprocessing_when_edge_orienter_is_provided() -> None:
     assert result.score == 1.0
     assert result.edges == {(1, 2)}
     assert edge_orienter.calls == 1
-    assert graph.edges == [predefined_edge]
+    assert graph.edges == {frozenset({1, 2}): predefined_edge}
     assert qubo_solver.received_graph is graph
     assert evaluator.received_solution.score == 1.0

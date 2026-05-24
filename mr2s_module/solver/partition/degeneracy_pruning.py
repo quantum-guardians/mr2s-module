@@ -34,7 +34,7 @@ class DegeneracyPruningFaceCyclePartitionStrategy(
     )
 
     target_node_count = self.target_graph.number_of_nodes()
-    undirected_edge_count = sum(1 for edge in graph.edges if not edge.directed)
+    undirected_edge_count = sum(1 for edge in graph.edges.values() if not edge.directed)
     if undirected_edge_count > target_node_count:
       logger.info(
         "DnC pruning estimate skipped by edge prefilter "
@@ -125,10 +125,11 @@ class DegeneracyPruningFaceCyclePartitionStrategy(
       interaction_graph.add_edges_from(quadratic)
       return interaction_graph
 
-    edges = getattr(bqm, "edges", graph.edges)
+    bqm_edges = getattr(bqm, "edges", None)
+    edges = bqm_edges if bqm_edges is not None else list(graph.edges.values())
     for edge in edges:
-      if hasattr(edge, "id"):
-        interaction_graph.add_edge(*edge.id)
+      if hasattr(edge, "endpoints"):
+        interaction_graph.add_edge(*edge.endpoints())
       else:
         source, target = edge
         interaction_graph.add_edge(source, target)

@@ -64,7 +64,7 @@ class ConfiguredSAQuboSolver(SAQuboSolver):
   def run(self, qubo, graph: Graph) -> Solution:
     sample_set = self.sampler.sample(qubo, num_reads=self.num_reads)
     return Solution(
-      edges=self._select_best_sample(sample_set, graph.edges),
+      edges=self._select_best_sample(sample_set, list(graph.edges.values())),
       graph=graph,
       sample_set=sample_set,
       score=None,
@@ -106,7 +106,7 @@ def remove_edges_by_percent(
     raise ValueError("remove_percent must be in [0, 100).")
 
   nx_graph = nx.Graph()
-  nx_graph.add_edges_from(edge.id for edge in graph.edges)
+  nx_graph.add_edges_from(edge.endpoints() for edge in graph.edges.values())
 
   edge_count = nx_graph.number_of_edges()
   target_remove_count = round(edge_count * remove_percent / 100)
@@ -194,7 +194,7 @@ def build_sa_solver() -> SAMR2SSolver:
 
 
 def clone_graph(graph: Graph) -> Graph:
-  return Graph(edges=[clone_edge(edge) for edge in graph.edges])
+  return Graph(edges=[clone_edge(edge) for edge in graph.edges.values()])
 
 
 def _trace_entry(
@@ -215,10 +215,10 @@ def _trace_entry(
         "vertices": len(sub_graph.get_vertices()),
         "edges": len(sub_graph.edges),
         "directed_edges": len([
-          edge for edge in sub_graph.edges if edge.directed
+          edge for edge in sub_graph.edges.values() if edge.directed
         ]),
         "undirected_edges": len([
-          edge for edge in sub_graph.edges if not edge.directed
+          edge for edge in sub_graph.edges.values() if not edge.directed
         ]),
       }
       for sub_graph in sub_graphs
@@ -294,11 +294,11 @@ def print_leaf_sub_graph_summary(sub_graphs: list[Graph]) -> None:
   print("DnC leaf subgraphs")
   print(f"  leaf_count: {len(sub_graphs)}")
   for index, sub_graph in enumerate(sub_graphs):
-    directed_edges = [edge for edge in sub_graph.edges if edge.directed]
-    undirected_edges = [edge for edge in sub_graph.edges if not edge.directed]
+    directed_edges = [edge for edge in sub_graph.edges.values() if edge.directed]
+    undirected_edges = [edge for edge in sub_graph.edges.values() if not edge.directed]
     edge_preview = [
-      edge.vertices if edge.directed else edge.id
-      for edge in sub_graph.edges[:10]
+      edge.vertices if edge.directed else edge.endpoints()
+      for edge in list(sub_graph.edges.values())[:10]
     ]
 
     print(f"  leaf[{index}]")
@@ -310,8 +310,8 @@ def print_leaf_sub_graph_summary(sub_graphs: list[Graph]) -> None:
   print()
 
 def _draw_edges(ax, graph: Graph, positions, color: str, linewidth: float) -> None:
-  for edge in graph.edges:
-    u, v = edge.id
+  for edge in graph.edges.values():
+    u, v = edge.endpoints()
     ax.plot(
       [positions[u][0], positions[v][0]],
       [positions[u][1], positions[v][1]],
@@ -324,12 +324,13 @@ def _draw_edges(ax, graph: Graph, positions, color: str, linewidth: float) -> No
 
 def _draw_boundary_edges(
     ax,
-    boundary_edges: set[tuple[int, int]],
+    boundary_edges: set[frozenset[int]],
     positions,
     color: str = "#111111",
     linewidth: float = 2.0,
 ) -> None:
-  for u, v in boundary_edges:
+  for edge_key in boundary_edges:
+    u, v = sorted(edge_key)
     ax.plot(
       [positions[u][0], positions[v][0]],
       [positions[u][1], positions[v][1]],
@@ -359,7 +360,7 @@ def _save_graph_png(
 ) -> None:
   fig, ax = plt.subplots(figsize=(10, 8))
   _draw_edges(ax, graph, positions, color="#555555", linewidth=1.1)
-  directed_graph = Graph(edges=[edge for edge in graph.edges if edge.directed])
+  directed_graph = Graph(edges=[edge for edge in graph.edges.values() if edge.directed])
   _draw_edges(ax, directed_graph, positions, color="#d14", linewidth=2.0)
   _draw_vertices(ax, graph, positions)
   ax.set_title(title)
@@ -381,7 +382,7 @@ def _save_face_groups_png(
     positions,
     inner_faces: list[list[int]],
     groups: list[list[int]],
-    boundary_edges: set[tuple[int, int]],
+    boundary_edges: set[frozenset[int]],
     path: Path,
     title: str,
 ) -> None:
@@ -524,10 +525,10 @@ def run_timed_solver(name: str, solver, graph: Graph) -> dict[str, object]:
   elapsed_seconds = time.perf_counter() - started_at
   score = solution.score
   selected_undirected_edges = {
-    (min(source, target), max(source, target))
+    frozenset({source, target})
     for source, target in solution.edges
   }
-  input_edge_ids = {edge.id for edge in graph.edges}
+  input_edge_ids = set(graph.edges.keys())
 
   return {
     "name": name,

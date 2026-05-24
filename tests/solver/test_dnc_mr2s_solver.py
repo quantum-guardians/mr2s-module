@@ -25,7 +25,7 @@ class StubMr2sSolver:
   def build_bqm(self, graph: Graph):
     return StubBqm(
       variables=sorted(graph.get_vertices()),
-      edges=list(graph.edges),
+      edges=list(graph.edges.values()),
     )
 
 
@@ -118,13 +118,13 @@ class StubRunningMr2sSolver:
   def build_bqm(self, graph: Graph):
     return StubBqm(
       variables=sorted(graph.get_vertices()),
-      edges=list(graph.edges),
+      edges=list(graph.edges.values()),
     )
 
   def run(self, graph: Graph) -> Solution:
     self.run_graphs.append(graph)
     return Solution(
-      edges={(edge.vertices[0], edge.vertices[1]) for edge in graph.edges},
+      edges={(edge.vertices[0], edge.vertices[1]) for edge in graph.edges.values()},
       graph=graph,
       sample_set=empty_binary_sample_set(),
     )
@@ -224,12 +224,12 @@ def test_merge_solutions_keeps_one_direction_per_input_edge() -> None:
   )
 
   selected_undirected_edges = {
-    (min(source, target), max(source, target))
+    frozenset({source, target})
     for source, target in merged.edges
   }
 
   assert len(merged.edges) == len(graph.edges)
-  assert selected_undirected_edges == {edge.id for edge in graph.edges}
+  assert selected_undirected_edges == set(graph.edges.keys())
 
 
 def test_merge_solutions_selects_direction_that_reduces_flow_imbalance() -> None:
@@ -665,10 +665,11 @@ def test_run_solves_full_graph_after_applying_merged_directions(
 
   assert isinstance(solution, DnCSolution)
   assert mr2s_solver.run_graphs == [child, graph]
-  assert graph.edges[0].directed is True
-  assert graph.edges[0].vertices == (1, 2)
-  assert graph.edges[1].id == remaining.id
-  assert graph.edges[1].directed is False
+  child_edge = graph.edges[frozenset({1, 2})]
+  assert child_edge.directed is True
+  assert child_edge.vertices == (1, 2)
+  remaining_edge_in_graph = graph.edges[remaining.id]
+  assert remaining_edge_in_graph.directed is False
   assert solution.edges == {(1, 2), (2, 3)}
   assert solution.sub_graphs == [child]
   assert len(solution.embedding_estimates) == 1

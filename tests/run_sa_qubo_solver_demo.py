@@ -43,7 +43,7 @@ def thin_planar_graph(
     raise ValueError(f"remove_ratio must be in [0.0, 1.0), got {remove_ratio}")
 
   nx_graph = nx.Graph()
-  nx_graph.add_edges_from(edge.id for edge in graph.edges)
+  nx_graph.add_edges_from(edge.endpoints() for edge in graph.edges.values())
 
   rng = np.random.default_rng(seed)
   edges = list(nx_graph.edges())
@@ -76,7 +76,7 @@ class ConfiguredSAQuboSolver(SAQuboSolver):
   def run(self, qubo, graph: Graph) -> Solution:
     sample_set = self.sampler.sample(qubo, num_reads=self.num_reads)
     return Solution(
-      edges=self._select_best_sample(sample_set, graph.edges),
+      edges=self._select_best_sample(sample_set, list(graph.edges.values())),
       sample_set=sample_set,
       graph=graph,
       score=None,

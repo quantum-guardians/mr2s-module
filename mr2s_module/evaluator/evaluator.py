@@ -31,7 +31,7 @@ class Evaluator:
   ) -> set[tuple[int, int]]:
     directed_edges = set()
 
-    for edge in solution.graph.edges:
+    for edge in solution.graph.edges.values():
       if edge.directed:
         directed_edges.add(edge.vertices)
         continue
@@ -77,11 +77,11 @@ class Evaluator:
     vertices = solution.graph.get_vertices()
     edge_weights = {
       edge.id: float(edge.weight)
-      for edge in solution.graph.edges
+      for edge in solution.graph.edges.values()
     }
 
     for source, target in solution.edges:
-      weight = edge_weights[(min(source, target), max(source, target))]
+      weight = edge_weights[frozenset({source, target})]
       outgoing_weights[source] = outgoing_weights.get(source, 0.0) + weight
       incoming_weights[target] = incoming_weights.get(target, 0.0) + weight
 

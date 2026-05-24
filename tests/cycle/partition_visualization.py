@@ -76,13 +76,13 @@ def draw_partition(
 
     for macro_id, sub_graph in enumerate(partition.sub_graphs):
         color = palette[macro_id]
-        for edge in sub_graph.edges:
+        for edge in sub_graph.edges.values():
             if not edge.directed:
                 _plot_edge(ax, edge, pos, color=color, alpha=0.55, linewidth=1.0, zorder=2)
 
     for macro_id, sub_graph in enumerate(partition.sub_graphs):
         color = palette[macro_id]
-        for edge in sub_graph.edges:
+        for edge in sub_graph.edges.values():
             if edge.directed:
                 _plot_edge(ax, edge, pos, color=color, alpha=0.98, linewidth=3.2, zorder=3)
 
@@ -120,7 +120,7 @@ def _fill_partition_faces(
         return
 
     macro_edge_ids = [
-        {edge.id for edge in sub_graph.edges}
+        set(sub_graph.edges.keys())
         for sub_graph in partition.sub_graphs
     ]
 
@@ -139,8 +139,8 @@ def _fill_partition_faces(
 
 
 def _best_face_owner(
-    face_edges: set[tuple[int, int]],
-    macro_edge_ids: list[set[tuple[int, int]]],
+    face_edges: set[frozenset[int]],
+    macro_edge_ids: list[set[frozenset[int]]],
 ) -> int | None:
     scored = [
         (len(face_edges.intersection(edge_ids)), -macro_id, macro_id)
@@ -164,7 +164,7 @@ def _plot_edge(
     linewidth: float,
     zorder: int,
 ) -> None:
-    u, v = edge.id
+    u, v = edge.endpoints()
     if u == v:
         return
     ax.plot(

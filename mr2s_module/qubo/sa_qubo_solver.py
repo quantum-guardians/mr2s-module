@@ -75,7 +75,7 @@ class SAQuboSolver(QuboSolver):
   def run(self, qubo: QuboMatrix, graph: Graph) -> Solution:
     sample_set = self.sampler.sample(qubo)
     return Solution(
-      edges=self._select_best_sample(sample_set, graph.edges),
+      edges=self._select_best_sample(sample_set, list(graph.edges.values())),
       sample_set=sample_set,
       graph=graph,
       score=None,

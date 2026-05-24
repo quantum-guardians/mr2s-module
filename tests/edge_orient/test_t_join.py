@@ -36,7 +36,7 @@ def test_t_join_integration_with_real_solver():
     cycle = Tjoin()
     _apply_cycle_directions(graph, cycle)
 
-    expected_directions = {e.vertices for e in graph.edges if e.directed}
+    expected_directions = {e.vertices for e in graph.edges.values() if e.directed}
     assert len(expected_directions) == 4
 
     solver = DnCMr2sSolver(mr2s_solver=QuboMR2SSolver())
@@ -64,7 +64,7 @@ def test_t_join_performance_and_apsp(num_points, remove_percent):
     elapsed = time.perf_counter() - start_time
 
     oriented_ids = {e.id for e in directed_edges}
-    remaining_edges = [e for e in graph.edges if e.id not in oriented_ids]
+    remaining_edges = [e for e in graph.edges.values() if e.id not in oriented_ids]
 
     graph.define_edge_direction(set(directed_edges))
     solver = DnCMr2sSolver(mr2s_solver=QuboMR2SSolver())
@@ -90,5 +90,5 @@ def test_t_join_performance_and_apsp(num_points, remove_percent):
     print(f"  final_apsp (after solver): {final_apsp}")
 
     assert final_apsp < float("inf")
-    expected_directions = {e.vertices for e in graph.edges if e.directed}
+    expected_directions = {e.vertices for e in graph.edges.values() if e.directed}
     assert expected_directions.issubset(solution.edges)

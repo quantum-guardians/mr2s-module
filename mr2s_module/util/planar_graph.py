@@ -8,7 +8,7 @@ from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
 
 
-EdgeKey = tuple[int, int]
+EdgeKey = frozenset[int]
 
 
 def domain_graph_to_networkx(graph: Graph) -> nx.Graph:
@@ -19,8 +19,8 @@ def domain_graph_to_networkx(graph: Graph) -> nx.Graph:
   smallest weight.
   """
   nx_graph = nx.Graph()
-  for edge in graph.edges:
-    u, v = edge.id
+  for edge in graph.edges.values():
+    u, v = edge.endpoints()
     if u == v:
       continue
     if nx_graph.has_edge(u, v):
@@ -90,7 +90,7 @@ def enumerate_faces(graph_or_embedding: nx.Graph | nx.PlanarEmbedding) -> list[l
 def face_edges(face: list[int] | tuple[int, ...]) -> set[EdgeKey]:
   """Return canonical undirected edge keys for one cyclic face boundary."""
   return {
-    tuple(sorted((face[index], face[(index + 1) % len(face)])))
+    frozenset({face[index], face[(index + 1) % len(face)]})
     for index in range(len(face))
   }
 
