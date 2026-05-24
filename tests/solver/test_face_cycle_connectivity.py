@@ -79,7 +79,7 @@ class _MultiReadSAQuboSolver(SAQuboSolver):
     def run(self, qubo, graph):
         sample_set = self.sampler.sample(qubo, num_reads=self.num_reads)
         return Solution(
-            edges=self._select_best_sample(sample_set, graph.edges),
+            edges=self._select_best_sample(sample_set, list(graph.edges.values())),
             graph=graph,
             sample_set=sample_set,
             score=None,

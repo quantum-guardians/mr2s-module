@@ -28,7 +28,7 @@ def test_run_finds_strongly_connected_triangle_orientation() -> None:
   solution = solver.run(graph)
 
   assert len(solution.edges) == 3
-  assert {(min(u, v), max(u, v)) for u, v in solution.edges} == {edge.id for edge in graph.edges}
+  assert {frozenset({u, v}) for u, v in solution.edges} == set(graph.edges.keys())
   assert solution.score is not None
   assert solution.score.apsp_sum == 9.0
   assert solution.score.flow_score == 0.0
@@ -48,6 +48,7 @@ def test_run_applies_preprocessing_directed_edges_from_edge_orienter() -> None:
 
   solution = solver.run(graph)
 
-  assert graph.edges[0].directed is True
-  assert graph.edges[0].vertices == (1, 2)
+  edge = graph.edges[frozenset({1, 2})]
+  assert edge.directed is True
+  assert edge.vertices == (1, 2)
   assert (1, 2) in solution.edges

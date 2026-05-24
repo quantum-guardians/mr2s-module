@@ -29,7 +29,7 @@ def _graph_log_context(graph: Graph) -> dict[str, int]:
   return {
     "vertices": len(graph.get_vertices()),
     "edges": len(graph.edges),
-    "directed_edges": sum(1 for edge in graph.edges if edge.directed),
+    "directed_edges": sum(1 for edge in graph.edges.values() if edge.directed),
   }
 
 
@@ -63,7 +63,7 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
     target_node_count = self.target_graph.number_of_nodes()
     undirected_edge_count = sum(
       1
-      for edge in graph.edges
+      for edge in graph.edges.values()
       if not edge.directed
     )
     if undirected_edge_count > target_node_count:

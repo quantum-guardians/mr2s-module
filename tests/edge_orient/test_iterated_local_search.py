@@ -12,180 +12,132 @@ from mr2s_module.edge_orient.iterated_local_search import (
     n2_search,
     n3_search,
 )
-from mr2s_module.domain.orientation import Orientation
 from mr2s_module.evaluator import Evaluator
 from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver
 from tests.cycle.conftest import remove_edges_by_percent
 from tests.util.graph_fixtures import delaunay_graph, graph_from_pairs
 
 
+def _edge(tail: int, head: int, weight: int = 1) -> tuple[frozenset[int], Edge]:
+    return frozenset({tail, head}), Edge(tail, head, weight, True)
+
+
+def _edges(*pairs: tuple[int, int], weights: dict[tuple[int, int], int] | None = None) -> dict:
+    weights = weights or {}
+    out: dict[frozenset[int], Edge] = {}
+    for tail, head in pairs:
+        w = weights.get((tail, head), 1)
+        out[frozenset({tail, head})] = Edge(tail, head, w, True)
+    return out
+
+
 class TestEvaluateScore:
     def test_empty_graph_returns_inf(self):
-        assert evaluate_score(Orientation(), []) == float('inf')
+        assert evaluate_score({}, []) == float('inf')
 
     def test_disconnected_returns_inf(self):
-        o = Orientation({frozenset({0, 1}): (0, 1)})
-        assert evaluate_score(o, [0, 1, 2]) == float('inf')
+        edges = _edges((0, 1))
+        assert evaluate_score(edges, [0, 1, 2]) == float('inf')
 
     def test_not_strongly_connected_returns_inf(self):
-        o = Orientation({
-            frozenset({0, 1}): (0, 1),
-            frozenset({1, 2}): (1, 2),
-            frozenset({0, 2}): (0, 2),
-        })
-        assert evaluate_score(o, [0, 1, 2]) == float('inf')
+        edges = _edges((0, 1), (1, 2), (0, 2))
+        assert evaluate_score(edges, [0, 1, 2]) == float('inf')
 
     def test_directed_cycle_score(self):
-        o = Orientation({
-            frozenset({0, 1}): (0, 1),
-            frozenset({1, 2}): (1, 2),
-            frozenset({0, 2}): (2, 0),
-        })
-        assert evaluate_score(o, [0, 1, 2]) == 9.0
-
-    def test_weighted_cycle_score_with_unit_weights(self):
-        o = Orientation({
-            frozenset({0, 1}): (0, 1),
-            frozenset({1, 2}): (1, 2),
-            frozenset({0, 2}): (2, 0),
-        })
-        weight_map = {
-            frozenset({0, 1}): 1,
-            frozenset({1, 2}): 1,
-            frozenset({0, 2}): 1,
-        }
-        assert evaluate_score(o, [0, 1, 2], weight_map) == 9.0
+        edges = _edges((0, 1), (1, 2), (2, 0))
+        assert evaluate_score(edges, [0, 1, 2]) == 9.0
 
     def test_weighted_score_differs_from_unweighted(self):
-        o = Orientation({
-            frozenset({0, 1}): (0, 1),
-            frozenset({1, 2}): (1, 2),
-            frozenset({0, 2}): (2, 0),
-        })
-        weight_map = {
-            frozenset({0, 1}): 1,
-            frozenset({1, 2}): 1,
-            frozenset({0, 2}): 100,
-        }
+        edges = _edges(
+            (0, 1), (1, 2), (2, 0),
+            weights={(0, 1): 1, (1, 2): 1, (2, 0): 100},
+        )
         # 0->1: 1, 0->2: 1+1=2, 1->2: 1, 1->0: 1+100=101, 2->0: 100, 2->1: 100+1=101
         # total = 1+2+1+101+100+101 = 306
-        assert evaluate_score(o, [0, 1, 2], weight_map) == 306.0
+        assert evaluate_score(edges, [0, 1, 2]) == 306.0
 
     def test_weighted_disconnected_returns_inf(self):
-        o = Orientation({frozenset({0, 1}): (0, 1), frozenset({1, 2}): (1, 2)})
-        weight_map = {frozenset({0, 1}): 10, frozenset({1, 2}): 10}
-        assert evaluate_score(o, [0, 1, 2], weight_map) == float('inf')
+        edges = _edges((0, 1), (1, 2), weights={(0, 1): 10, (1, 2): 10})
+        assert evaluate_score(edges, [0, 1, 2]) == float('inf')
 
 
 class TestN1Search:
     def test_improves_bad_orientation(self):
         rng = np.random.default_rng(0)
         base = nx.Graph([(0, 1), (1, 2), (0, 2)])
-        bad = Orientation({
-            frozenset({0, 1}): (0, 1),
-            frozenset({1, 2}): (1, 2),
-            frozenset({0, 2}): (0, 2),
-        })
-        snapshot = bad.copy()
-        new_orient, new_score = n1_search(bad, float('inf'), base, [0, 1, 2], None, rng)
+        bad = _edges((0, 1), (1, 2), (0, 2))
+        snapshot = dict(bad)
+        new_edges, new_score = n1_search(bad, float('inf'), base, [0, 1, 2], rng)
         assert new_score < float('inf')
-        assert new_orient != snapshot
+        assert new_edges != snapshot
         assert bad == snapshot  # 입력은 변형되지 않아야 함
 
     def test_no_improvement_returns_original(self):
         rng = np.random.default_rng(0)
         base = nx.Graph([(0, 1), (1, 2), (0, 2)])
-        optimal = Orientation({
-            frozenset({0, 1}): (0, 1),
-            frozenset({1, 2}): (1, 2),
-            frozenset({0, 2}): (2, 0),
-        })
+        optimal = _edges((0, 1), (1, 2), (2, 0))
         score = 9.0
-        new_orient, new_score = n1_search(optimal, score, base, [0, 1, 2], None, rng)
+        new_edges, new_score = n1_search(optimal, score, base, [0, 1, 2], rng)
         assert new_score == score
-        assert new_orient == optimal
+        assert new_edges == optimal
 
 
 class TestN2Search:
     def test_improves_bad_orientation(self):
         rng = np.random.default_rng(0)
         base = nx.Graph([(0, 1), (1, 2), (0, 2)])
-        bad = Orientation({
-            frozenset({0, 1}): (0, 1),
-            frozenset({1, 2}): (1, 2),
-            frozenset({0, 2}): (0, 2),
-        })
-        snapshot = bad.copy()
-        new_orient, new_score = n2_search(bad, float('inf'), base, [0, 1, 2], None, rng)
+        bad = _edges((0, 1), (1, 2), (0, 2))
+        snapshot = dict(bad)
+        new_edges, new_score = n2_search(bad, float('inf'), base, [0, 1, 2], rng)
         assert new_score < float('inf')
-        assert new_orient != snapshot
+        assert new_edges != snapshot
         assert bad == snapshot
 
     def test_no_improvement_returns_original(self):
         rng = np.random.default_rng(0)
         base = nx.Graph([(0, 1), (1, 2), (0, 2)])
-        optimal = Orientation({
-            frozenset({0, 1}): (0, 1),
-            frozenset({1, 2}): (1, 2),
-            frozenset({0, 2}): (2, 0),
-        })
+        optimal = _edges((0, 1), (1, 2), (2, 0))
         score = 9.0
-        new_orient, new_score = n2_search(optimal, score, base, [0, 1, 2], None, rng)
+        new_edges, new_score = n2_search(optimal, score, base, [0, 1, 2], rng)
         assert new_score == score
-        assert new_orient == optimal
+        assert new_edges == optimal
 
 
 class TestN3Search:
     def test_with_cyclic_graph_returns_sc_orientation(self):
         rng = np.random.default_rng(0)
         base = nx.Graph([(0, 1), (1, 2), (2, 3), (3, 0)])
-        orient = Orientation({
-            frozenset({0, 1}): (0, 1),
-            frozenset({1, 2}): (1, 2),
-            frozenset({2, 3}): (2, 3),
-            frozenset({3, 0}): (3, 0),
-        })
-        score = evaluate_score(orient, [0, 1, 2, 3])
+        edges = _edges((0, 1), (1, 2), (2, 3), (3, 0))
+        score = evaluate_score(edges, [0, 1, 2, 3])
         assert score < float('inf')
-        new_orient, new_score = n3_search(orient, score, base, [0, 1, 2, 3], None, rng)
+        new_edges, new_score = n3_search(edges, score, base, [0, 1, 2, 3], rng)
         assert new_score < float('inf')
 
     def test_with_dag_orientation_returns_original(self):
         rng = np.random.default_rng(0)
         base = nx.Graph([(0, 1), (1, 2), (0, 2)])
-        dag = Orientation({
-            frozenset({0, 1}): (0, 1),
-            frozenset({1, 2}): (1, 2),
-            frozenset({0, 2}): (0, 2),
-        })
-        new_orient, new_score = n3_search(dag, float('inf'), base, [0, 1, 2], None, rng)
+        dag = _edges((0, 1), (1, 2), (0, 2))
+        new_edges, new_score = n3_search(dag, float('inf'), base, [0, 1, 2], rng)
         assert new_score == float('inf')
-        assert new_orient == dag
+        assert new_edges == dag
 
     def test_acyclic_graph_returns_original(self):
         rng = np.random.default_rng(0)
         base = nx.Graph([(0, 1), (1, 2)])
-        tree_orient = Orientation({
-            frozenset({0, 1}): (0, 1),
-            frozenset({1, 2}): (1, 2),
-        })
+        tree = _edges((0, 1), (1, 2))
         score = float('inf')
-        new_orient, new_score = n3_search(tree_orient, score, base, [0, 1, 2], None, rng)
+        new_edges, new_score = n3_search(tree, score, base, [0, 1, 2], rng)
         assert new_score == score
-        assert new_orient == tree_orient
+        assert new_edges == tree
 
     def test_no_improvement_returns_original(self):
         rng = np.random.default_rng(0)
         base = nx.Graph([(0, 1), (1, 2), (0, 2)])
-        optimal = Orientation({
-            frozenset({0, 1}): (0, 1),
-            frozenset({1, 2}): (1, 2),
-            frozenset({0, 2}): (2, 0),
-        })
+        optimal = _edges((0, 1), (1, 2), (2, 0))
         score = 9.0
-        new_orient, new_score = n3_search(optimal, score, base, [0, 1, 2], None, rng)
+        new_edges, new_score = n3_search(optimal, score, base, [0, 1, 2], rng)
         assert new_score == score
-        assert new_orient == optimal
+        assert new_edges == optimal
 
 
 class TestIteratedLocalSearch:
@@ -263,7 +215,7 @@ class TestIteratedLocalSearch:
         ])
         result = IteratedLocalSearch().run(graph)
         edges = result.get_edges()
-        weight_map = {frozenset(e.id): e.weight for e in edges}
+        weight_map = {e.id: e.weight for e in edges}
         assert weight_map[frozenset({0, 1})] == 5
         assert weight_map[frozenset({1, 2})] == 3
         assert weight_map[frozenset({0, 2})] == 2
@@ -333,6 +285,5 @@ def test_ils_integration_with_sa_solver():
     print(f"  final_apsp (after SA solver): {final_apsp}")
 
     assert final_apsp < float("inf")
-    # ILS 가 결정한 방향은 SA 통과 후에도 그대로 살아있어야 함.
-    expected_directions = {e.vertices for e in graph.edges if e.directed}
+    expected_directions = {e.vertices for e in graph.edges.values() if e.directed}
     assert expected_directions.issubset(solution.edges)

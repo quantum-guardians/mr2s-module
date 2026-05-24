@@ -41,7 +41,7 @@ def test_robbin_integration_with_real_solver():
     cycle = Robbin()
     _apply_cycle_directions(graph, cycle)
 
-    expected_directions = {e.vertices for e in graph.edges if e.directed}
+    expected_directions = {e.vertices for e in graph.edges.values() if e.directed}
     assert len(expected_directions) == 3
 
     solver = DnCMr2sSolver(mr2s_solver=QuboMR2SSolver())
@@ -69,7 +69,7 @@ def test_robbin_performance_and_apsp(num_points, remove_percent):
 
     oriented_edges = [e for e in directed_edges if e.directed]
     oriented_ids = {e.id for e in oriented_edges}
-    undirected_edges = [e for e in graph.edges if e.id not in oriented_ids]
+    undirected_edges = [e for e in graph.edges.values() if e.id not in oriented_ids]
 
     # Cycle 방향을 graph 에 박은 뒤 실제 솔버 통과.
     graph.define_edge_direction(set(directed_edges))
@@ -97,5 +97,5 @@ def test_robbin_performance_and_apsp(num_points, remove_percent):
 
     assert final_apsp < float("inf")
     # Cycle 이 결정한 방향은 solver 통과 후에도 그대로 살아있어야 함.
-    expected_directions = {e.vertices for e in graph.edges if e.directed}
+    expected_directions = {e.vertices for e in graph.edges.values() if e.directed}
     assert expected_directions.issubset(solution.edges)

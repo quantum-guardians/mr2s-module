@@ -39,4 +39,4 @@ class FlowPolyGenerator:
 
     vertices = graph.get_vertices()
 
-    return self._get_total_term(vertices, graph.edges)
+    return self._get_total_term(vertices, list(graph.edges.values()))

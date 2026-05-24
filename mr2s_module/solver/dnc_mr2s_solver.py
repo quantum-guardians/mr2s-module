@@ -41,7 +41,7 @@ def _graph_log_context(graph: Graph) -> dict[str, int]:
   return {
     "vertices": len(graph.get_vertices()),
     "edges": len(graph.edges),
-    "directed_edges": sum(1 for edge in graph.edges if edge.directed),
+    "directed_edges": sum(1 for edge in graph.edges.values() if edge.directed),
   }
 
 
@@ -63,9 +63,9 @@ def _solve_subgraph(
     graph_context["edges"],
     graph_context["directed_edges"],
   )
-  if sub_graph.edges and all(edge.directed for edge in sub_graph.edges):
+  if sub_graph.edges and all(edge.directed for edge in sub_graph.edges.values()):
     solution = Solution(
-      edges={edge.vertices for edge in sub_graph.edges},
+      edges={edge.vertices for edge in sub_graph.edges.values()},
       graph=sub_graph,
       sample_set=empty_sample_set,
     )
@@ -174,16 +174,16 @@ class DnCMr2sSolver:
       len(solution_list),
       len(graph.edges),
     )
-    candidate_edges: dict[tuple[int, int], set[tuple[int, int]]] = {}
+    candidate_edges: dict[frozenset[int], set[tuple[int, int]]] = {}
     balance: dict[int, float] = {}
 
     for solution in solution_list:
       for source, target in solution.edges:
-        edge_id = (min(source, target), max(source, target))
+        edge_id = frozenset({source, target})
         candidate_edges.setdefault(edge_id, set()).add((source, target))
 
     merged_edges: set[tuple[int, int]] = set()
-    for edge in graph.edges:
+    for edge in graph.edges.values():
       candidates = candidate_edges.get(edge.id, set())
       if not candidates:
         continue
@@ -312,13 +312,13 @@ class DnCMr2sSolver:
   def _apply_merged_directions(graph: Graph, solution: Solution) -> None:
     weights_by_edge = {
       edge.id: edge.weight
-      for edge in graph.edges
+      for edge in graph.edges.values()
     }
     predefined_edges = {
       Edge(
         source,
         target,
-        weights_by_edge[(min(source, target), max(source, target))],
+        weights_by_edge[frozenset({source, target})],
         True,
       )
       for source, target in solution.edges

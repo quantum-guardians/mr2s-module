@@ -16,7 +16,7 @@ def remove_edges_by_percent(
         raise ValueError("remove_percent must be in [0, 100).")
 
     nx_graph = nx.Graph()
-    nx_graph.add_edges_from(edge.id for edge in graph.edges)
+    nx_graph.add_edges_from(edge.endpoints() for edge in graph.edges.values())
 
     edge_count = nx_graph.number_of_edges()
     target_remove_count = round(edge_count * remove_percent / 100)

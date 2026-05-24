@@ -89,11 +89,11 @@ class SAMR2SSolver:
     outgoing_weights: dict[int, float] = {}
     edge_weights = {
       edge.id: float(edge.weight)
-      for edge in graph.edges
+      for edge in graph.edges.values()
     }
 
     for source, target in directed_edges:
-      weight = edge_weights[(min(source, target), max(source, target))]
+      weight = edge_weights[frozenset({source, target})]
       outgoing_weights[source] = outgoing_weights.get(source, 0.0) + weight
       incoming_weights[target] = incoming_weights.get(target, 0.0) + weight
 
@@ -155,11 +155,11 @@ class SAMR2SSolver:
     balance: dict[int, float] = {}
     edge_weights = {
       edge.id: float(edge.weight)
-      for edge in graph.edges
+      for edge in graph.edges.values()
     }
 
     for source, target in fixed_edges:
-      weight = edge_weights[(min(source, target), max(source, target))]
+      weight = edge_weights[frozenset({source, target})]
       balance[source] = balance.get(source, 0.0) - weight
       balance[target] = balance.get(target, 0.0) + weight
 
@@ -255,12 +255,12 @@ class SAMR2SSolver:
 
     fixed_edges = {
       edge.vertices
-      for edge in graph.edges
+      for edge in graph.edges.values()
       if edge.directed
     }
     variable_edges = [
       edge
-      for edge in graph.edges
+      for edge in graph.edges.values()
       if not edge.directed
     ]
 

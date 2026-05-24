@@ -1,4 +1,3 @@
-from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.orientation_result import OrientedEdges
 from mr2s_module.util import domain_graph_to_networkx, robbins_orient
@@ -20,10 +19,6 @@ class Robbin:
             return OrientedEdges()
 
         start_node = next(iter(graph.get_vertices()))
-        orientation = robbins_orient(nx_graph, start_node)
+        directed_edges = robbins_orient(nx_graph, start_node)
 
-        directed_edges = [
-            Edge(u, v, nx_graph[u][v].get("weight", 1), True)
-            for u, v in orientation.directed_edges()
-        ]
-        return OrientedEdges(edges=directed_edges)
+        return OrientedEdges(edges=list(directed_edges.values()))
