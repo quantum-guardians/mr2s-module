@@ -38,6 +38,7 @@ from mr2s_module import (
     SmallWorldSpec,
 )
 from mr2s_module.domain import Solution
+from mr2s_module.qubo.solution_processing import select_best_sample
 from tests.util.graph_fixtures import (
     delaunay_graph,
     domain_graph_to_nx_graph,
@@ -79,7 +80,7 @@ class _MultiReadSAQuboSolver(SAQuboSolver):
     def run(self, qubo, graph):
         sample_set = self.sampler.sample(qubo, num_reads=self.num_reads)
         return Solution(
-            edges=self._select_best_sample(sample_set, list(graph.edges.values())),
+            edges=select_best_sample(sample_set, list(graph.edges.values()), self.ranker),
             graph=graph,
             sample_set=sample_set,
             score=None,

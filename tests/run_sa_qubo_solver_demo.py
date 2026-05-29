@@ -24,6 +24,7 @@ from mr2s_module import (
   SmallWorldSpec,
 )
 from mr2s_module.domain import Solution
+from mr2s_module.qubo.solution_processing import select_best_sample
 from mr2s_module.util import add_polys
 from mr2s_module.util.qubo_util import map_binary_poly_to_bqm
 from tests.util.graph_fixtures import delaunay_graph
@@ -76,7 +77,7 @@ class ConfiguredSAQuboSolver(SAQuboSolver):
   def run(self, qubo, graph: Graph) -> Solution:
     sample_set = self.sampler.sample(qubo, num_reads=self.num_reads)
     return Solution(
-      edges=self._select_best_sample(sample_set, list(graph.edges.values())),
+      edges=select_best_sample(sample_set, list(graph.edges.values()), self.ranker),
       sample_set=sample_set,
       graph=graph,
       score=None,

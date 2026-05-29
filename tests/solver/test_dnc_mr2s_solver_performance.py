@@ -17,6 +17,7 @@ from mr2s_module.evaluator import ApspSumRanker
 from mr2s_module.qubo import (
   SAQuboSolver,
 )
+from mr2s_module.qubo.solution_processing import select_best_sample
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver
 from mr2s_module.solver.partition import (
   DegeneracyPruningFaceCyclePartitionStrategy,
@@ -64,7 +65,7 @@ class ConfiguredSAQuboSolver(SAQuboSolver):
   def run(self, qubo, graph: Graph) -> Solution:
     sample_set = self.sampler.sample(qubo, num_reads=self.num_reads)
     return Solution(
-      edges=self._select_best_sample(sample_set, list(graph.edges.values())),
+      edges=select_best_sample(sample_set, list(graph.edges.values()), self.ranker),
       graph=graph,
       sample_set=sample_set,
       score=None,
