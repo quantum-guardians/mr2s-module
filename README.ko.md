@@ -104,6 +104,7 @@ graph = Graph(edges=[
 ### Solver
 
 - `SAQuboSolver`
+- `QAQuboSolver` (D-Wave 양자 어닐러 백엔드; D-Wave API 자격증명 필요 — `DWAVE_API_TOKEN` 환경변수 설정 또는 `~/.config/dwave/dwave.conf` 구성)
 - `QuboMR2SSolver`
 - `SAMr2sSolver` (간선 방향 자체를 직접 simulated annealing으로 최적화)
 

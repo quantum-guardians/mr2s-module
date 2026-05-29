@@ -1,3 +1,4 @@
+from mr2s_module.qubo.qa_qubo_solver import QAQuboSolver
 from mr2s_module.qubo.sa_qubo_solver import SAQuboSolver
 from mr2s_module.qubo.flow_poly_generator import FlowPolyGenerator
 from mr2s_module.qubo.n_hop_poly_generator import NHop, NHopPolyGenerator, SmallWorldSpec
@@ -5,6 +6,7 @@ from mr2s_module.qubo.n_hop_poly_generator import NHop, NHopPolyGenerator, Small
 __all__ = [
   "FlowPolyGenerator",
   "NHopPolyGenerator",
+  "QAQuboSolver",
   "SAQuboSolver",
   "NHop",
   "SmallWorldSpec",

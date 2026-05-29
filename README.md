@@ -104,6 +104,7 @@ Important separation:
 ### Solvers
 
 - `SAQuboSolver`
+- `QAQuboSolver` (D-Wave quantum annealer backend; requires D-Wave API credentials — set `DWAVE_API_TOKEN` or configure `~/.config/dwave/dwave.conf`)
 - `QuboMR2SSolver`
 - `SAMr2sSolver` (direct simulated annealing on edge orientations)
 
