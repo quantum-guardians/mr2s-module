@@ -34,10 +34,9 @@ from mr2s_module import (
     NHop,
     NHopPolyGenerator,
     QuboMR2SSolver,
-    SAQuboSolver,
+    QuboSolver,
     SmallWorldSpec,
 )
-from mr2s_module.domain import Solution
 from tests.util.graph_fixtures import (
     delaunay_graph,
     domain_graph_to_nx_graph,
@@ -67,33 +66,17 @@ def _thinned_planar_biconnected(n: int, seed: int, keep_ratio: float) -> Graph:
     return nx_graph_to_domain_graph(g)
 
 
-class _MultiReadSAQuboSolver(SAQuboSolver):
-    """`min(samples, key=evaluator)` 안에서 evaluator 가 not-strongly-connected
-    샘플에 대해 AssertionError 를 던지면 전체가 깨진다. 즉, num_reads 가 클수록
-    나쁜 샘플이 한 개라도 끼어들 확률이 올라가 single QUBO 의 약점이 드러난다."""
-
-    def __init__(self, ranker, num_reads: int):
-        super().__init__(ranker)
-        self.num_reads = num_reads
-
-    def run(self, qubo, graph):
-        sample_set = self.sampler.sample(qubo, num_reads=self.num_reads)
-        return Solution(
-            edges=self._select_best_sample(sample_set, list(graph.edges.values())),
-            graph=graph,
-            sample_set=sample_set,
-            score=None,
-        )
-
-
 def _build_solver(use_face_cycle: bool, num_reads: int = 10) -> QuboMR2SSolver:
+    # num_reads 가 클수록 `min(samples, key=evaluator)` 안에서 evaluator 가
+    # not-strongly-connected 샘플에 대해 AssertionError 를 던질 확률이 올라가
+    # single QUBO 의 약점이 드러난다.
     n_hop_gen = NHopPolyGenerator()
     n_hop_gen.small_world_spec = SmallWorldSpec(n_hops=[NHop(n=2, weight=1)])
     evaluator = Evaluator()
     ranker = ApspSumRanker()
     return QuboMR2SSolver(
         edge_orienter=FaceClusterPartition(target_k=8) if use_face_cycle else None,
-        qubo_solver=_MultiReadSAQuboSolver(ranker=ranker, num_reads=num_reads),
+        qubo_solver=QuboSolver.create_sa_solver(ranker=ranker, num_reads=num_reads),
         evaluator=evaluator,
         poly_generators=[FlowPolyGenerator(), n_hop_gen],
     )

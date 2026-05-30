@@ -12,8 +12,8 @@ from mr2s_module import (
   NHop,
   NHopPolyGenerator,
   QuboMR2SSolver,
+  QuboSolver,
   SAMR2SSolver,
-  SAQuboSolver,
   SmallWorldSpec,
   SnowballFaceClusterer,
 )
@@ -34,6 +34,6 @@ def test_top_level_exports_support_component_composition() -> None:
     assert NHopPolyGenerator is not None
     assert NHop is not None
     assert SmallWorldSpec is not None
-    assert SAQuboSolver is not None
+    assert QuboSolver is not None
     assert SAMR2SSolver is not None
     assert SnowballFaceClusterer is not None

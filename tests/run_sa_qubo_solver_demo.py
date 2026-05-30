@@ -20,7 +20,7 @@ from mr2s_module import (
   Graph,
   NHop,
   NHopPolyGenerator,
-  SAQuboSolver,
+  QuboSolver,
   SmallWorldSpec,
 )
 from mr2s_module.domain import Solution
@@ -66,21 +66,6 @@ def thin_planar_graph(
     Edge(min(u, v), max(u, v), weight, False)
     for u, v in nx_graph.edges()
   ])
-
-
-class ConfiguredSAQuboSolver(SAQuboSolver):
-  def __init__(self, ranker, num_reads: int):
-    super().__init__(ranker)
-    self.num_reads = num_reads
-
-  def run(self, qubo, graph: Graph) -> Solution:
-    sample_set = self.sampler.sample(qubo, num_reads=self.num_reads)
-    return Solution(
-      edges=self._select_best_sample(sample_set, list(graph.edges.values())),
-      sample_set=sample_set,
-      graph=graph,
-      score=None,
-    )
 
 
 def build_polynomial(graph: Graph):
@@ -160,7 +145,7 @@ def main() -> None:
 
   polynomial = build_polynomial(graph)
   bqm = map_binary_poly_to_bqm(polynomial)
-  ranking_solver = ConfiguredSAQuboSolver(
+  ranking_solver = QuboSolver.create_sa_solver(
     ranker=ApspSumRanker(),
     num_reads=args.num_reads,
   )
