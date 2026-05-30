@@ -79,7 +79,7 @@ graph = Graph(edges=[
 
 1. `Graph`를 생성하거나 전처리합니다.
 2. 하나 이상의 polynomial generator로 QUBO 항을 만듭니다.
-3. `SAQuboSolver`로 QUBO를 풉니다.
+3. `QuboSolver`로 QUBO를 풉니다.
 4. `ApspSumRanker`로 후보 샘플 중 가장 좋은 해를 고릅니다.
 5. `Evaluator`로 최종 `Solution`을 평가합니다.
 
@@ -103,8 +103,9 @@ graph = Graph(edges=[
 
 ### Solver
 
-- `SAQuboSolver`
-- `QAQuboSolver` (D-Wave 양자 어닐러 백엔드; D-Wave API 자격증명 필요 — `DWAVE_API_TOKEN` 환경변수 설정 또는 `~/.config/dwave/dwave.conf` 구성)
+- `QuboSolver` (통합 QUBO 솔버; 팩토리 메서드로 백엔드 선택)
+  - `QuboSolver.create_sa_solver(ranker=...)` — 시뮬레이티드 어닐링 백엔드 (로컬, 자격증명 불필요)
+  - `QuboSolver.create_qa_solver(ranker=...)` — D-Wave 양자 어닐러 백엔드; D-Wave API 자격증명 필요 — `DWAVE_API_TOKEN` 환경변수 설정 또는 `~/.config/dwave/dwave.conf` 구성
 - `QuboMR2SSolver`
 - `SAMr2sSolver` (간선 방향 자체를 직접 simulated annealing으로 최적화)
 
@@ -125,7 +126,7 @@ from mr2s_module import (
     NHop,
     NHopPolyGenerator,
     QuboMR2SSolver,
-    SAQuboSolver,
+    QuboSolver,
     SmallWorldSpec,
 )
 
@@ -142,7 +143,7 @@ n_hop_generator.small_world_spec = SmallWorldSpec(
 
 solver = QuboMR2SSolver(
     edge_orienter=None,
-    qubo_solver=SAQuboSolver(ranker=ApspSumRanker()),
+    qubo_solver=QuboSolver.create_sa_solver(ranker=ApspSumRanker()),
     evaluator=Evaluator(),
     poly_generators={FlowPolyGenerator(), n_hop_generator},
 )
@@ -164,7 +165,7 @@ print(solution.score)
 - Delaunay triangulation 기반 평면 그래프 생성
 - biconnected 성질을 유지하면서 일부 edge 제거
 - `FaceClusterPartition` 적용 여부 선택
-- `SAQuboSolver` 실행
+- `QuboSolver` (시뮬레이티드 어닐링 백엔드) 실행
 - 선택된 방향과 최종 점수 출력
 
 예시:

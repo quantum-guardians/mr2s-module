@@ -13,7 +13,7 @@ from mr2s_module.qubo import (
   FlowPolyGenerator,
   NHop,
   NHopPolyGenerator,
-  SAQuboSolver,
+  QuboSolver,
   SmallWorldSpec,
 )
 from mr2s_module.util import add_polys
@@ -25,7 +25,7 @@ class QuboMR2SSolver:
   def __init__(
       self,
       edge_orienter: EdgeOrientationProtocol | None = None,
-      qubo_solver: QuboSolverProtocol = SAQuboSolver(ranker=ApspSumRanker()),
+      qubo_solver: QuboSolverProtocol = QuboSolver.create_sa_solver(ranker=ApspSumRanker()),
       evaluator: EvaluatorProtocol = Evaluator(),
       poly_generators: list[PolyGeneratorProtocol] | set[PolyGeneratorProtocol] | None = None,
   ) -> None:

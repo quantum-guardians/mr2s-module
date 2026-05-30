@@ -79,7 +79,7 @@ The current flow is:
 
 1. build or preprocess a `Graph`
 2. generate QUBO terms with one or more polynomial generators
-3. solve the QUBO with `SAQuboSolver`
+3. solve the QUBO with `QuboSolver`
 4. rank candidate samples with `ApspSumRanker`
 5. evaluate the selected `Solution` with `Evaluator`
 
@@ -103,8 +103,9 @@ Important separation:
 
 ### Solvers
 
-- `SAQuboSolver`
-- `QAQuboSolver` (D-Wave quantum annealer backend; requires D-Wave API credentials — set `DWAVE_API_TOKEN` or configure `~/.config/dwave/dwave.conf`)
+- `QuboSolver` (unified QUBO solver; pick a backend via factory methods)
+  - `QuboSolver.create_sa_solver(ranker=...)` — simulated annealing backend (local, no credentials)
+  - `QuboSolver.create_qa_solver(ranker=...)` — D-Wave quantum annealer backend; requires D-Wave API credentials — set `DWAVE_API_TOKEN` or configure `~/.config/dwave/dwave.conf`
 - `QuboMR2SSolver`
 - `SAMr2sSolver` (direct simulated annealing on edge orientations)
 
@@ -125,7 +126,7 @@ from mr2s_module import (
     NHop,
     NHopPolyGenerator,
     QuboMR2SSolver,
-    SAQuboSolver,
+    QuboSolver,
     SmallWorldSpec,
 )
 
@@ -142,7 +143,7 @@ n_hop_generator.small_world_spec = SmallWorldSpec(
 
 solver = QuboMR2SSolver(
     edge_orienter=None,
-    qubo_solver=SAQuboSolver(ranker=ApspSumRanker()),
+    qubo_solver=QuboSolver.create_sa_solver(ranker=ApspSumRanker()),
     evaluator=Evaluator(),
     poly_generators={FlowPolyGenerator(), n_hop_generator},
 )
@@ -164,7 +165,7 @@ It can:
 - generate a planar graph with Delaunay triangulation
 - remove a percentage of edges while keeping the graph biconnected
 - optionally apply `FaceClusterPartition`
-- run `SAQuboSolver`
+- run `QuboSolver` (simulated annealing backend)
 - print the selected orientation and final score
 
 Example:

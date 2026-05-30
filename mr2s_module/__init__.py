@@ -34,8 +34,7 @@ from mr2s_module.qubo import (
     FlowPolyGenerator,
     NHop,
     NHopPolyGenerator,
-    QAQuboSolver,
-    SAQuboSolver,
+    QuboSolver,
     SmallWorldSpec,
 )
 from mr2s_module.solver import MR2SSolver, QuboMR2SSolver
@@ -70,11 +69,10 @@ __all__ = [
     "NHop",
     "NHopPolyGenerator",
     "PolyGeneratorProtocol",
-    "QAQuboSolver",
     "QuboMR2SSolver",
     "QuboMatrix",
+    "QuboSolver",
     "QuboSolverProtocol",
-    "SAQuboSolver",
     "SAMR2SSolver",
     "Score",
     "SmallWorldSpec",

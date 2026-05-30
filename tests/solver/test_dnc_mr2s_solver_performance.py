@@ -12,12 +12,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from mr2s_module.cycle import BalancedFaceGraphClusterer, FaceClusterPartition
-from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, Solution
+from mr2s_module.domain import Edge, EmbeddingEstimate, Graph
 from mr2s_module.evaluator import ApspSumRanker
 from mr2s_module.qubo import (
-  SAQuboSolver,
+  QuboSolver,
 )
-from mr2s_module.qubo.solution_processing import select_best_sample
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver
 from mr2s_module.solver.partition import (
   DegeneracyPruningFaceCyclePartitionStrategy,
@@ -55,21 +54,6 @@ def _fake_embedding_estimate(bqm) -> EmbeddingEstimate:
     max_chain_length=1,
     embedding={variable: [variable] for variable in variables},
   )
-
-
-class ConfiguredSAQuboSolver(SAQuboSolver):
-  def __init__(self, num_reads: int) -> None:
-    super().__init__(ranker=ApspSumRanker())
-    self.num_reads = num_reads
-
-  def run(self, qubo, graph: Graph) -> Solution:
-    sample_set = self.sampler.sample(qubo, num_reads=self.num_reads)
-    return Solution(
-      edges=select_best_sample(sample_set, list(graph.edges.values()), self.ranker),
-      graph=graph,
-      sample_set=sample_set,
-      score=None,
-    )
 
 
 def build_grid_planar_graph(rows: int, cols: int, weight: int = 1) -> Graph:
@@ -176,7 +160,7 @@ def build_degeneracy_pruning_dnc_solver(num_reads: int = 20) -> DnCMr2sSolver:
 
 def build_qubo_solver(num_reads: int = 20) -> QuboMR2SSolver:
   return QuboMR2SSolver(
-    qubo_solver=ConfiguredSAQuboSolver(num_reads=num_reads),
+    qubo_solver=QuboSolver.create_sa_solver(ranker=ApspSumRanker(), num_reads=num_reads),
   )
 
 

@@ -1,6 +1,6 @@
 """QUBO 솔버 공통 해(sample) 후처리 유틸리티.
 
-어닐러(`SAQuboSolver`, `QAQuboSolver`)가 반환한 `SampleSet`을 실제 간선
+어닐러(`QuboSolver`)가 반환한 `SampleSet`을 실제 간선
 방향(directed edge) 집합으로 변환하고, 여러 sample 중 ranker 기준 최적해를
 고르는 로직을 모아둔다. 솔버 간 코드 중복을 피하기 위해 모듈 레벨 free
 function 으로 제공한다.
