@@ -1,5 +1,5 @@
 from dimod import SimulatedAnnealingSampler
-from dwave.system import DWaveSampler, EmbeddingComposite
+from dwave.system import DWaveSampler, EmbeddingComposite, FixedEmbeddingComposite
 
 from mr2s_module.domain import Graph, Solution
 from mr2s_module.protocols import QuboMatrix, SolutionRankerProtocol
@@ -48,10 +48,33 @@ class QuboSolver:
     return QuboSolver(ranker=ranker, sampler=sampler, num_reads=num_reads)
 
   def run(self, qubo: QuboMatrix, graph: Graph) -> Solution:
+    sample_set = self._sample(self.sampler, qubo)
+    return Solution(
+      edges=select_best_sample(sample_set, list(graph.edges.values()), self.ranker),
+      sample_set=sample_set,
+      graph=graph,
+      score=None,
+    )
+
+  def _sample(self, sampler, qubo: QuboMatrix):
     if self.num_reads is None:
-      sample_set = self.sampler.sample(qubo)
-    else:
-      sample_set = self.sampler.sample(qubo, num_reads=self.num_reads)
+      return sampler.sample(qubo)
+    return sampler.sample(qubo, num_reads=self.num_reads)
+
+  def run_with_embedding(
+      self,
+      qubo: QuboMatrix,
+      graph: Graph,
+      embedding: dict[object, list[object]],
+  ) -> Solution:
+    child_sampler = getattr(self.sampler, "child", None)
+    if child_sampler is None:
+      raise NotImplementedError(
+        "The configured QUBO sampler does not support fixed embeddings"
+      )
+
+    fixed_sampler = FixedEmbeddingComposite(child_sampler, embedding=embedding)
+    sample_set = self._sample(fixed_sampler, qubo)
     return Solution(
       edges=select_best_sample(sample_set, list(graph.edges.values()), self.ranker),
       sample_set=sample_set,

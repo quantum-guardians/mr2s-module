@@ -50,6 +50,13 @@ class DnCGraphPartitionStrategyProtocol(Protocol):
 class QuboSolverProtocol(Protocol):
     def run(self, qubo: QuboMatrix, graph: Graph) -> Solution: ...
 
+    def run_with_embedding(
+        self,
+        qubo: QuboMatrix,
+        graph: Graph,
+        embedding: dict[object, list[object]],
+    ) -> Solution: ...
+
 
 class EvaluatorProtocol(Protocol):
     def run(self, solution: Solution) -> Score: ...

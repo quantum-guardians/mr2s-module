@@ -130,6 +130,25 @@ class StubRunningMr2sSolver:
     )
 
 
+class StubEmbeddingAwareRunningMr2sSolver(StubRunningMr2sSolver):
+  def __init__(self) -> None:
+    super().__init__()
+    self.run_with_embedding_calls: list[tuple[Graph, EmbeddingEstimate]] = []
+
+  def run_with_embedding(
+      self,
+      graph: Graph,
+      embedding_estimate: EmbeddingEstimate,
+  ) -> Solution:
+    self.run_with_embedding_calls.append((graph, embedding_estimate))
+    return Solution(
+      edges={(edge.vertices[1], edge.vertices[0]) for edge in graph.edges.values()},
+      graph=graph,
+      sample_set=empty_binary_sample_set(),
+      score=Score(apsp_sum=1.0, strong_connect_rate=1.0, flow_score=0.0),
+    )
+
+
 def _fake_embedding_estimate(bqm_or_graph) -> EmbeddingEstimate:
   if hasattr(bqm_or_graph, "variables"):
     variables = sorted(bqm_or_graph.variables)
@@ -438,6 +457,83 @@ def test_solve_subgraphs_skips_qubo_solver_for_directed_only_graph() -> None:
   assert solutions[0].edges == {(1, 2), (2, 3)}
   assert solutions[0].graph is sub_graph
   assert solutions[0].score is not None
+
+
+def test_solve_subgraphs_reuses_matching_physical_embedding() -> None:
+  graph_a = Graph(edges=[Edge(1, 2, 1, False)])
+  graph_b = Graph(edges=[Edge(3, 4, 1, False)])
+  estimate_a = EmbeddingEstimate(
+    num_logical_variables=2,
+    num_quadratic_couplings=1,
+    num_physical_qubits=2,
+    max_chain_length=1,
+    embedding={1: ["a"], 2: ["b"]},
+  )
+  estimate_b = EmbeddingEstimate(
+    num_logical_variables=2,
+    num_quadratic_couplings=1,
+    num_physical_qubits=2,
+    max_chain_length=1,
+    embedding={3: ["c"], 4: ["d"]},
+  )
+  mr2s_solver = StubEmbeddingAwareRunningMr2sSolver()
+  solver = DnCMr2sSolver(
+    mr2s_solver=mr2s_solver,
+    subgraph_processes=1,
+  )
+
+  solutions = solver._solve_subgraphs([graph_a, graph_b], [estimate_a, estimate_b])
+
+  assert mr2s_solver.run_graphs == []
+  assert mr2s_solver.run_with_embedding_calls == [
+    (graph_a, estimate_a),
+    (graph_b, estimate_b),
+  ]
+  assert [solution.edges for solution in solutions] == [{(2, 1)}, {(4, 3)}]
+
+
+def test_solve_subgraphs_falls_back_for_placeholder_embedding() -> None:
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+  placeholder_estimate = EmbeddingEstimate(
+    num_logical_variables=2,
+    num_quadratic_couplings=1,
+    num_physical_qubits=2,
+    max_chain_length=1,
+    embedding={1: [], 2: []},
+  )
+  mr2s_solver = StubEmbeddingAwareRunningMr2sSolver()
+  solver = DnCMr2sSolver(
+    mr2s_solver=mr2s_solver,
+    subgraph_processes=1,
+  )
+
+  solutions = solver._solve_subgraphs([graph], [placeholder_estimate])
+
+  assert mr2s_solver.run_with_embedding_calls == []
+  assert mr2s_solver.run_graphs == [graph]
+  assert solutions[0].edges == {(1, 2)}
+
+
+def test_solve_subgraphs_keeps_directed_only_skip_before_embedding_reuse() -> None:
+  graph = Graph(edges=[Edge(1, 2, 1, True)])
+  estimate = EmbeddingEstimate(
+    num_logical_variables=2,
+    num_quadratic_couplings=1,
+    num_physical_qubits=2,
+    max_chain_length=1,
+    embedding={1: ["a"], 2: ["b"]},
+  )
+  mr2s_solver = StubEmbeddingAwareRunningMr2sSolver()
+  solver = DnCMr2sSolver(
+    mr2s_solver=mr2s_solver,
+    subgraph_processes=1,
+  )
+
+  solutions = solver._solve_subgraphs([graph], [estimate])
+
+  assert mr2s_solver.run_with_embedding_calls == []
+  assert mr2s_solver.run_graphs == []
+  assert solutions[0].edges == {(1, 2)}
 
 
 def test_divide_graph_keeps_graph_when_embedding_estimate_succeeds(
