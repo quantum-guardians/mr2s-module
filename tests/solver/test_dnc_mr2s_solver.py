@@ -1,6 +1,5 @@
 import pytest
 import networkx as nx
-import os
 
 from mr2s_module.domain import (
   Edge,
@@ -316,6 +315,14 @@ def test_subgraph_processes_must_be_positive() -> None:
     DnCMr2sSolver(mr2s_solver=StubMr2sSolver(), subgraph_processes=0)
 
 
+def test_subgraph_start_method_must_be_spawn_or_fork() -> None:
+  with pytest.raises(ValueError, match="subgraph_start_method"):
+    DnCMr2sSolver(
+      mr2s_solver=StubMr2sSolver(),
+      subgraph_start_method="forkserver",
+    )
+
+
 def test_resolve_subgraph_processes_uses_auto_cpu_count(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -334,32 +341,26 @@ def test_resolve_subgraph_processes_caps_configured_count() -> None:
   assert solver._resolve_subgraph_processes(2) == 2
 
 
-def test_solve_subgraphs_uses_process_pool_for_multiple_workers(
+def test_solve_subgraphs_uses_process_runner_for_multiple_workers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
   graph_a = Graph(edges=[Edge(1, 2, 1, False)])
   graph_b = Graph(edges=[Edge(3, 4, 1, False)])
   created_workers: list[int | None] = []
-  contexts: list[object] = []
+  start_methods: list[str | None] = []
 
-  class FakeProcessPoolExecutor:
-    def __init__(self, max_workers: int | None = None, mp_context=None) -> None:
+  class FakeProcessRunner:
+    def __init__(self, max_workers: int, start_method=None) -> None:
       created_workers.append(max_workers)
-      contexts.append(mp_context)
-
-    def __enter__(self):
-      return self
-
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
-      return None
+      start_methods.append(start_method)
 
     def map(self, func, iterable):
       return [func(item) for item in iterable]
 
   monkeypatch.setattr(
     dnc_mr2s_solver,
-    "ProcessPoolExecutor",
-    FakeProcessPoolExecutor,
+    "ProcessRunner",
+    FakeProcessRunner,
   )
   solver = DnCMr2sSolver(
     mr2s_solver=StubRunningMr2sSolver(),
@@ -369,42 +370,33 @@ def test_solve_subgraphs_uses_process_pool_for_multiple_workers(
   solutions = solver._solve_subgraphs([graph_a, graph_b])
 
   assert created_workers == [2]
-  if os.name == "nt":
-    assert contexts[0] is not None
-  else:
-    assert contexts == [None]
+  assert start_methods == [None]
   assert [solution.graph for solution in solutions] == [graph_a, graph_b]
 
 
-def test_solve_subgraphs_uses_spawn_context_on_windows(
+def test_solve_subgraphs_passes_configured_start_method_to_process_runner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
   graph_a = Graph(edges=[Edge(1, 2, 1, False)])
   graph_b = Graph(edges=[Edge(3, 4, 1, False)])
   start_methods: list[str] = []
 
-  class FakeProcessPoolExecutor:
-    def __init__(self, max_workers: int | None = None, mp_context=None) -> None:
-      start_methods.append(mp_context.get_start_method())
-
-    def __enter__(self):
-      return self
-
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
-      return None
+  class FakeProcessRunner:
+    def __init__(self, max_workers: int, start_method=None) -> None:
+      start_methods.append(start_method)
 
     def map(self, func, iterable):
       return [func(item) for item in iterable]
 
-  monkeypatch.setattr(dnc_mr2s_solver.os, "name", "nt")
   monkeypatch.setattr(
     dnc_mr2s_solver,
-    "ProcessPoolExecutor",
-    FakeProcessPoolExecutor,
+    "ProcessRunner",
+    FakeProcessRunner,
   )
   solver = DnCMr2sSolver(
     mr2s_solver=StubRunningMr2sSolver(),
     subgraph_processes=2,
+    subgraph_start_method="spawn",
   )
 
   solver._solve_subgraphs([graph_a, graph_b])
@@ -412,21 +404,21 @@ def test_solve_subgraphs_uses_spawn_context_on_windows(
   assert start_methods == ["spawn"]
 
 
-def test_solve_subgraphs_falls_back_when_process_pool_is_unavailable(
+def test_solve_subgraphs_falls_back_when_process_runner_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
   graph_a = Graph(edges=[Edge(1, 2, 1, False)])
   graph_b = Graph(edges=[Edge(3, 4, 1, False)])
   mr2s_solver = StubRunningMr2sSolver()
 
-  class UnavailableProcessPoolExecutor:
-    def __init__(self, max_workers: int | None = None, mp_context=None) -> None:
+  class UnavailableProcessRunner:
+    def __init__(self, max_workers: int, start_method=None) -> None:
       raise PermissionError("semaphore unavailable")
 
   monkeypatch.setattr(
     dnc_mr2s_solver,
-    "ProcessPoolExecutor",
-    UnavailableProcessPoolExecutor,
+    "ProcessRunner",
+    UnavailableProcessRunner,
   )
   solver = DnCMr2sSolver(
     mr2s_solver=mr2s_solver,

@@ -1,7 +1,5 @@
 from dataclasses import dataclass, field
-from concurrent.futures import ProcessPoolExecutor
 import logging
-import multiprocessing
 import os
 from time import perf_counter
 from typing import Iterable
@@ -25,6 +23,11 @@ from mr2s_module.protocols import DnCGraphPartitionStrategyProtocol
 from mr2s_module.solver.partition import (
   DegeneracyPruningFaceCyclePartitionStrategy,
   EmbeddingAwareFaceCyclePartitionStrategy,
+)
+from mr2s_module.solver.process_runner import (
+  ProcessRunner,
+  ProcessStartMethod,
+  validate_process_start_method,
 )
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
 from mr2s_module.util import empty_binary_sample_set
@@ -152,6 +155,7 @@ class DnCMr2sSolver:
     )
   )
   subgraph_processes: int | None = None
+  subgraph_start_method: ProcessStartMethod | None = None
   target_graph: nx.Graph = field(default_factory=lambda: dnx.pegasus_graph(16))
   graph_partition_strategy: DnCGraphPartitionStrategyProtocol | None = None
   _owns_graph_partition_strategy: bool = field(default=False, init=False)
@@ -163,6 +167,11 @@ class DnCMr2sSolver:
   def __post_init__(self) -> None:
     if self.subgraph_processes is not None and self.subgraph_processes < 1:
       raise ValueError("subgraph_processes must be None or at least 1")
+    if self.subgraph_start_method is not None:
+      try:
+        validate_process_start_method(self.subgraph_start_method)
+      except ValueError as exc:
+        raise ValueError(f"subgraph_{exc}") from exc
     if self.graph_partition_strategy is None:
       self._owns_graph_partition_strategy = True
       self.graph_partition_strategy = DegeneracyPruningFaceCyclePartitionStrategy(
@@ -447,28 +456,23 @@ class DnCMr2sSolver:
       )
       return solutions
 
-    mp_context = (
-      multiprocessing.get_context("spawn")
-      if os.name == "nt"
-      else None
-    )
     try:
-      with ProcessPoolExecutor(
-          max_workers=process_count,
-          mp_context=mp_context,
-      ) as executor:
-        solutions = list(executor.map(
-          _run_subgraph_solution,
-          [
-            (self.mr2s_solver, sub_graph, embedding_estimate, empty_sample_set)
-            for sub_graph, embedding_estimate in zip(sub_graphs, estimates)
-          ],
-        ))
-        logger.info(
-          "DnC solve subgraphs finished parallel elapsed_ms=%.3f",
-          _elapsed_ms(started_at),
-        )
-        return solutions
+      runner = ProcessRunner(
+        max_workers=process_count,
+        start_method=self.subgraph_start_method,
+      )
+      solutions = runner.map(
+        _run_subgraph_solution,
+        [
+          (self.mr2s_solver, sub_graph, embedding_estimate, empty_sample_set)
+          for sub_graph, embedding_estimate in zip(sub_graphs, estimates)
+        ],
+      )
+      logger.info(
+        "DnC solve subgraphs finished parallel elapsed_ms=%.3f",
+        _elapsed_ms(started_at),
+      )
+      return solutions
     except (NotImplementedError, OSError, PermissionError):
       logger.info(
         "DnC solve subgraphs falling back to sequential processes=%d",
