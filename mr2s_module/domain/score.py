@@ -15,3 +15,9 @@ class EmbeddingEstimate:
   num_physical_qubits: int
   max_chain_length: int
   embedding: dict[object, list[object]] = field(default_factory=dict)
+
+  @property
+  def has_physical_embedding(self) -> bool:
+    if self.num_logical_variables == 0:
+      return True
+    return bool(self.embedding) and all(self.embedding.values())

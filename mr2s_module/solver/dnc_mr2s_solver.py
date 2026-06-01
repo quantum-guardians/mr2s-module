@@ -45,15 +45,41 @@ def _graph_log_context(graph: Graph) -> dict[str, int]:
   }
 
 
-def _run_subgraph_solution(args: tuple[QuboMR2SSolver, Graph, SampleSet]) -> Solution:
-  mr2s_solver, sub_graph, empty_sample_set = args
-  return _solve_subgraph(mr2s_solver, sub_graph, empty_sample_set)
+def _run_subgraph_solution(
+    args: tuple[QuboMR2SSolver, Graph, EmbeddingEstimate | None, SampleSet],
+) -> Solution:
+  mr2s_solver, sub_graph, embedding_estimate, empty_sample_set = args
+  return _solve_subgraph(
+    mr2s_solver,
+    sub_graph,
+    empty_sample_set,
+    embedding_estimate,
+  )
+
+
+def _solve_with_reused_embedding(
+    mr2s_solver: QuboMR2SSolver,
+    graph: Graph,
+    embedding_estimate: EmbeddingEstimate | None,
+) -> tuple[Solution, bool] | None:
+  if embedding_estimate is None or not embedding_estimate.has_physical_embedding:
+    return None
+
+  run_with_embedding = getattr(mr2s_solver, "run_with_embedding", None)
+  if run_with_embedding is None:
+    return None
+
+  try:
+    return run_with_embedding(graph, embedding_estimate), True
+  except (NotImplementedError, ValueError):
+    return None
 
 
 def _solve_subgraph(
     mr2s_solver: QuboMR2SSolver,
     sub_graph: Graph,
     empty_sample_set: SampleSet,
+    embedding_estimate: EmbeddingEstimate | None = None,
 ) -> Solution:
   started_at = perf_counter()
   graph_context = _graph_log_context(sub_graph)
@@ -75,6 +101,27 @@ def _solve_subgraph(
       _elapsed_ms(started_at),
     )
     return solution
+
+  reused_solution = _solve_with_reused_embedding(
+    mr2s_solver,
+    sub_graph,
+    embedding_estimate,
+  )
+  if reused_solution is not None:
+    solution, _ = reused_solution
+    logger.info(
+      "DnC solve subgraph reused embedding elapsed_ms=%.3f solution_edges=%d",
+      _elapsed_ms(started_at),
+      len(solution.edges),
+    )
+    return solution
+
+  if embedding_estimate is not None:
+    logger.info(
+      "DnC solve subgraph falling back without embedding reuse "
+      "has_physical_embedding=%s",
+      embedding_estimate.has_physical_embedding,
+    )
 
   solution = mr2s_solver.run(sub_graph)
   logger.info(
@@ -367,8 +414,16 @@ class DnCMr2sSolver:
     ) or 1
     return max(1, min(cpu_count, subgraph_count))
 
-  def _solve_subgraphs(self, sub_graphs: list[Graph]) -> list[Solution]:
+  def _solve_subgraphs(
+      self,
+      sub_graphs: list[Graph],
+      embedding_estimates: list[EmbeddingEstimate] | None = None,
+  ) -> list[Solution]:
     started_at = perf_counter()
+    if embedding_estimates is not None and len(embedding_estimates) != len(sub_graphs):
+      raise ValueError("embedding_estimates must align with sub_graphs")
+
+    estimates = embedding_estimates or [None] * len(sub_graphs)
     process_count = self._resolve_subgraph_processes(len(sub_graphs))
     empty_sample_set = empty_binary_sample_set()
     logger.info(
@@ -378,8 +433,13 @@ class DnCMr2sSolver:
     )
     if process_count == 1:
       solutions = [
-        _solve_subgraph(self.mr2s_solver, sub_graph, empty_sample_set)
-        for sub_graph in sub_graphs
+        _solve_subgraph(
+          self.mr2s_solver,
+          sub_graph,
+          empty_sample_set,
+          embedding_estimate,
+        )
+        for sub_graph, embedding_estimate in zip(sub_graphs, estimates)
       ]
       logger.info(
         "DnC solve subgraphs finished sequential elapsed_ms=%.3f",
@@ -400,8 +460,8 @@ class DnCMr2sSolver:
         solutions = list(executor.map(
           _run_subgraph_solution,
           [
-            (self.mr2s_solver, sub_graph, empty_sample_set)
-            for sub_graph in sub_graphs
+            (self.mr2s_solver, sub_graph, embedding_estimate, empty_sample_set)
+            for sub_graph, embedding_estimate in zip(sub_graphs, estimates)
           ],
         ))
         logger.info(
@@ -415,8 +475,13 @@ class DnCMr2sSolver:
         process_count,
       )
       solutions = [
-        _solve_subgraph(self.mr2s_solver, sub_graph, empty_sample_set)
-        for sub_graph in sub_graphs
+        _solve_subgraph(
+          self.mr2s_solver,
+          sub_graph,
+          empty_sample_set,
+          embedding_estimate,
+        )
+        for sub_graph, embedding_estimate in zip(sub_graphs, estimates)
       ]
       logger.info(
         "DnC solve subgraphs finished fallback elapsed_ms=%.3f",
@@ -437,8 +502,18 @@ class DnCMr2sSolver:
     sub_graphs = partition.sub_graphs
     if len(sub_graphs) == 1 and sub_graphs[0] is graph:
       direct_started_at = perf_counter()
+      reused_solution = _solve_with_reused_embedding(
+        self.mr2s_solver,
+        graph,
+        partition.embedding_estimates[0] if partition.embedding_estimates else None,
+      )
+      direct_solution = (
+        reused_solution[0]
+        if reused_solution is not None
+        else self.mr2s_solver.run(graph)
+      )
       solution = self._attach_partition_metadata(
-        self.mr2s_solver.run(graph),
+        direct_solution,
         partition,
       )
       logger.info(
@@ -449,7 +524,7 @@ class DnCMr2sSolver:
       return solution
 
     solve_started_at = perf_counter()
-    solutions = self._solve_subgraphs(sub_graphs)
+    solutions = self._solve_subgraphs(sub_graphs, partition.embedding_estimates)
     logger.info(
       "DnC solver subgraph solve phase finished elapsed_ms=%.3f",
       _elapsed_ms(solve_started_at),

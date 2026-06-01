@@ -71,3 +71,21 @@ class QuboMR2SSolver:
     solution.score = score
 
     return solution
+
+  def run_with_embedding(
+      self,
+      graph: Graph,
+      embedding_estimate: EmbeddingEstimate,
+  ) -> Solution:
+    if not embedding_estimate.has_physical_embedding:
+      raise ValueError("embedding_estimate does not contain a physical embedding")
+
+    bqm = self.build_bqm(graph)
+    run_with_embedding = getattr(self.qubo_solver, "run_with_embedding", None)
+    if run_with_embedding is None:
+      raise NotImplementedError("QUBO solver does not support embedding reuse")
+
+    solution = run_with_embedding(bqm, graph, embedding_estimate.embedding)
+    score = self.evaluator.run(solution)
+    solution.score = score
+    return solution
