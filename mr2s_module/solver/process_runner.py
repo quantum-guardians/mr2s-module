@@ -18,7 +18,7 @@ class ProcessExecutionError(RuntimeError):
 
 def validate_process_start_method(start_method: str) -> None:
   if start_method not in {"spawn", "fork"}:
-    raise ValueError("start_method must be 'spawn', 'fork', or None")
+    raise ValueError("start_method must be 'spawn' or 'fork'")
   if start_method not in multiprocessing.get_all_start_methods():
     raise ValueError(
       f"start_method {start_method!r} is not supported on this platform"
