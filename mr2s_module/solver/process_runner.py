@@ -82,8 +82,8 @@ class ProcessRunner:
         process.start()
         active[index] = process
 
-    start_available_processes()
     try:
+      start_available_processes()
       while completed < len(item_list):
         try:
           index, succeeded, payload = result_queue.get(timeout=0.1)
