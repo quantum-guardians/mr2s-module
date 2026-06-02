@@ -51,6 +51,17 @@ class _FakeProcess:
     self.terminated = True
 
 
+class _FakeQueue:
+  def __init__(self) -> None:
+    self.calls: list[str] = []
+
+  def close(self) -> None:
+    self.calls.append("close")
+
+  def join_thread(self) -> None:
+    self.calls.append("join_thread")
+
+
 def test_validate_process_start_method_rejects_unknown_method() -> None:
   with pytest.raises(ValueError, match="start_method"):
     validate_process_start_method("forkserver")
@@ -156,6 +167,14 @@ def test_process_runner_reports_child_exception_type() -> None:
       _raise_runtime_error,
       [1],
     )
+
+
+def test_close_result_queue_joins_feeder_thread() -> None:
+  result_queue = _FakeQueue()
+
+  process_runner._close_result_queue(result_queue)
+
+  assert result_queue.calls == ["close", "join_thread"]
 
 
 def test_terminate_process_tree_kills_process_group_on_posix(

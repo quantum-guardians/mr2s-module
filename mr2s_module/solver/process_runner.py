@@ -65,6 +65,11 @@ def _run_process_task(func, index: int, item, result_queue) -> None:
     result_queue.put((index, False, f"{exc.__class__.__name__}: {exc!s}"))
 
 
+def _close_result_queue(result_queue) -> None:
+  result_queue.close()
+  result_queue.join_thread()
+
+
 @dataclass(frozen=True)
 class ProcessRunner:
   max_workers: int
@@ -134,6 +139,6 @@ class ProcessRunner:
       for process in active.values():
         _terminate_process_tree(process)
         process.join()
-      result_queue.close()
+      _close_result_queue(result_queue)
 
     return [cast(_R, result) for result in results]
