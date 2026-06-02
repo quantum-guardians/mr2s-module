@@ -13,3 +13,24 @@ def test_missing_credentials_raises_runtime_error(monkeypatch):
 
   with pytest.raises(RuntimeError, match="credentials"):
     QuboSolver.create_qa_solver(ranker=ApspSumRanker())
+
+
+def test_create_qa_solver_uses_separate_samplers_for_embedding_modes(monkeypatch):
+  created_samplers = []
+
+  class FakeDWaveSampler:
+    def __init__(self):
+      created_samplers.append(self)
+
+  class FakeEmbeddingComposite:
+    def __init__(self, child):
+      self.child = child
+
+  monkeypatch.setattr(qubo_solver_module, "DWaveSampler", FakeDWaveSampler)
+  monkeypatch.setattr(qubo_solver_module, "EmbeddingComposite", FakeEmbeddingComposite)
+
+  solver = QuboSolver.create_qa_solver(ranker=ApspSumRanker())
+
+  assert len(created_samplers) == 2
+  assert solver.sampler.child is created_samplers[0]
+  assert solver.fixed_embedding_child_sampler is created_samplers[1]
