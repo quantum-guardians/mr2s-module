@@ -72,9 +72,8 @@ class QuboSolver:
   ) -> "QuboSolver":
     """D-Wave 양자 어닐러 백엔드 솔버 (D-Wave API 자격증명 필요)."""
     try:
-      embedding_child_sampler = DWaveSampler()
-      fixed_embedding_child_sampler = DWaveSampler()
-      sampler = EmbeddingComposite(embedding_child_sampler)
+      child_sampler = DWaveSampler()
+      sampler = EmbeddingComposite(child_sampler)
     except Exception as e:
       raise RuntimeError(
         "D-Wave API credentials not found. "
@@ -85,7 +84,7 @@ class QuboSolver:
       ranker=ranker,
       sampler=sampler,
       num_reads=num_reads,
-      fixed_embedding_child_sampler=fixed_embedding_child_sampler,
+      fixed_embedding_child_sampler=child_sampler,
     )
 
   def run(self, qubo: QuboMatrix, graph: Graph) -> Solution:
