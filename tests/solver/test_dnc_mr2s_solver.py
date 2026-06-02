@@ -160,6 +160,30 @@ class StubContextFailingMr2sSolver(StubRunningMr2sSolver):
     raise InvalidEmbeddingError("invalid reused embedding")
 
 
+class StubValueErrorEmbeddingAwareRunningMr2sSolver(StubRunningMr2sSolver):
+  def __init__(self) -> None:
+    super().__init__()
+    self.run_with_embedding_calls: list[tuple[Graph, EmbeddingEstimate]] = []
+
+  def run_with_embedding(
+      self,
+      graph: Graph,
+      embedding_estimate: EmbeddingEstimate,
+  ) -> Solution:
+    self.run_with_embedding_calls.append((graph, embedding_estimate))
+    raise ValueError("invalid reused embedding")
+
+
+class StubValueErrorContextRunningMr2sSolver(StubRunningMr2sSolver):
+  def __init__(self) -> None:
+    super().__init__()
+    self.run_with_context_calls: list[QuboSolveContext] = []
+
+  def run_with_context(self, context: QuboSolveContext) -> Solution:
+    self.run_with_context_calls.append(context)
+    raise ValueError("invalid reused context embedding")
+
+
 def _fake_embedding_estimate(bqm_or_graph) -> EmbeddingEstimate:
   if hasattr(bqm_or_graph, "variables"):
     variables = sorted(bqm_or_graph.variables)
@@ -553,6 +577,56 @@ def test_solve_subgraphs_falls_back_when_context_embedding_is_invalid() -> None:
     embedding_estimate=estimate,
   )
   mr2s_solver = StubContextFailingMr2sSolver()
+  solver = DnCMr2sSolver(
+    mr2s_solver=mr2s_solver,
+    subgraph_processes=1,
+  )
+
+  solutions = solver._solve_subgraphs([graph], [estimate], [context])
+
+  assert mr2s_solver.run_with_context_calls == [context]
+  assert mr2s_solver.run_graphs == [graph]
+  assert solutions[0].edges == {(1, 2)}
+
+
+def test_solve_subgraphs_falls_back_when_reused_embedding_raises_value_error() -> None:
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+  estimate = EmbeddingEstimate(
+    num_logical_variables=2,
+    num_quadratic_couplings=1,
+    num_physical_qubits=2,
+    max_chain_length=1,
+    embedding={1: ["a"], 2: ["b"]},
+  )
+  mr2s_solver = StubValueErrorEmbeddingAwareRunningMr2sSolver()
+  solver = DnCMr2sSolver(
+    mr2s_solver=mr2s_solver,
+    subgraph_processes=1,
+  )
+
+  solutions = solver._solve_subgraphs([graph], [estimate])
+
+  assert mr2s_solver.run_with_embedding_calls == [(graph, estimate)]
+  assert mr2s_solver.run_graphs == [graph]
+  assert solutions[0].edges == {(1, 2)}
+
+
+def test_solve_subgraphs_falls_back_when_reused_context_raises_value_error() -> None:
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+  estimate = EmbeddingEstimate(
+    num_logical_variables=2,
+    num_quadratic_couplings=1,
+    num_physical_qubits=2,
+    max_chain_length=1,
+    embedding={1: ["a"], 2: ["b"]},
+  )
+  context = QuboSolveContext(
+    graph=graph,
+    bqm=StubBqm(variables=[1, 2]),
+    target_graph=nx.path_graph(["a", "b"]),
+    embedding_estimate=estimate,
+  )
+  mr2s_solver = StubValueErrorContextRunningMr2sSolver()
   solver = DnCMr2sSolver(
     mr2s_solver=mr2s_solver,
     subgraph_processes=1,

@@ -82,7 +82,7 @@ def _solve_with_reused_embedding(
 
   try:
     return run_with_embedding(graph, embedding_estimate), True
-  except (NotImplementedError, InvalidEmbeddingError):
+  except (NotImplementedError, InvalidEmbeddingError, ValueError):
     return None
 
 
@@ -106,7 +106,7 @@ def _solve_with_reused_context(
 
   try:
     return run_with_context(solve_context), True
-  except (NotImplementedError, InvalidEmbeddingError):
+  except (NotImplementedError, InvalidEmbeddingError, ValueError):
     return None
 
 
