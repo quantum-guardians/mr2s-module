@@ -323,13 +323,10 @@ def test_subgraph_start_method_must_be_spawn_or_fork() -> None:
     )
 
 
-def test_resolve_subgraph_processes_uses_auto_cpu_count(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_resolve_subgraph_processes_defaults_to_one_worker() -> None:
   solver = _embedding_aware_dnc_solver(StubMr2sSolver())
-  monkeypatch.setattr(dnc_mr2s_solver.os, "process_cpu_count", lambda: 8, raising=False)
 
-  assert solver._resolve_subgraph_processes(3) == 3
+  assert solver._resolve_subgraph_processes(3) == 1
 
 
 def test_resolve_subgraph_processes_caps_configured_count() -> None:

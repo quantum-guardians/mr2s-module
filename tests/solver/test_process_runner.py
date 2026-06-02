@@ -33,6 +33,19 @@ def _run_nested_process(value: int) -> int:
   return result
 
 
+class _FakeProcess:
+  pid = 12345
+
+  def __init__(self) -> None:
+    self.terminated = False
+
+  def is_alive(self) -> bool:
+    return True
+
+  def terminate(self) -> None:
+    self.terminated = True
+
+
 def test_validate_process_start_method_rejects_unknown_method() -> None:
   with pytest.raises(ValueError, match="start_method"):
     validate_process_start_method("forkserver")
@@ -130,3 +143,37 @@ def test_process_runner_allows_nested_multiprocessing() -> None:
   )
 
   assert result == [2, 3]
+
+
+def test_terminate_process_tree_kills_process_group_on_posix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  killed_groups: list[tuple[int, int]] = []
+  fake_process = _FakeProcess()
+  monkeypatch.setattr(process_runner.os, "name", "posix")
+  monkeypatch.setattr(
+    process_runner.os,
+    "killpg",
+    lambda pid, sig: killed_groups.append((pid, sig)),
+  )
+
+  process_runner._terminate_process_tree(fake_process)
+
+  assert killed_groups == [(fake_process.pid, process_runner.signal.SIGTERM)]
+  assert not fake_process.terminated
+
+
+def test_terminate_process_tree_falls_back_to_process_terminate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+  fake_process = _FakeProcess()
+  monkeypatch.setattr(process_runner.os, "name", "posix")
+  monkeypatch.setattr(
+    process_runner.os,
+    "killpg",
+    lambda pid, sig: (_ for _ in ()).throw(ProcessLookupError()),
+  )
+
+  process_runner._terminate_process_tree(fake_process)
+
+  assert fake_process.terminated

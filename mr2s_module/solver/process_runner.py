@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import multiprocessing
 import os
 import queue
+import signal
 import sys
 from typing import Callable, Iterable, Literal, TypeVar, cast
 
@@ -32,7 +33,32 @@ def default_process_start_method() -> ProcessStartMethod:
   return "fork"
 
 
+def _prepare_child_process_group() -> None:
+  if os.name == "posix" and hasattr(os, "setsid"):
+    try:
+      os.setsid()
+    except OSError:
+      pass
+
+
+def _terminate_process_tree(process: multiprocessing.Process) -> None:
+  if not process.is_alive():
+    return
+
+  if os.name == "posix":
+    try:
+      os.killpg(process.pid, signal.SIGTERM)
+      return
+    except (AttributeError, ProcessLookupError, PermissionError):
+      pass
+    except OSError:
+      pass
+
+  process.terminate()
+
+
 def _run_process_task(func, index: int, item, result_queue) -> None:
+  _prepare_child_process_group()
   try:
     result_queue.put((index, True, func(item)))
   except BaseException as exc:
@@ -106,8 +132,7 @@ class ProcessRunner:
         start_available_processes()
     finally:
       for process in active.values():
-        if process.is_alive():
-          process.terminate()
+        _terminate_process_tree(process)
         process.join()
       result_queue.close()
 

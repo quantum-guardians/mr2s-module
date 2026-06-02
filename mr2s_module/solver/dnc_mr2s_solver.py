@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 import logging
-import os
 from time import perf_counter
 from typing import Iterable
 
@@ -414,14 +413,7 @@ class DnCMr2sSolver:
       return 1
     if self.subgraph_processes is not None:
       return min(self.subgraph_processes, subgraph_count)
-
-    process_cpu_count = getattr(os, "process_cpu_count", None)
-    cpu_count = (
-      process_cpu_count()
-      if process_cpu_count is not None
-      else os.cpu_count()
-    ) or 1
-    return max(1, min(cpu_count, subgraph_count))
+    return 1
 
   def _solve_subgraphs(
       self,
