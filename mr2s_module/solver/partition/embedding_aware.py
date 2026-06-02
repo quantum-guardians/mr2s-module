@@ -1,6 +1,6 @@
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from time import perf_counter
 
 import networkx as nx
@@ -41,6 +41,7 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
   face_cycle: FaceCycleProtocol
   target_graph: nx.Graph | None
   embedding_estimator: EmbeddingEstimator = estimate_required_qubits
+  _fallback_target_graph_cache: nx.Graph | None = field(default=None, init=False)
 
   @staticmethod
   def _is_progressing_partition(parent: Graph, sub_graphs: list[Graph]) -> bool:
@@ -54,7 +55,9 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
     )
 
   def _fallback_target_graph(self) -> nx.Graph:
-    return dnx.pegasus_graph(16)
+    if self._fallback_target_graph_cache is None:
+      self._fallback_target_graph_cache = dnx.pegasus_graph(16)
+    return self._fallback_target_graph_cache
 
   def _build_solve_context(self, graph: Graph) -> QuboSolveContext:
     build_solve_context = getattr(self.mr2s_solver, "build_solve_context", None)
