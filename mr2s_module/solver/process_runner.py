@@ -61,8 +61,8 @@ def _run_process_task(func, index: int, item, result_queue) -> None:
   _prepare_child_process_group()
   try:
     result_queue.put((index, True, func(item)))
-  except BaseException as exc:
-    result_queue.put((index, False, repr(exc)))
+  except Exception as exc:
+    result_queue.put((index, False, f"{exc.__class__.__name__}: {exc!s}"))
 
 
 @dataclass(frozen=True)
