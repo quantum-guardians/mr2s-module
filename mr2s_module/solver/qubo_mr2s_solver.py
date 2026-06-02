@@ -19,6 +19,7 @@ from mr2s_module.qubo import (
 from mr2s_module.util import add_polys
 from mr2s_module.util.embedding_util import estimate_required_qubits
 from mr2s_module.util.qubo_util import map_binary_poly_to_bqm
+from mr2s_module.solver.solve_context import QuboSolveContext
 
 
 class QuboMR2SSolver:
@@ -56,6 +57,25 @@ class QuboMR2SSolver:
     binary_polynomial = self._build_polynomial(graph)
     return map_binary_poly_to_bqm(binary_polynomial)
 
+  def build_solve_context(
+      self,
+      graph: Graph,
+      target_graph=None,
+  ) -> QuboSolveContext:
+    if target_graph is None:
+      fixed_embedding_target_graph = getattr(
+        self.qubo_solver,
+        "fixed_embedding_target_graph",
+        None,
+      )
+      if fixed_embedding_target_graph is not None:
+        target_graph = fixed_embedding_target_graph()
+    return QuboSolveContext(
+      graph=graph,
+      bqm=self.build_bqm(graph),
+      target_graph=target_graph,
+    )
+
   def estimate_embedding(self, graph: Graph) -> EmbeddingEstimate:
     return estimate_required_qubits(self.build_bqm(graph))
 
@@ -86,6 +106,24 @@ class QuboMR2SSolver:
       raise NotImplementedError("QUBO solver does not support embedding reuse")
 
     solution = run_with_embedding(bqm, graph, embedding_estimate.embedding)
+    score = self.evaluator.run(solution)
+    solution.score = score
+    return solution
+
+  def run_with_context(self, context: QuboSolveContext) -> Solution:
+    embedding_estimate = context.embedding_estimate
+    if embedding_estimate is None or not embedding_estimate.has_physical_embedding:
+      raise ValueError("context does not contain a physical embedding")
+
+    run_with_embedding = getattr(self.qubo_solver, "run_with_embedding", None)
+    if run_with_embedding is None:
+      raise NotImplementedError("QUBO solver does not support embedding reuse")
+
+    solution = run_with_embedding(
+      context.bqm,
+      context.graph,
+      embedding_estimate.embedding,
+    )
     score = self.evaluator.run(solution)
     solution.score = score
     return solution

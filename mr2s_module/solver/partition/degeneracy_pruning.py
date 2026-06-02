@@ -11,6 +11,7 @@ from mr2s_module.solver.partition.embedding_aware import (
   _elapsed_ms,
   _graph_log_context,
 )
+from mr2s_module.solver.solve_context import QuboSolveContext
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ class DegeneracyPruningFaceCyclePartitionStrategy(
   max_degeneracy: int | None = None
   _resolved_target_degeneracy: int | None = field(default=None, init=False)
 
-  def _embedding_estimate(self, graph: Graph) -> EmbeddingEstimate | None:
+  def _embedding_context(self, graph: Graph) -> QuboSolveContext | None:
     started_at = perf_counter()
     graph_context = _graph_log_context(graph)
     logger.info(
@@ -33,7 +34,21 @@ class DegeneracyPruningFaceCyclePartitionStrategy(
       graph_context["directed_edges"],
     )
 
-    target_node_count = self.target_graph.number_of_nodes()
+    try:
+      build_started_at = perf_counter()
+      context = self._build_solve_context(graph)
+      bqm = context.bqm
+      target_graph = context.target_graph or self._fallback_target_graph()
+      context.target_graph = target_graph
+      build_elapsed_ms = _elapsed_ms(build_started_at)
+    except RuntimeError:
+      logger.info(
+        "DnC pruning estimate failed to build BQM elapsed_ms=%.3f",
+        _elapsed_ms(started_at),
+      )
+      return None
+
+    target_node_count = target_graph.number_of_nodes()
     undirected_edge_count = sum(1 for edge in graph.edges.values() if not edge.directed)
     if undirected_edge_count > target_node_count:
       logger.info(
@@ -42,17 +57,6 @@ class DegeneracyPruningFaceCyclePartitionStrategy(
         _elapsed_ms(started_at),
         undirected_edge_count,
         target_node_count,
-      )
-      return None
-
-    try:
-      build_started_at = perf_counter()
-      bqm = self.mr2s_solver.build_bqm(graph)
-      build_elapsed_ms = _elapsed_ms(build_started_at)
-    except RuntimeError:
-      logger.info(
-        "DnC pruning estimate failed to build BQM elapsed_ms=%.3f",
-        _elapsed_ms(started_at),
       )
       return None
 
@@ -69,7 +73,7 @@ class DegeneracyPruningFaceCyclePartitionStrategy(
 
     interaction_graph = self._build_interaction_graph(graph, bqm)
     quadratic_count = interaction_graph.number_of_edges()
-    target_edge_count = self.target_graph.number_of_edges()
+    target_edge_count = target_graph.number_of_edges()
     if quadratic_count > target_edge_count:
       logger.info(
         "DnC pruning estimate skipped by coupling prefilter "
@@ -107,13 +111,20 @@ class DegeneracyPruningFaceCyclePartitionStrategy(
       degeneracy,
       max_degeneracy,
     )
-    return EmbeddingEstimate(
+    context.embedding_estimate = EmbeddingEstimate(
       num_logical_variables=variable_count,
       num_quadratic_couplings=quadratic_count,
       num_physical_qubits=variable_count,
       max_chain_length=degeneracy,
       embedding={variable: [] for variable in bqm.variables},
     )
+    return context
+
+  def _embedding_estimate(self, graph: Graph) -> EmbeddingEstimate | None:
+    context = self._embedding_context(graph)
+    if context is None:
+      return None
+    return context.embedding_estimate
 
   @staticmethod
   def _build_interaction_graph(graph: Graph, bqm: Any) -> nx.Graph:
@@ -147,6 +158,6 @@ class DegeneracyPruningFaceCyclePartitionStrategy(
       return self.max_degeneracy
     if self._resolved_target_degeneracy is None:
       self._resolved_target_degeneracy = self._estimate_degeneracy(
-        nx.Graph(self.target_graph)
+        nx.Graph(self.target_graph or self._fallback_target_graph())
       )
     return self._resolved_target_degeneracy

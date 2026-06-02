@@ -1,11 +1,16 @@
 from dimod import SampleSet, SimulatedAnnealingSampler
 from dwave.system.composites.embedding import EmbeddingComposite, FixedEmbeddingComposite
 from dwave.system.samplers.dwave_sampler import DWaveSampler
+import networkx as nx
 
 from mr2s_module.domain import Graph, Solution
 from mr2s_module.protocols import QuboMatrix, SolutionRankerProtocol
 from mr2s_module.qubo.solution_processing import select_best_sample
 from mr2s_module.util.sample_set import empty_binary_sample_set
+
+
+class InvalidEmbeddingError(ValueError):
+  """Raised when a reused embedding is invalid for the current BQM/target."""
 
 
 class QuboSolver:
@@ -29,6 +34,25 @@ class QuboSolver:
     self.num_reads = num_reads
     self.fixed_embedding_child_sampler = fixed_embedding_child_sampler
     self.fixed_sampler = None
+
+  def fixed_embedding_target_graph(self) -> nx.Graph | None:
+    child_sampler = self._fixed_embedding_child_sampler()
+    if child_sampler is None:
+      return None
+
+    to_networkx_graph = getattr(child_sampler, "to_networkx_graph", None)
+    if to_networkx_graph is not None:
+      return nx.Graph(to_networkx_graph())
+
+    nodelist = getattr(child_sampler, "nodelist", None)
+    edgelist = getattr(child_sampler, "edgelist", None)
+    if nodelist is None or edgelist is None:
+      return None
+
+    target_graph = nx.Graph()
+    target_graph.add_nodes_from(nodelist)
+    target_graph.add_edges_from(edgelist)
+    return target_graph
 
   @staticmethod
   def create_sa_solver(
@@ -108,6 +132,10 @@ class QuboSolver:
         "The configured QUBO sampler does not support fixed embeddings"
       )
 
+    target_graph = self.fixed_embedding_target_graph()
+    if target_graph is not None:
+      self._validate_embedding(qubo, embedding, target_graph)
+
     self.fixed_sampler = FixedEmbeddingComposite(child_sampler, embedding=embedding)
     sample_set = self._sample(self.fixed_sampler, qubo, graph)
     return Solution(
@@ -116,6 +144,67 @@ class QuboSolver:
       graph=graph,
       score=None,
     )
+
+  def _fixed_embedding_child_sampler(self):
+    child_sampler = self.fixed_embedding_child_sampler
+    if child_sampler is None:
+      child_sampler = getattr(self.sampler, "child", None)
+    return child_sampler
+
+  def _validate_embedding(
+      self,
+      qubo: QuboMatrix,
+      embedding: dict[object, list[object]],
+      target_graph: nx.Graph,
+  ) -> None:
+    variables = set(getattr(qubo, "variables", []))
+    missing_variables = [
+      variable
+      for variable in variables
+      if variable not in embedding or not embedding[variable]
+    ]
+    if missing_variables:
+      raise InvalidEmbeddingError(
+        "reused embedding is missing non-empty chains for "
+        f"{len(missing_variables)} BQM variables"
+      )
+
+    for variable in variables:
+      chain = list(embedding[variable])
+      missing_nodes = [node for node in chain if node not in target_graph]
+      if missing_nodes:
+        raise InvalidEmbeddingError(
+          f"chain for {variable} contains nodes outside the target graph"
+        )
+      if len(chain) > 1 and not nx.is_connected(target_graph.subgraph(chain)):
+        raise InvalidEmbeddingError(f"chain for {variable} is not connected")
+
+    used_nodes: dict[object, object] = {}
+    for variable in variables:
+      for node in embedding[variable]:
+        previous_variable = used_nodes.get(node)
+        if previous_variable is not None:
+          raise InvalidEmbeddingError(
+            f"chains for {previous_variable} and {variable} overlap at {node}"
+          )
+        used_nodes[node] = variable
+
+    quadratic = getattr(qubo, "quadratic", {})
+    for source, target in quadratic:
+      source_chain = embedding.get(source)
+      target_chain = embedding.get(target)
+      if not source_chain or not target_chain:
+        raise InvalidEmbeddingError(
+          f"interaction ({source}, {target}) references a missing chain"
+        )
+      if not any(
+          target_graph.has_edge(source_node, target_node)
+          for source_node in source_chain
+          for target_node in target_chain
+      ):
+        raise InvalidEmbeddingError(
+          f"interaction ({source}, {target}) is not represented on target graph"
+        )
 
   def _has_undirected_edges(self, graph: Graph) -> bool:
     return any(not edge.directed for edge in graph.edges.values())

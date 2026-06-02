@@ -1,4 +1,5 @@
 from dimod import BinaryPolynomial, Vartype
+import networkx as nx
 
 from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, Solution
 from mr2s_module.domain.orientation_result import OrientedEdges
@@ -28,10 +29,13 @@ class StubPolyGenerator:
 
 class StubQuboSolver:
     def __init__(self) -> None:
+        self.received_qubo = None
         self.received_graph: Graph | None = None
         self.received_embedding: dict[object, list[object]] | None = None
+        self.target_graph = nx.path_graph(["q1", "q2"])
 
     def run(self, qubo, graph: Graph):
+        self.received_qubo = qubo
         self.received_graph = graph
         return Solution(
             edges={(edge.vertices[0], edge.vertices[1]) for edge in graph.edges.values()},
@@ -41,6 +45,7 @@ class StubQuboSolver:
         )
 
     def run_with_embedding(self, qubo, graph: Graph, embedding):
+        self.received_qubo = qubo
         self.received_graph = graph
         self.received_embedding = embedding
         return Solution(
@@ -49,6 +54,9 @@ class StubQuboSolver:
             sample_set=empty_binary_sample_set(),
             score=None,
         )
+
+    def fixed_embedding_target_graph(self):
+        return self.target_graph
 
 
 class StubEvaluator:
@@ -131,3 +139,50 @@ def test_run_with_embedding_passes_embedding_to_qubo_solver() -> None:
     assert result.edges == {(1, 2)}
     assert qubo_solver.received_graph is graph
     assert qubo_solver.received_embedding == {1: ["q1"], 2: ["q2"]}
+
+
+def test_build_solve_context_uses_qubo_solver_target_graph() -> None:
+    graph = Graph(edges=[Edge(1, 2, 1, False)])
+    poly_generator = StubPolyGenerator()
+    qubo_solver = StubQuboSolver()
+    solver = QuboMR2SSolver(
+        edge_orienter=None,
+        qubo_solver=qubo_solver,
+        poly_generators={poly_generator},
+    )
+
+    context = solver.build_solve_context(graph)
+
+    assert context.graph is graph
+    assert context.target_graph is qubo_solver.target_graph
+    assert context.bqm is not None
+    assert poly_generator.seen_graphs == [graph]
+
+
+def test_run_with_context_uses_context_bqm_and_embedding() -> None:
+    graph = Graph(edges=[Edge(1, 2, 1, False)])
+    poly_generator = StubPolyGenerator()
+    qubo_solver = StubQuboSolver()
+    evaluator = StubEvaluator()
+    solver = QuboMR2SSolver(
+        edge_orienter=None,
+        qubo_solver=qubo_solver,
+        evaluator=evaluator,
+        poly_generators={poly_generator},
+    )
+    context = solver.build_solve_context(graph)
+    context.embedding_estimate = EmbeddingEstimate(
+        num_logical_variables=2,
+        num_quadratic_couplings=1,
+        num_physical_qubits=2,
+        max_chain_length=1,
+        embedding={1: ["q1"], 2: ["q2"]},
+    )
+
+    result = solver.run_with_context(context)
+
+    assert result.score == 1.0
+    assert qubo_solver.received_qubo is context.bqm
+    assert qubo_solver.received_graph is graph
+    assert qubo_solver.received_embedding == {1: ["q1"], 2: ["q2"]}
+    assert poly_generator.seen_graphs == [graph]
