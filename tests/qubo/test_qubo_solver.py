@@ -37,19 +37,19 @@ class TopologySampler(OneSampleSampler):
     self.edgelist = edgelist
 
 
-def test_sample_prints_info_for_empty_sample_set(capsys) -> None:
+def test_sample_logs_info_for_empty_sample_set(caplog) -> None:
   solver = QuboSolver(ranker=ApspSumRanker(), sampler=EmptySampler())
   qubo = BinaryQuadraticModel({}, {}, 0.0, "BINARY")
 
   sample_set = solver._sample(solver.sampler, qubo)
 
   assert len(sample_set) == 0
-  output = capsys.readouterr().out
+  output = caplog.text
   assert "SampleSet is empty" in output
   assert "sample_set.info={'reason': 'empty'}" in output
 
 
-def test_sample_prints_debug_context_for_empty_sample_set(capsys) -> None:
+def test_sample_logs_debug_context_for_empty_sample_set(caplog) -> None:
   solver = QuboSolver(ranker=ApspSumRanker(), sampler=EmptySampler(), num_reads=5)
   qubo = BinaryQuadraticModel({"e_1_2": 1.0}, {("e_1_2", "e_2_3"): -1.0}, 0.0, "BINARY")
   graph = Graph(edges=[Edge(1, 2, 1, False), Edge(2, 3, 1, True)])
@@ -57,7 +57,7 @@ def test_sample_prints_debug_context_for_empty_sample_set(capsys) -> None:
   sample_set = solver._sample(solver.sampler, qubo, graph)
 
   assert len(sample_set) == 0
-  output = capsys.readouterr().out
+  output = caplog.text
   assert "sampler=EmptySampler" in output
   assert "num_reads=5" in output
   assert "qubo_variables=2" in output

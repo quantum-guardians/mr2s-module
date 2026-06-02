@@ -1,3 +1,5 @@
+import logging
+
 from dimod import SampleSet, SimulatedAnnealingSampler
 from dwave.system.composites.embedding import EmbeddingComposite, FixedEmbeddingComposite
 from dwave.system.samplers.dwave_sampler import DWaveSampler
@@ -7,6 +9,9 @@ from mr2s_module.domain import Graph, Solution
 from mr2s_module.protocols import QuboMatrix, SolutionRankerProtocol
 from mr2s_module.qubo.solution_processing import select_best_sample
 from mr2s_module.util.sample_set import empty_binary_sample_set
+
+
+logger = logging.getLogger(__name__)
 
 
 class InvalidEmbeddingError(ValueError):
@@ -107,10 +112,11 @@ class QuboSolver:
       sample_set = sampler.sample(qubo, num_reads=self.num_reads)
 
     if len(sample_set) == 0:
-      print(
+      logger.warning(
         "SampleSet is empty; "
-        f"sample_set.info={sample_set.info}; "
-        f"{self._sample_debug_info(sampler, qubo, graph)}"
+        "sample_set.info=%s; %s",
+        sample_set.info,
+        self._sample_debug_info(sampler, qubo, graph),
       )
 
     return sample_set
