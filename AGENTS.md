@@ -22,5 +22,8 @@ Add tests under a top-level `tests/` package that mirrors the module layout, for
 ## Commit & Pull Request Guidelines
 Create feature branches with the pattern `feat/ISSUE-{ISSUE_NUM}`, for example `feat/ISSUE-11`. Recent history favors short imperative commits, usually with a Conventional Commit prefix such as `feat:` or a direct maintenance message. Keep commit subjects concise and specific, for example `feat: add APSP evaluator`. Pull requests should describe the behavioral change, note any graph or QUBO assumptions, link the related issue, and include sample input/output when algorithm results change.
 
+## Release Guidelines
+Use `.agents/assets/release-template.md` for GitHub release notes. Fill in the tag, summary, change list, validation result, related pull request, and full changelog link before publishing a release. Keep older releases on the same section structure when practical so release history stays consistent.
+
 ## Security & Configuration Tips
 Do not hardcode credentials or solver endpoints. Treat third-party solver configuration as environment-specific, and keep `.pypirc` or publishing settings out of feature changes unless packaging work requires them.
