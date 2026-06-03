@@ -10,7 +10,6 @@ from mr2s_module.protocols import QuboMatrix, SolutionRankerProtocol
 from mr2s_module.qubo.solution_processing import select_best_sample
 from mr2s_module.util.sample_set import empty_binary_sample_set
 
-
 logger = logging.getLogger(__name__)
 
 

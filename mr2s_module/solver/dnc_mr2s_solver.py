@@ -3,7 +3,6 @@ import logging
 from time import perf_counter
 from typing import Any, Iterable
 
-import dwave_networkx as dnx
 import networkx as nx
 from dimod import SampleSet
 
