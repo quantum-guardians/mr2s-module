@@ -10,6 +10,8 @@
 - {{CHANGE_2}}
 - {{CHANGE_3}}
 
+Review the full changelog range before replacing these placeholders, and include all release-level changes between `{{PREVIOUS_TAG}}` and `{{TAG_NAME}}`.
+
 ## Validation
 
 - {{VALIDATION_COMMAND_OR_STATUS}}
