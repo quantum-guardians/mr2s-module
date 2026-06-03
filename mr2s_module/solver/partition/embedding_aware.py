@@ -1,9 +1,10 @@
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from time import perf_counter
 
 import networkx as nx
+import dwave_networkx as dnx
 
 from mr2s_module.domain import (
   EmbeddableGraphPartition,
@@ -13,6 +14,7 @@ from mr2s_module.domain import (
 )
 from mr2s_module.protocols import FaceCycleProtocol
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
+from mr2s_module.solver.solve_context import QuboSolveContext
 from mr2s_module.util import estimate_required_qubits
 
 
@@ -37,8 +39,9 @@ def _graph_log_context(graph: Graph) -> dict[str, int]:
 class EmbeddingAwareFaceCyclePartitionStrategy:
   mr2s_solver: QuboMR2SSolver
   face_cycle: FaceCycleProtocol
-  target_graph: nx.Graph
+  target_graph: nx.Graph | None
   embedding_estimator: EmbeddingEstimator = estimate_required_qubits
+  _fallback_target_graph_cache: nx.Graph | None = field(default=None, init=False)
 
   @staticmethod
   def _is_progressing_partition(parent: Graph, sub_graphs: list[Graph]) -> bool:
@@ -51,7 +54,26 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
       for sub_graph in sub_graphs
     )
 
-  def _embedding_estimate(self, graph: Graph) -> EmbeddingEstimate | None:
+  def _fallback_target_graph(self) -> nx.Graph:
+    if self._fallback_target_graph_cache is None:
+      self._fallback_target_graph_cache = dnx.pegasus_graph(16)
+    return self._fallback_target_graph_cache
+
+  def _build_solve_context(self, graph: Graph) -> QuboSolveContext:
+    build_solve_context = getattr(self.mr2s_solver, "build_solve_context", None)
+    if build_solve_context is not None:
+      context = build_solve_context(graph, target_graph=self.target_graph)
+      if context.target_graph is None:
+        context.target_graph = self._fallback_target_graph()
+      return context
+
+    return QuboSolveContext(
+      graph=graph,
+      bqm=self.mr2s_solver.build_bqm(graph),
+      target_graph=self.target_graph or self._fallback_target_graph(),
+    )
+
+  def _embedding_context(self, graph: Graph) -> QuboSolveContext | None:
     started_at = perf_counter()
     graph_context = _graph_log_context(graph)
     logger.info(
@@ -60,7 +82,25 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
       graph_context["edges"],
       graph_context["directed_edges"],
     )
-    target_node_count = self.target_graph.number_of_nodes()
+    try:
+      build_started_at = perf_counter()
+      context = self._build_solve_context(graph)
+      bqm = context.bqm
+      target_graph = context.target_graph or self._fallback_target_graph()
+      context.target_graph = target_graph
+      logger.info(
+        "DnC embedding estimate built BQM elapsed_ms=%.3f variables=%d",
+        _elapsed_ms(build_started_at),
+        len(bqm.variables),
+      )
+    except RuntimeError:
+      logger.info(
+        "DnC embedding estimate failed elapsed_ms=%.3f",
+        _elapsed_ms(started_at),
+      )
+      return None
+
+    target_node_count = target_graph.number_of_nodes()
     undirected_edge_count = sum(
       1
       for edge in graph.edges.values()
@@ -77,13 +117,6 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
       return None
 
     try:
-      build_started_at = perf_counter()
-      bqm = self.mr2s_solver.build_bqm(graph)
-      logger.info(
-        "DnC embedding estimate built BQM elapsed_ms=%.3f variables=%d",
-        _elapsed_ms(build_started_at),
-        len(bqm.variables),
-      )
       if len(bqm.variables) > target_node_count:
         logger.info(
           "DnC embedding estimate skipped by variable prefilter "
@@ -96,8 +129,9 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
       estimate_started_at = perf_counter()
       estimate = self.embedding_estimator(
         bqm,
-        target_graph=self.target_graph,
+        target_graph=target_graph,
       )
+      context.embedding_estimate = estimate
       logger.info(
         "DnC embedding estimate finished elapsed_ms=%.3f "
         "estimator_elapsed_ms=%.3f physical_qubits=%d max_chain_length=%d",
@@ -106,13 +140,19 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
         estimate.num_physical_qubits,
         estimate.max_chain_length,
       )
-      return estimate
+      return context
     except RuntimeError:
       logger.info(
         "DnC embedding estimate failed elapsed_ms=%.3f",
         _elapsed_ms(started_at),
       )
       return None
+
+  def _embedding_estimate(self, graph: Graph) -> EmbeddingEstimate | None:
+    context = self._embedding_context(graph)
+    if context is None:
+      return None
+    return context.embedding_estimate
 
   def can_embed(self, graph: Graph) -> bool:
     return self._embedding_estimate(graph) is not None
@@ -121,18 +161,27 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
       self,
       sub_graphs: list[Graph],
   ) -> list[EmbeddingEstimate] | None:
-    estimates: list[EmbeddingEstimate] = []
+    contexts = self._estimate_partition_contexts(sub_graphs)
+    if contexts is None:
+      return None
+    return [context.embedding_estimate for context in contexts]
+
+  def _estimate_partition_contexts(
+      self,
+      sub_graphs: list[Graph],
+  ) -> list[QuboSolveContext] | None:
+    contexts: list[QuboSolveContext] = []
     for sub_graph in sub_graphs:
-      estimate = self._embedding_estimate(sub_graph)
-      if estimate is None:
+      context = self._embedding_context(sub_graph)
+      if context is None or context.embedding_estimate is None:
         return None
-      estimates.append(estimate)
-    return estimates
+      contexts.append(context)
+    return contexts
 
   def _single_graph_partition(self, graph: Graph) -> EmbeddableGraphPartition | None:
     started_at = perf_counter()
-    estimate = self._embedding_estimate(graph)
-    if estimate is None:
+    context = self._embedding_context(graph)
+    if context is None or context.embedding_estimate is None:
       logger.info(
         "DnC single-graph partition unavailable elapsed_ms=%.3f",
         _elapsed_ms(started_at),
@@ -144,8 +193,9 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
     )
     return EmbeddableGraphPartition(
       sub_graphs=[graph],
-      embedding_estimates=[estimate],
+      embedding_estimates=[context.embedding_estimate],
       target_k=None,
+      solve_contexts=[context],
     )
 
   @staticmethod
@@ -228,18 +278,19 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
       partition_elapsed_ms = _elapsed_ms(attempt_started_at)
       sub_graphs = result.sub_graphs
       estimate_started_at = perf_counter()
-      embedding_estimates = (
-        self._estimate_partition(sub_graphs)
+      solve_contexts = (
+        self._estimate_partition_contexts(sub_graphs)
         if self._is_progressing_partition(graph, sub_graphs)
         else None
       )
       estimate_elapsed_ms = _elapsed_ms(estimate_started_at)
 
-      if embedding_estimates is not None:
+      if solve_contexts is not None:
         best_partition = EmbeddableGraphPartition(
           sub_graphs=sub_graphs,
-          embedding_estimates=embedding_estimates,
+          embedding_estimates=[context.embedding_estimate for context in solve_contexts],
           target_k=target_k,
+          solve_contexts=solve_contexts,
         )
         logger.info(
           "DnC target_k attempt succeeded target_k=%d subgraphs=%d "

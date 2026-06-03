@@ -4,6 +4,7 @@ import pytest
 
 import mr2s_module.solver.process_runner as process_runner
 from mr2s_module.solver.process_runner import (
+  ProcessExecutionError,
   ProcessRunner,
   default_process_start_method,
   validate_process_start_method,
@@ -33,6 +34,10 @@ def _run_nested_process(value: int) -> int:
   return result
 
 
+def _raise_runtime_error(_value: int) -> int:
+  raise RuntimeError("boom")
+
+
 class _FakeProcess:
   pid = 12345
 
@@ -44,6 +49,17 @@ class _FakeProcess:
 
   def terminate(self) -> None:
     self.terminated = True
+
+
+class _FakeQueue:
+  def __init__(self) -> None:
+    self.calls: list[str] = []
+
+  def close(self) -> None:
+    self.calls.append("close")
+
+  def join_thread(self) -> None:
+    self.calls.append("join_thread")
 
 
 def test_validate_process_start_method_rejects_unknown_method() -> None:
@@ -143,6 +159,22 @@ def test_process_runner_allows_nested_multiprocessing() -> None:
   )
 
   assert result == [2, 3]
+
+
+def test_process_runner_reports_child_exception_type() -> None:
+  with pytest.raises(ProcessExecutionError, match="RuntimeError: boom"):
+    ProcessRunner(max_workers=1, start_method="spawn").map(
+      _raise_runtime_error,
+      [1],
+    )
+
+
+def test_close_result_queue_joins_feeder_thread() -> None:
+  result_queue = _FakeQueue()
+
+  process_runner._close_result_queue(result_queue)
+
+  assert result_queue.calls == ["close", "join_thread"]
 
 
 def test_terminate_process_tree_kills_process_group_on_posix(

@@ -61,8 +61,13 @@ def _run_process_task(func, index: int, item, result_queue) -> None:
   _prepare_child_process_group()
   try:
     result_queue.put((index, True, func(item)))
-  except BaseException as exc:
-    result_queue.put((index, False, repr(exc)))
+  except Exception as exc:
+    result_queue.put((index, False, f"{exc.__class__.__name__}: {exc!s}"))
+
+
+def _close_result_queue(result_queue) -> None:
+  result_queue.close()
+  result_queue.join_thread()
 
 
 @dataclass(frozen=True)
@@ -134,6 +139,6 @@ class ProcessRunner:
       for process in active.values():
         _terminate_process_tree(process)
         process.join()
-      result_queue.close()
+      _close_result_queue(result_queue)
 
     return [cast(_R, result) for result in results]

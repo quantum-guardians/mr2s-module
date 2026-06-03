@@ -1,8 +1,10 @@
 from dimod import BinaryQuadraticModel, SampleSet
+import networkx as nx
+import pytest
 
 from mr2s_module.domain import Edge, Graph
 from mr2s_module.evaluator import ApspSumRanker
-from mr2s_module.qubo import QuboSolver
+from mr2s_module.qubo import InvalidEmbeddingError, QuboSolver
 from mr2s_module.util import empty_binary_sample_set
 import mr2s_module.qubo.qubo_solver as qubo_solver_module
 
@@ -28,19 +30,26 @@ class OneSampleSampler:
     return SampleSet.from_samples({"e_1_2": 0}, vartype="BINARY", energy=0.0)
 
 
-def test_sample_prints_info_for_empty_sample_set(capsys) -> None:
+class TopologySampler(OneSampleSampler):
+  def __init__(self, nodelist, edgelist):
+    super().__init__()
+    self.nodelist = nodelist
+    self.edgelist = edgelist
+
+
+def test_sample_logs_info_for_empty_sample_set(caplog) -> None:
   solver = QuboSolver(ranker=ApspSumRanker(), sampler=EmptySampler())
   qubo = BinaryQuadraticModel({}, {}, 0.0, "BINARY")
 
   sample_set = solver._sample(solver.sampler, qubo)
 
   assert len(sample_set) == 0
-  output = capsys.readouterr().out
+  output = caplog.text
   assert "SampleSet is empty" in output
   assert "sample_set.info={'reason': 'empty'}" in output
 
 
-def test_sample_prints_debug_context_for_empty_sample_set(capsys) -> None:
+def test_sample_logs_debug_context_for_empty_sample_set(caplog) -> None:
   solver = QuboSolver(ranker=ApspSumRanker(), sampler=EmptySampler(), num_reads=5)
   qubo = BinaryQuadraticModel({"e_1_2": 1.0}, {("e_1_2", "e_2_3"): -1.0}, 0.0, "BINARY")
   graph = Graph(edges=[Edge(1, 2, 1, False), Edge(2, 3, 1, True)])
@@ -48,7 +57,7 @@ def test_sample_prints_debug_context_for_empty_sample_set(capsys) -> None:
   sample_set = solver._sample(solver.sampler, qubo, graph)
 
   assert len(sample_set) == 0
-  output = capsys.readouterr().out
+  output = caplog.text
   assert "sampler=EmptySampler" in output
   assert "num_reads=5" in output
   assert "qubo_variables=2" in output
@@ -120,3 +129,106 @@ def test_run_with_embedding_stores_fixed_embedding_composite(monkeypatch) -> Non
   assert solver.fixed_sampler.embedding == embedding
   assert child_sampler.calls == 1
   assert solution.edges == {(1, 2)}
+
+
+def test_fixed_embedding_target_graph_uses_child_sampler_topology() -> None:
+  child_sampler = TopologySampler(["q1", "q2"], [("q1", "q2")])
+  solver = QuboSolver(
+    ranker=ApspSumRanker(),
+    sampler=FailingSampler(),
+    fixed_embedding_child_sampler=child_sampler,
+  )
+
+  target_graph = solver.fixed_embedding_target_graph()
+
+  assert target_graph is not None
+  assert set(target_graph.nodes) == {"q1", "q2"}
+  assert set(target_graph.edges) == {("q1", "q2")}
+
+
+def test_fixed_embedding_target_graph_prefers_to_networkx_graph() -> None:
+  target = nx.path_graph(["q1", "q2", "q3"])
+
+  class NetworkxTopologySampler(OneSampleSampler):
+    def to_networkx_graph(self):
+      return target
+
+  solver = QuboSolver(
+    ranker=ApspSumRanker(),
+    sampler=FailingSampler(),
+    fixed_embedding_child_sampler=NetworkxTopologySampler(),
+  )
+
+  target_graph = solver.fixed_embedding_target_graph()
+
+  assert target_graph is not target
+  assert set(target_graph.edges) == {("q1", "q2"), ("q2", "q3")}
+
+
+def test_run_with_embedding_rejects_disconnected_chain_before_sampling() -> None:
+  child_sampler = TopologySampler(["q1", "q2"], [])
+  solver = QuboSolver(
+    ranker=ApspSumRanker(),
+    sampler=FailingSampler(),
+    fixed_embedding_child_sampler=child_sampler,
+  )
+  qubo = BinaryQuadraticModel({"x": 1.0}, {}, 0.0, "BINARY")
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+
+  with pytest.raises(InvalidEmbeddingError, match="not connected"):
+    solver.run_with_embedding(qubo, graph, {"x": ["q1", "q2"]})
+
+  assert child_sampler.calls == 0
+
+
+def test_run_with_embedding_rejects_missing_bqm_variable_chain() -> None:
+  child_sampler = TopologySampler(["q1"], [])
+  solver = QuboSolver(
+    ranker=ApspSumRanker(),
+    sampler=FailingSampler(),
+    fixed_embedding_child_sampler=child_sampler,
+  )
+  qubo = BinaryQuadraticModel({"x": 1.0}, {}, 0.0, "BINARY")
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+
+  with pytest.raises(InvalidEmbeddingError, match="missing non-empty chains"):
+    solver.run_with_embedding(qubo, graph, {})
+
+  assert child_sampler.calls == 0
+
+
+def test_run_with_embedding_rejects_overlapping_chains() -> None:
+  child_sampler = TopologySampler(["q1"], [])
+  solver = QuboSolver(
+    ranker=ApspSumRanker(),
+    sampler=FailingSampler(),
+    fixed_embedding_child_sampler=child_sampler,
+  )
+  qubo = BinaryQuadraticModel({"x": 1.0, "y": 1.0}, {}, 0.0, "BINARY")
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+
+  with pytest.raises(InvalidEmbeddingError, match="overlap"):
+    solver.run_with_embedding(qubo, graph, {"x": ["q1"], "y": ["q1"]})
+
+  assert child_sampler.calls == 0
+
+
+def test_run_with_embedding_rejects_unrepresented_interaction() -> None:
+  child_sampler = TopologySampler(["q1", "q2"], [])
+  solver = QuboSolver(
+    ranker=ApspSumRanker(),
+    sampler=FailingSampler(),
+    fixed_embedding_child_sampler=child_sampler,
+  )
+  qubo = BinaryQuadraticModel(
+    {"x": 1.0, "y": 1.0},
+    {("x", "y"): -1.0},
+    0.0,
+    "BINARY",
+  )
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+
+  with pytest.raises(InvalidEmbeddingError, match="not represented"):
+    solver.run_with_embedding(qubo, graph, {"x": ["q1"], "y": ["q2"]})
+
+  assert child_sampler.calls == 0

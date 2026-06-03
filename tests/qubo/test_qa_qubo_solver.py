@@ -15,7 +15,7 @@ def test_missing_credentials_raises_runtime_error(monkeypatch):
     QuboSolver.create_qa_solver(ranker=ApspSumRanker())
 
 
-def test_create_qa_solver_uses_separate_samplers_for_embedding_modes(monkeypatch):
+def test_create_qa_solver_reuses_same_sampler_for_embedding_modes(monkeypatch):
   created_samplers = []
 
   class FakeDWaveSampler:
@@ -31,6 +31,6 @@ def test_create_qa_solver_uses_separate_samplers_for_embedding_modes(monkeypatch
 
   solver = QuboSolver.create_qa_solver(ranker=ApspSumRanker())
 
-  assert len(created_samplers) == 2
+  assert len(created_samplers) == 1
   assert solver.sampler.child is created_samplers[0]
-  assert solver.fixed_embedding_child_sampler is created_samplers[1]
+  assert solver.fixed_embedding_child_sampler is created_samplers[0]
