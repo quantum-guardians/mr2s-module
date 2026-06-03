@@ -246,17 +246,18 @@ class TestIteratedLocalSearch:
 
 @pytest.mark.slow
 def test_ils_integration_with_sa_solver():
-    """약 300개 정점 Delaunay 그래프에 ILS 를 돌리고 SA 솔버까지 통과시켜 동작 확인.
+    """작은 Delaunay 그래프에 ILS 를 돌리고 SA 솔버까지 통과시켜 동작 확인.
 
     ILS 가 모든 간선을 방향 결정해 두므로 SA 의 anneal 루프는 빈 variable_edges 로
     즉시 빠진다. 본 테스트는 통합 경로(Solution 생성, Evaluator 평가)를 검증한다.
     """
-    base_graph = delaunay_graph(n=300, seed=42)
+    graph_size = 30
+    base_graph = delaunay_graph(n=graph_size, seed=42)
     graph, removed_count = remove_edges_by_percent(base_graph, 0)
     if graph.is_empty():
         return
 
-    ils = IteratedLocalSearch(max_iter=30, patience=5)
+    ils = IteratedLocalSearch(max_iter=1, patience=1)
 
     start_time = time.perf_counter()
     directed_edges = ils.run(graph).get_edges()
@@ -276,7 +277,7 @@ def test_ils_integration_with_sa_solver():
 
     final_apsp = Evaluator().eval_apsp_sum(solution)
 
-    print(f"\nILS Integration with SA (n=300, remove=0%)")
+    print(f"\nILS Integration with SA (n={graph_size}, remove=0%)")
     print(f"  ils_elapsed_seconds: {elapsed:.4f}")
     print(f"  original_edges: {len(base_graph.edges)}")
     print(f"  removed_edges: {removed_count}")

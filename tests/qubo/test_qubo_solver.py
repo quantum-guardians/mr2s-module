@@ -207,7 +207,7 @@ def test_run_with_embedding_stores_fixed_embedding_composite(monkeypatch) -> Non
     sampler=FailingSampler(),
     fixed_embedding_child_sampler=child_sampler,
   )
-  qubo = BinaryQuadraticModel({}, {}, 0.0, "BINARY")
+  qubo = BinaryQuadraticModel({"e_1_2": 0.0}, {}, 0.0, "BINARY")
   graph = Graph(edges=[Edge(1, 2, 1, False)])
 
   solution = solver.run_with_embedding(qubo, graph, embedding)
