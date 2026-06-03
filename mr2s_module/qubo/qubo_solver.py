@@ -7,7 +7,7 @@ import networkx as nx
 
 from mr2s_module.domain import Graph, Solution
 from mr2s_module.protocols import QuboMatrix, SolutionRankerProtocol
-from mr2s_module.qubo.solution_processing import select_best_sample
+from mr2s_module.qubo.solution_processing import process_solution, select_best_sample
 from mr2s_module.util.sample_set import empty_binary_sample_set
 
 logger = logging.getLogger(__name__)
@@ -89,8 +89,20 @@ class QuboSolver:
   def run(self, qubo: QuboMatrix, graph: Graph) -> Solution:
     if not self._has_undirected_edges(graph):
       return self._solution_from_directed_graph(graph)
+    if not self._has_qubo_variables(qubo):
+      return self._solution_from_default_sample(
+        qubo,
+        graph,
+        fallback_reason="zero_variable_qubo",
+      )
 
     sample_set = self._sample(self.sampler, qubo, graph)
+    if len(sample_set) == 0:
+      return self._solution_from_default_sample(
+        qubo,
+        graph,
+        fallback_reason="empty_sample_set",
+      )
     return Solution(
       edges=select_best_sample(sample_set, list(graph.edges.values()), self.ranker),
       sample_set=sample_set,
@@ -127,6 +139,12 @@ class QuboSolver:
   ) -> Solution:
     if not self._has_undirected_edges(graph):
       return self._solution_from_directed_graph(graph)
+    if not self._has_qubo_variables(qubo):
+      return self._solution_from_default_sample(
+        qubo,
+        graph,
+        fallback_reason="zero_variable_qubo",
+      )
 
     child_sampler = self.fixed_embedding_child_sampler
     if child_sampler is None:
@@ -142,6 +160,12 @@ class QuboSolver:
 
     self.fixed_sampler = FixedEmbeddingComposite(child_sampler, embedding=embedding)
     sample_set = self._sample(self.fixed_sampler, qubo, graph)
+    if len(sample_set) == 0:
+      return self._solution_from_default_sample(
+        qubo,
+        graph,
+        fallback_reason="empty_sample_set",
+      )
     return Solution(
       edges=select_best_sample(sample_set, list(graph.edges.values()), self.ranker),
       sample_set=sample_set,
@@ -213,10 +237,32 @@ class QuboSolver:
   def _has_undirected_edges(self, graph: Graph) -> bool:
     return any(not edge.directed for edge in graph.edges.values())
 
+  def _has_qubo_variables(self, qubo: QuboMatrix) -> bool:
+    return bool(getattr(qubo, "variables", ()))
+
   def _solution_from_directed_graph(self, graph: Graph) -> Solution:
     return Solution(
       edges={edge.vertices for edge in graph.edges.values()},
       sample_set=empty_binary_sample_set(),
+      graph=graph,
+      score=None,
+    )
+
+  def _solution_from_default_sample(
+      self,
+      qubo: QuboMatrix,
+      graph: Graph,
+      fallback_reason: str,
+  ) -> Solution:
+    sample_set = SampleSet.from_samples(
+      {},
+      vartype="BINARY",
+      energy=float(getattr(qubo, "offset", 0.0)),
+    )
+    sample_set.info["fallback_reason"] = fallback_reason
+    return Solution(
+      edges=process_solution({}, list(graph.edges.values())),
+      sample_set=sample_set,
       graph=graph,
       score=None,
     )

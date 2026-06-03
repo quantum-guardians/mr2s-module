@@ -56,6 +56,8 @@ def select_best_sample(
     canonical_edges: list[Edge],
     ranker: SolutionRankerProtocol,
 ) -> set[tuple[int, int]]:
+  if len(sample_set) == 0:
+    return process_solution({}, canonical_edges)
 
   def get_effective_score(tuples: set[tuple[int, int]]):
     solution = Solution(
