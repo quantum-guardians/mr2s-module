@@ -54,6 +54,20 @@ def test_run_applies_preprocessing_directed_edges_from_edge_orienter() -> None:
   assert (1, 2) in solution.edges
 
 
+def test_run_allows_disconnected_soft_solution() -> None:
+  graph = Graph(edges=[
+    Edge(1, 2, 1, False),
+    Edge(2, 3, 1, False),
+  ])
+
+  solution = SAMR2SSolver(random_seed=3).run(graph)
+
+  assert solution.score is not None
+  assert solution.score.strong_connect_rate == 0.0
+  assert solution.score.apsp_sum == float("inf")
+  assert len(solution.edges) == 2
+
+
 def test_run_stops_each_restart_after_consecutive_stale_steps(monkeypatch) -> None:
   graph = Graph(edges=[Edge(1, 2, 1, False)])
   solver = SAMR2SSolver(

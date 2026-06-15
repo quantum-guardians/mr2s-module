@@ -109,6 +109,9 @@ Important separation:
 - `QuboMR2SSolver`
 - `SAMr2sSolver` (direct simulated annealing on edge orientations)
 
+`SAMR2SSolver` normalizes APSP, flow, and unreachable-pair terms by graph scale
+before combining them, so APSP does not dominate by raw size.
+
 `SAMR2SSolver` stops the current restart early after at least five temperature
 steps when both conditions hold for three consecutive steps:
 
