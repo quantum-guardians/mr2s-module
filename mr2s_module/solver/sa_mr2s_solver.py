@@ -119,6 +119,15 @@ class SAMR2SSolver:
     ))
 
   @staticmethod
+  def _build_graph_weight_scale(graph: Graph) -> float:
+    total_weight = sum(float(edge.weight) for edge in graph.edges.values())
+    return max(1.0, total_weight * total_weight)
+
+  @staticmethod
+  def _build_pair_scale(vertices: list[int]) -> float:
+    return float(max(1, len(vertices) * max(0, len(vertices) - 1)))
+
+  @staticmethod
   def _build_apsp_and_disconnected_pair_count(
       directed_edges: set[tuple[int, int]],
       vertices: list[int],
@@ -156,10 +165,12 @@ class SAMR2SSolver:
       vertices,
     )
     flow_score = self._build_flow_score(directed_edges, graph)
+    pair_scale = self._build_pair_scale(vertices)
+    weight_scale = self._build_graph_weight_scale(graph)
     return (
-      self.apsp_weight * apsp_sum
-      + self.flow_weight * flow_score
-      + self.disconnected_pair_penalty * float(unreachable_pairs)
+      self.apsp_weight * (apsp_sum / pair_scale)
+      + self.flow_weight * (flow_score / weight_scale)
+      + self.disconnected_pair_penalty * (float(unreachable_pairs) / pair_scale)
     )
 
   def _greedy_flow_seed_bits(
