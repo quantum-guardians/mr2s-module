@@ -41,7 +41,6 @@ from mr2s_module.solver import (
     MR2SSolver,
     QuboMR2SSolver,
     SAMR2SSolver,
-    SATemperatureTrace,
 )
 from mr2s_module.solver.partition import (
     DegeneracyPruningFaceCyclePartitionStrategy,
@@ -78,7 +77,6 @@ __all__ = [
     "QuboSolver",
     "QuboSolverProtocol",
     "SAMR2SSolver",
-    "SATemperatureTrace",
     "Score",
     "SmallWorldSpec",
     "SnowballFaceClusterer",
