@@ -43,12 +43,15 @@ from mr2s_module.qubo import (
     QuboSolver,
     SmallWorldSpec,
 )
-from mr2s_module.solver import MR2SSolver, QuboMR2SSolver
+from mr2s_module.solver import (
+    MR2SSolver,
+    QuboMR2SSolver,
+    SAMR2SSolver,
+)
 from mr2s_module.solver.partition import (
     DegeneracyPruningFaceCyclePartitionStrategy,
     EmbeddingAwareFaceCyclePartitionStrategy,
 )
-from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver
 from mr2s_module.util import estimate_required_qubits, map_binary_poly_to_bqm
 
 __all__ = [

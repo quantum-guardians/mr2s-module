@@ -110,6 +110,19 @@ Important separation:
 - `QuboMR2SSolver`
 - `SAMr2sSolver` (direct simulated annealing on edge orientations)
 
+`SAMR2SSolver` normalizes APSP, flow, and unreachable-pair terms by graph scale
+before combining them, so APSP does not dominate by raw size.
+
+`SAMR2SSolver` stops the current restart early after at least five temperature
+steps when both conditions hold for three consecutive steps:
+
+- best objective improvement is `0`
+- acceptance rate is at most `1%`
+
+Configure this with `early_stop_patience`, `min_temperature_steps`,
+`early_stop_acceptance_rate`, and `min_objective_improvement`. Set
+`early_stop_patience=None` to use only the temperature schedule.
+
 ### Ranking and evaluation
 
 - `ApspSumRanker`

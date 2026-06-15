@@ -26,6 +26,10 @@ class SAMR2SSolver:
       sweeps_per_temperature: int = 2,
       num_restarts: int = 4,
       random_seed: int | None = None,
+      early_stop_patience: int | None = 3,
+      min_temperature_steps: int = 5,
+      early_stop_acceptance_rate: float = 0.01,
+      min_objective_improvement: float = 0.0,
   ) -> None:
     if initial_temperature <= 0.0:
       raise ValueError("initial_temperature must be positive")
@@ -45,6 +49,14 @@ class SAMR2SSolver:
       raise ValueError("flow_weight must be non-negative")
     if disconnected_pair_penalty < 0.0:
       raise ValueError("disconnected_pair_penalty must be non-negative")
+    if early_stop_patience is not None and early_stop_patience < 1:
+      raise ValueError("early_stop_patience must be at least 1 or None")
+    if min_temperature_steps < 1:
+      raise ValueError("min_temperature_steps must be at least 1")
+    if not 0.0 <= early_stop_acceptance_rate <= 1.0:
+      raise ValueError("early_stop_acceptance_rate must be in [0.0, 1.0]")
+    if min_objective_improvement < 0.0:
+      raise ValueError("min_objective_improvement must be non-negative")
 
     self.edge_orienter = edge_orienter
     self.evaluator = evaluator
@@ -57,6 +69,10 @@ class SAMR2SSolver:
     self.sweeps_per_temperature = sweeps_per_temperature
     self.num_restarts = num_restarts
     self.random_seed = random_seed
+    self.early_stop_patience = early_stop_patience
+    self.min_temperature_steps = min_temperature_steps
+    self.early_stop_acceptance_rate = early_stop_acceptance_rate
+    self.min_objective_improvement = min_objective_improvement
 
   @staticmethod
   def _build_direction(
@@ -103,6 +119,15 @@ class SAMR2SSolver:
     ))
 
   @staticmethod
+  def _build_graph_weight_scale(graph: Graph) -> float:
+    total_weight = sum(float(edge.weight) for edge in graph.edges.values())
+    return max(1.0, total_weight * total_weight)
+
+  @staticmethod
+  def _build_pair_scale(vertices: list[int]) -> float:
+    return float(max(1, len(vertices) * max(0, len(vertices) - 1)))
+
+  @staticmethod
   def _build_apsp_and_disconnected_pair_count(
       directed_edges: set[tuple[int, int]],
       vertices: list[int],
@@ -140,10 +165,12 @@ class SAMR2SSolver:
       vertices,
     )
     flow_score = self._build_flow_score(directed_edges, graph)
+    pair_scale = self._build_pair_scale(vertices)
+    weight_scale = self._build_graph_weight_scale(graph)
     return (
-      self.apsp_weight * apsp_sum
-      + self.flow_weight * flow_score
-      + self.disconnected_pair_penalty * float(unreachable_pairs)
+      self.apsp_weight * (apsp_sum / pair_scale)
+      + self.flow_weight * (flow_score / weight_scale)
+      + self.disconnected_pair_penalty * (float(unreachable_pairs) / pair_scale)
     )
 
   def _greedy_flow_seed_bits(
@@ -204,7 +231,6 @@ class SAMR2SSolver:
     best_bits: list[int] | None = None
     best_objective = float("inf")
     seed_bits = self._greedy_flow_seed_bits(variable_edges, fixed_edges, graph)
-
     for restart in range(self.num_restarts):
       if restart == 0:
         current_bits = list(seed_bits)
@@ -222,8 +248,13 @@ class SAMR2SSolver:
         best_objective = current_objective
         best_bits = list(current_bits)
 
+      restart_best_objective = current_objective
+      stale_temperature_steps = 0
       temperature = self.initial_temperature
+      temperature_step = 0
       while temperature > self.final_temperature:
+        previous_restart_best = restart_best_objective
+        accepted_moves = 0
         for _ in range(steps_per_temperature):
           bit_index = rng.randrange(len(variable_edges))
           current_bits[bit_index] ^= 1
@@ -237,13 +268,38 @@ class SAMR2SSolver:
           delta = next_objective - current_objective
           accept = delta <= 0.0 or rng.random() < math.exp(-delta / temperature)
           if accept:
+            accepted_moves += 1
             current_objective = next_objective
+            restart_best_objective = min(
+              restart_best_objective,
+              current_objective,
+            )
             if current_objective < best_objective:
               best_objective = current_objective
               best_bits = list(current_bits)
           else:
             current_bits[bit_index] ^= 1
+
+        acceptance_rate = accepted_moves / steps_per_temperature
+        objective_improvement = previous_restart_best - restart_best_objective
+        can_stop = temperature_step + 1 >= self.min_temperature_steps
+        is_stale = (
+          objective_improvement <= self.min_objective_improvement
+          and acceptance_rate <= self.early_stop_acceptance_rate
+        )
+        stale_temperature_steps = (
+          stale_temperature_steps + 1
+          if can_stop and is_stale
+          else 0
+        )
+        if (
+          self.early_stop_patience is not None
+          and stale_temperature_steps >= self.early_stop_patience
+        ):
+          break
+
         temperature *= self.cooling_rate
+        temperature_step += 1
 
     if best_bits is None:
       return list(seed_bits), best_objective

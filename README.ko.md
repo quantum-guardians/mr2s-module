@@ -110,6 +110,17 @@ graph = Graph(edges=[
 - `QuboMR2SSolver`
 - `SAMr2sSolver` (간선 방향 자체를 직접 simulated annealing으로 최적화)
 
+`SAMR2SSolver`는 최소 5개 온도 단계를 수행한 뒤 다음 조건이 3단계 연속
+충족되면 현재 restart를 조기 종료합니다.
+
+- best objective 개선량이 `0`
+- acceptance rate가 `1%` 이하
+
+`early_stop_patience`, `min_temperature_steps`,
+`early_stop_acceptance_rate`, `min_objective_improvement`로 조정할 수
+있습니다. 온도 스케줄만 사용하려면 `early_stop_patience=None`을
+설정합니다.
+
 ### 랭킹 및 평가
 
 - `ApspSumRanker`
