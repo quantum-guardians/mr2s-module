@@ -178,7 +178,8 @@ strong-connectivity success, and keeps APSP quality comparable.
 
 `solve_with_chain_reduction` wraps a normal `QuboSolver` call with
 reduce → unit-reweight → solve → expand. The returned `Solution.edges` are directed edges
-on the **original** graph, so the call site is unchanged:
+on the **original** graph, so it yields the same result as solving directly — you just
+inject your QUBO builder and solver instead of calling `solver.run` yourself:
 
 ```python
 from mr2s_module import (
@@ -196,7 +197,7 @@ def build_qubo(graph: Graph):
 
 solver = QuboSolver.create_sa_solver(ranker=ApspSumRanker(), num_reads=80)
 
-# Drop-in replacement for `solver.run(build_qubo(graph), graph)`:
+# Same result as `solver.run(build_qubo(graph), graph)`, with chain reduction applied:
 solution = solve_with_chain_reduction(graph, build_qubo, solver)
 
 print(solution.edges)   # directed edges on the original graph

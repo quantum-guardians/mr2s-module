@@ -22,10 +22,8 @@ from __future__ import annotations
 
 from typing import Callable
 
-from dimod import SampleSet
-
 from mr2s_module.domain import Edge, Graph, Solution
-from mr2s_module.protocols import QuboMatrix
+from mr2s_module.protocols import QuboMatrix, QuboSolverProtocol
 from mr2s_module.reduction.degree_two_chain import (
   ChainReductionResult,
   DegreeTwoChainReducer,
@@ -33,10 +31,6 @@ from mr2s_module.reduction.degree_two_chain import (
 
 # build_qubo: 무방향 그래프 → QUBO(BQM). 예) NHop+Flow 다항식을 합성해 BQM 으로 매핑.
 QuboBuilder = Callable[[Graph], QuboMatrix]
-
-# solver: QuboSolver 처럼 .run(qubo, graph) -> Solution 을 제공하는 모든 솔버.
-class _SupportsRun:  # 문서용 프로토콜 힌트 (런타임 강제 아님)
-  def run(self, qubo: QuboMatrix, graph: Graph) -> Solution: ...
 
 
 def reweight_collapsed_to_unit(result: ChainReductionResult) -> Graph:
@@ -75,7 +69,7 @@ def expand_solution(
 def solve_with_chain_reduction(
     graph: Graph,
     build_qubo: QuboBuilder,
-    solver: _SupportsRun,
+    solver: QuboSolverProtocol,
     *,
     min_internal_vertices: int = 2,
 ) -> Solution:
@@ -104,10 +98,6 @@ def solve_with_chain_reduction(
   return Solution(
     edges=expanded_edges,
     graph=graph,
-    sample_set=_sample_set_of(reduced_solution),
+    sample_set=reduced_solution.sample_set,
     score=None,
   )
-
-
-def _sample_set_of(solution: Solution) -> SampleSet:
-  return solution.sample_set

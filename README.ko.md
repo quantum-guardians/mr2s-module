@@ -175,7 +175,8 @@ MR2S 간선 방향배정에서 차수-2 정점은 두 인접 간선의 방향이
 
 `solve_with_chain_reduction` 은 평범한 `QuboSolver` 호출을
 축약 → unit 재가중 → 풀이 → 복원 으로 감쌉니다. 반환되는 `Solution.edges` 는 **원본** 그래프
-위의 방향 간선이라 호출부 인터페이스는 동일합니다.
+위의 방향 간선이라, 직접 푸는 것과 동일한 결과를 줍니다 — `solver.run` 을 직접 호출하는 대신
+QUBO 빌더와 솔버를 주입하기만 하면 됩니다.
 
 ```python
 from mr2s_module import (
@@ -193,7 +194,7 @@ def build_qubo(graph: Graph):
 
 solver = QuboSolver.create_sa_solver(ranker=ApspSumRanker(), num_reads=80)
 
-# `solver.run(build_qubo(graph), graph)` 를 그대로 대체:
+# `solver.run(build_qubo(graph), graph)` 와 동일한 결과 + 체인 축약 적용:
 solution = solve_with_chain_reduction(graph, build_qubo, solver)
 
 print(solution.edges)   # 원본 그래프 위의 방향 간선
