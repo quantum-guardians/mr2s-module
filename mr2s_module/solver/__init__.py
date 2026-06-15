@@ -1,6 +1,6 @@
 from mr2s_module.solver.mr2s_solver import MR2SSolver
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
-from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver
+from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver, SATemperatureTrace
 from mr2s_module.solver.solve_context import QuboSolveContext
 from mr2s_module.solver.partition import (
   DegeneracyPruningFaceCyclePartitionStrategy,
@@ -12,6 +12,7 @@ __all__ = [
   "QuboMR2SSolver",
   "QuboSolveContext",
   "SAMR2SSolver",
+  "SATemperatureTrace",
   "DegeneracyPruningFaceCyclePartitionStrategy",
   "EmbeddingAwareFaceCyclePartitionStrategy",
 ]

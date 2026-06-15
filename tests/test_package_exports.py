@@ -14,6 +14,7 @@ from mr2s_module import (
   QuboMR2SSolver,
   QuboSolver,
   SAMR2SSolver,
+  SATemperatureTrace,
   SmallWorldSpec,
   SnowballFaceClusterer,
 )
@@ -36,4 +37,5 @@ def test_top_level_exports_support_component_composition() -> None:
     assert SmallWorldSpec is not None
     assert QuboSolver is not None
     assert SAMR2SSolver is not None
+    assert SATemperatureTrace is not None
     assert SnowballFaceClusterer is not None

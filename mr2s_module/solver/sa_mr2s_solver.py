@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 import random
+from dataclasses import dataclass
+from typing import Callable
 
 import networkx as nx
 from dimod import SampleSet
@@ -9,6 +11,23 @@ from dimod import SampleSet
 from mr2s_module.domain import Edge, Graph, Solution
 from mr2s_module.evaluator import Evaluator
 from mr2s_module.protocols import EdgeOrientationProtocol, EvaluatorProtocol
+
+
+@dataclass(frozen=True)
+class SATemperatureTrace:
+  restart: int
+  temperature_step: int
+  total_iterations: int
+  temperature: float
+  apsp_sum: float
+  flow_score: float
+  unreachable_pairs: int
+  objective: float
+  best_objective: float
+  accepted_moves: int
+  acceptance_rate: float
+  stale_temperature_steps: int
+  stopped_early: bool
 
 
 class SAMR2SSolver:
@@ -26,6 +45,11 @@ class SAMR2SSolver:
       sweeps_per_temperature: int = 2,
       num_restarts: int = 4,
       random_seed: int | None = None,
+      trace_callback: Callable[[SATemperatureTrace], None] | None = None,
+      early_stop_patience: int | None = 3,
+      min_temperature_steps: int = 5,
+      early_stop_acceptance_rate: float = 0.01,
+      min_objective_improvement: float = 0.0,
   ) -> None:
     if initial_temperature <= 0.0:
       raise ValueError("initial_temperature must be positive")
@@ -45,6 +69,14 @@ class SAMR2SSolver:
       raise ValueError("flow_weight must be non-negative")
     if disconnected_pair_penalty < 0.0:
       raise ValueError("disconnected_pair_penalty must be non-negative")
+    if early_stop_patience is not None and early_stop_patience < 1:
+      raise ValueError("early_stop_patience must be at least 1 or None")
+    if min_temperature_steps < 1:
+      raise ValueError("min_temperature_steps must be at least 1")
+    if not 0.0 <= early_stop_acceptance_rate <= 1.0:
+      raise ValueError("early_stop_acceptance_rate must be in [0.0, 1.0]")
+    if min_objective_improvement < 0.0:
+      raise ValueError("min_objective_improvement must be non-negative")
 
     self.edge_orienter = edge_orienter
     self.evaluator = evaluator
@@ -57,6 +89,11 @@ class SAMR2SSolver:
     self.sweeps_per_temperature = sweeps_per_temperature
     self.num_restarts = num_restarts
     self.random_seed = random_seed
+    self.trace_callback = trace_callback
+    self.early_stop_patience = early_stop_patience
+    self.min_temperature_steps = min_temperature_steps
+    self.early_stop_acceptance_rate = early_stop_acceptance_rate
+    self.min_objective_improvement = min_objective_improvement
 
   @staticmethod
   def _build_direction(
@@ -134,12 +171,37 @@ class SAMR2SSolver:
       fixed_edges: set[tuple[int, int]],
       vertices: list[int],
   ) -> float:
+    apsp_sum, flow_score, unreachable_pairs = self._objective_metrics(
+      graph,
+      variable_edges,
+      state_bits,
+      fixed_edges,
+      vertices,
+    )
+    return self._combine_objective(apsp_sum, flow_score, unreachable_pairs)
+
+  def _objective_metrics(
+      self,
+      graph: Graph,
+      variable_edges: list[Edge],
+      state_bits: list[int],
+      fixed_edges: set[tuple[int, int]],
+      vertices: list[int],
+  ) -> tuple[float, float, int]:
     directed_edges = self._state_to_edges(variable_edges, state_bits, fixed_edges)
     apsp_sum, unreachable_pairs = self._build_apsp_and_disconnected_pair_count(
       directed_edges,
       vertices,
     )
     flow_score = self._build_flow_score(directed_edges, graph)
+    return apsp_sum, flow_score, unreachable_pairs
+
+  def _combine_objective(
+      self,
+      apsp_sum: float,
+      flow_score: float,
+      unreachable_pairs: int,
+  ) -> float:
     return (
       self.apsp_weight * apsp_sum
       + self.flow_weight * flow_score
@@ -204,6 +266,7 @@ class SAMR2SSolver:
     best_bits: list[int] | None = None
     best_objective = float("inf")
     seed_bits = self._greedy_flow_seed_bits(variable_edges, fixed_edges, graph)
+    total_iterations = 0
 
     for restart in range(self.num_restarts):
       if restart == 0:
@@ -222,8 +285,13 @@ class SAMR2SSolver:
         best_objective = current_objective
         best_bits = list(current_bits)
 
+      restart_best_objective = current_objective
+      stale_temperature_steps = 0
       temperature = self.initial_temperature
+      temperature_step = 0
       while temperature > self.final_temperature:
+        previous_restart_best = restart_best_objective
+        accepted_moves = 0
         for _ in range(steps_per_temperature):
           bit_index = rng.randrange(len(variable_edges))
           current_bits[bit_index] ^= 1
@@ -237,13 +305,65 @@ class SAMR2SSolver:
           delta = next_objective - current_objective
           accept = delta <= 0.0 or rng.random() < math.exp(-delta / temperature)
           if accept:
+            accepted_moves += 1
             current_objective = next_objective
+            restart_best_objective = min(
+              restart_best_objective,
+              current_objective,
+            )
             if current_objective < best_objective:
               best_objective = current_objective
               best_bits = list(current_bits)
           else:
             current_bits[bit_index] ^= 1
+
+        total_iterations += steps_per_temperature
+        acceptance_rate = accepted_moves / steps_per_temperature
+        objective_improvement = previous_restart_best - restart_best_objective
+        can_stop = temperature_step + 1 >= self.min_temperature_steps
+        is_stale = (
+          objective_improvement <= self.min_objective_improvement
+          and acceptance_rate <= self.early_stop_acceptance_rate
+        )
+        stale_temperature_steps = (
+          stale_temperature_steps + 1
+          if can_stop and is_stale
+          else 0
+        )
+        stopped_early = (
+          self.early_stop_patience is not None
+          and stale_temperature_steps >= self.early_stop_patience
+        )
+
+        if self.trace_callback is not None:
+          apsp_sum, flow_score, unreachable_pairs = self._objective_metrics(
+            graph,
+            variable_edges,
+            current_bits,
+            fixed_edges,
+            vertices,
+          )
+          self.trace_callback(SATemperatureTrace(
+            restart=restart,
+            temperature_step=temperature_step,
+            total_iterations=total_iterations,
+            temperature=temperature,
+            apsp_sum=apsp_sum,
+            flow_score=flow_score,
+            unreachable_pairs=unreachable_pairs,
+            objective=current_objective,
+            best_objective=best_objective,
+            accepted_moves=accepted_moves,
+            acceptance_rate=acceptance_rate,
+            stale_temperature_steps=stale_temperature_steps,
+            stopped_early=stopped_early,
+          ))
+
+        if stopped_early:
+          break
+
         temperature *= self.cooling_rate
+        temperature_step += 1
 
     if best_bits is None:
       return list(seed_bits), best_objective
