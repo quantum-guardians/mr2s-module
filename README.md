@@ -93,6 +93,7 @@ Important separation:
 ### Preprocessing
 
 - `FaceClusterPartition`
+- `DegreeTwoChainReducer` — collapses degree-2 vertex chains into single edges (see [Chain Reduction](#chain-reduction))
 
 ### QUBO generators
 
@@ -152,6 +153,66 @@ solution = solver.run(graph)
 
 print(solution.edges)
 print(solution.score)
+```
+
+## Chain Reduction
+
+In MR2S edge orientation, a degree-2 vertex has its two incident edges forced into a
+consistent direction, so a whole chain of degree-2 vertices is decided by a single bit.
+Keeping every chain edge as its own QUBO variable wastes variables, and — more importantly
+— it blinds the small-world `NHop` reward: an n-hop path that enters a branch-free
+"corridor" dead-ends inside the chain instead of reaching the next hub, so the objective
+cannot see hub-to-hub (macro) structure within the same horizon.
+
+`DegreeTwoChainReducer` collapses each degree-2 chain `a - x1 - … - xk - b` into a single
+edge `a - b`, then `expand()` restores the directed solution onto the original graph. On a
+~300-vertex planar graph this typically halves the QUBO variable count, improves
+strong-connectivity success, and keeps APSP quality comparable.
+
+> ⚠️ Weight caveat: a collapsed edge's weight is the **sum** of the original chain weights,
+> which distorts the Flow/NHop QUBO and collapses strong connectivity. Solve the reduced
+> graph with **unit weight** on collapsed edges; `expand()` re-applies the original weights
+> when restoring, so APSP distances are preserved.
+
+### Adapter
+
+`solve_with_chain_reduction` wraps a normal `QuboSolver` call with
+reduce → unit-reweight → solve → expand. The returned `Solution.edges` are directed edges
+on the **original** graph, so the call site is unchanged:
+
+```python
+from mr2s_module import (
+    ApspSumRanker, FlowPolyGenerator, Graph, NHop, NHopPolyGenerator,
+    QuboSolver, SmallWorldSpec,
+)
+from mr2s_module.reduction import solve_with_chain_reduction
+from mr2s_module.util import add_polys
+from mr2s_module.util.qubo_util import map_binary_poly_to_bqm
+
+# Provide your polynomial composition as a callback: (graph) -> QUBO.
+def build_qubo(graph: Graph):
+    n_hop = NHopPolyGenerator(small_world_spec=SmallWorldSpec(n_hops=[NHop(2, 1)]))
+    return map_binary_poly_to_bqm(add_polys(FlowPolyGenerator().run(graph), n_hop.run(graph)))
+
+solver = QuboSolver.create_sa_solver(ranker=ApspSumRanker(), num_reads=80)
+
+# Drop-in replacement for `solver.run(build_qubo(graph), graph)`:
+solution = solve_with_chain_reduction(graph, build_qubo, solver)
+
+print(solution.edges)   # directed edges on the original graph
+```
+
+If the graph has no degree-2 chains, the adapter solves the original graph directly, so
+behavior is identical to not using it. Helper functions `reweight_collapsed_to_unit` and
+`expand_solution` are also exported for custom pipelines.
+
+### Benchmark
+
+A runnable experiment that measures the n-hop horizon blind spot (structure metrics M1/M2/M3
+plus a real SA comparison) is at [tests/run_chain_reduction_benchmark.py](tests/run_chain_reduction_benchmark.py):
+
+```bash
+python tests/run_chain_reduction_benchmark.py --num-reads 60
 ```
 
 ## Demo Script

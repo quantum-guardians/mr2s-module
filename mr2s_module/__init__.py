@@ -30,6 +30,12 @@ from mr2s_module.protocols import (
     Solution,
     SolutionRankerProtocol,
 )
+from mr2s_module.reduction import (
+    ChainReductionResult,
+    CollapsedChain,
+    DegreeTwoChainReducer,
+    solve_with_chain_reduction,
+)
 from mr2s_module.qubo import (
     FlowPolyGenerator,
     NHop,
@@ -49,6 +55,10 @@ __all__ = [
     "AdjEntry",
     "ApspSumRanker",
     "BalancedFaceGraphClusterer",
+    "ChainReductionResult",
+    "CollapsedChain",
+    "DegreeTwoChainReducer",
+    "solve_with_chain_reduction",
     "Edge",
     "EdgeOrientationProtocol",
     "EdgeType",

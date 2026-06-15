@@ -1,7 +1,10 @@
 from mr2s_module import (
   ApspSumRanker,
   BalancedFaceGraphClusterer,
+  ChainReductionResult,
+  CollapsedChain,
   DegeneracyPruningFaceCyclePartitionStrategy,
+  DegreeTwoChainReducer,
   Edge,
   EmbeddingAwareFaceCyclePartitionStrategy,
   EmbeddingEstimate,
@@ -16,13 +19,17 @@ from mr2s_module import (
   SAMR2SSolver,
   SmallWorldSpec,
   SnowballFaceClusterer,
+  solve_with_chain_reduction,
 )
 
 
 def test_top_level_exports_support_component_composition() -> None:
     assert Graph is not None
     assert BalancedFaceGraphClusterer is not None
+    assert ChainReductionResult is not None
+    assert CollapsedChain is not None
     assert DegeneracyPruningFaceCyclePartitionStrategy is not None
+    assert DegreeTwoChainReducer is not None
     assert Edge is not None
     assert EmbeddingAwareFaceCyclePartitionStrategy is not None
     assert EmbeddingEstimate is not None
@@ -37,3 +44,4 @@ def test_top_level_exports_support_component_composition() -> None:
     assert QuboSolver is not None
     assert SAMR2SSolver is not None
     assert SnowballFaceClusterer is not None
+    assert solve_with_chain_reduction is not None

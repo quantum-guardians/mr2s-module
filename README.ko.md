@@ -93,6 +93,7 @@ graph = Graph(edges=[
 ### 전처리
 
 - `FaceClusterPartition`
+- `DegreeTwoChainReducer` — 차수-2 정점 체인을 단일 간선으로 축약 ([체인 축약](#체인-축약) 참고)
 
 ### QUBO 생성기
 
@@ -152,6 +153,62 @@ solution = solver.run(graph)
 
 print(solution.edges)
 print(solution.score)
+```
+
+## 체인 축약
+
+MR2S 간선 방향배정에서 차수-2 정점은 두 인접 간선의 방향이 항상 일관되게 강제되므로,
+차수-2 정점이 이어진 체인 전체가 단 1비트로 결정됩니다. 체인의 모든 간선을 각각 QUBO 변수로
+두는 것은 변수 낭비이며, 더 중요하게는 small-world `NHop` 보상의 시야를 가립니다. n-hop 경로가
+분기 없는 "복도"에 들어가면 다음 허브에 닿지 못하고 체인 내부에서 막다른 길로 끝나서, 같은
+지평선(horizon) 안에서 허브-허브(매크로) 구조를 보지 못합니다.
+
+`DegreeTwoChainReducer` 는 각 차수-2 체인 `a - x1 - … - xk - b` 를 단일 간선 `a - b` 로 축약하고,
+`expand()` 로 방향 해를 원본 그래프 위에 복원합니다. 정점 약 300개의 평면 그래프에서 보통 QUBO
+변수 수가 절반으로 줄고, 강연결 성공률이 좋아지며, APSP 품질은 동등 수준을 유지합니다.
+
+> ⚠️ 가중치 캐비엇: 축약 간선의 가중치는 원본 체인 가중치의 **합** 이라 Flow/NHop QUBO 를
+> 왜곡해 강연결이 붕괴합니다. 축약 그래프는 축약 간선을 **unit 가중치**로 풀고, 복원 시
+> `expand()` 가 원본 가중치를 다시 입히므로 APSP 거리는 보존됩니다.
+
+### 어댑터
+
+`solve_with_chain_reduction` 은 평범한 `QuboSolver` 호출을
+축약 → unit 재가중 → 풀이 → 복원 으로 감쌉니다. 반환되는 `Solution.edges` 는 **원본** 그래프
+위의 방향 간선이라 호출부 인터페이스는 동일합니다.
+
+```python
+from mr2s_module import (
+    ApspSumRanker, FlowPolyGenerator, Graph, NHop, NHopPolyGenerator,
+    QuboSolver, SmallWorldSpec,
+)
+from mr2s_module.reduction import solve_with_chain_reduction
+from mr2s_module.util import add_polys
+from mr2s_module.util.qubo_util import map_binary_poly_to_bqm
+
+# 다항식 합성 로직을 콜백으로 주입: (graph) -> QUBO.
+def build_qubo(graph: Graph):
+    n_hop = NHopPolyGenerator(small_world_spec=SmallWorldSpec(n_hops=[NHop(2, 1)]))
+    return map_binary_poly_to_bqm(add_polys(FlowPolyGenerator().run(graph), n_hop.run(graph)))
+
+solver = QuboSolver.create_sa_solver(ranker=ApspSumRanker(), num_reads=80)
+
+# `solver.run(build_qubo(graph), graph)` 를 그대로 대체:
+solution = solve_with_chain_reduction(graph, build_qubo, solver)
+
+print(solution.edges)   # 원본 그래프 위의 방향 간선
+```
+
+차수-2 체인이 없으면 어댑터는 원본 그래프를 그대로 풀어 동작이 완전히 동일합니다. 보조 함수
+`reweight_collapsed_to_unit` 와 `expand_solution` 도 커스텀 파이프라인용으로 export 되어 있습니다.
+
+### 벤치마크
+
+n-hop 지평선 맹점을 측정하는 실험(구조 지표 M1/M2/M3 + 실제 SA 비교)은
+[tests/run_chain_reduction_benchmark.py](tests/run_chain_reduction_benchmark.py) 에 있습니다.
+
+```bash
+python tests/run_chain_reduction_benchmark.py --num-reads 60
 ```
 
 ## 데모 스크립트
