@@ -2,13 +2,13 @@
 
 ## Agent Instruction Scope
 This file is the repository-level source of truth. Repository-specific rules
-below take precedence over defaults in `.agents/docs/`, `.agents/skills/`, and
-`.agents/agents/`.
+below take precedence over defaults in `.claude/docs/`, `.claude/skills/`, and
+`.claude/agents/`.
 
-Before non-trivial work, read `.agents/docs/project.md` and follow
-`.agents/docs/workflow.md` and `.agents/docs/testing.md`. For tracked Git work,
+Before non-trivial work, read `.claude/docs/project.md` and follow
+`.claude/docs/workflow.md` and `.claude/docs/testing.md`. For tracked Git work,
 also use the issue, branch, commit, and pull-request documents in
-`.agents/docs/`. Use project-local skills only when their trigger applies.
+`.claude/docs/`. Use project-local skills only when their trigger applies.
 
 ## Project Structure & Module Organization
 `mr2s_module/` contains the library code. Keep domain models in `mr2s_module/domain/`, cycle extraction logic in `mr2s_module/cycle/`, QUBO generation and solving in `mr2s_module/qubo/`, orchestration in `mr2s_module/solver/`, evaluation code in `mr2s_module/evaluator/`, and shared helpers in `mr2s_module/util/`. Package metadata lives in `pyproject.toml`; built artifacts are written to `dist/` and should not be edited manually.
@@ -33,7 +33,7 @@ Add tests under a top-level `tests/` package that mirrors the module layout, for
 Create feature branches with the pattern `feat/ISSUE-{ISSUE_NUM}`, for example `feat/ISSUE-11`. Recent history favors short imperative commits, usually with a Conventional Commit prefix such as `feat:` or a direct maintenance message. Keep commit subjects concise and specific, for example `feat: add APSP evaluator`. Pull requests should describe the behavioral change, note any graph or QUBO assumptions, link the related issue, and include sample input/output when algorithm results change.
 
 ## Release Guidelines
-Use `.agents/assets/release-template.md` for GitHub release notes. Before writing a release, review the full changelog range from the previous tag to the new tag and make the summary and change list reflect the whole release, not only the most recent pull request. Fill in the tag, summary, change list, validation result, related pull request, and full changelog link before publishing a release. Keep older releases on the same section structure when practical so release history stays consistent.
+Use `.claude/assets/release-template.md` for GitHub release notes. Before writing a release, review the full changelog range from the previous tag to the new tag and make the summary and change list reflect the whole release, not only the most recent pull request. Fill in the tag, summary, change list, validation result, related pull request, and full changelog link before publishing a release. Keep older releases on the same section structure when practical so release history stays consistent.
 
 ## Security & Configuration Tips
 Do not hardcode credentials or solver endpoints. Treat third-party solver configuration as environment-specific, and keep `.pypirc` or publishing settings out of feature changes unless packaging work requires them.
