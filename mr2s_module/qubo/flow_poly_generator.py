@@ -17,8 +17,9 @@ class FlowPolyGenerator:
         term = add_polys(term, BinaryPolynomial({(): temp}, Vartype.BINARY))
         continue
 
-      # 나가는 방향이 1, 들어오는 방향이 -1
-      indicator_function = get_indicator_function(vertex, edge.other_vertex(vertex), edge.weight)
+      # 나가는 방향이 1, 들어오는 방향이 -1. 흐름보존은 방향(±1)만 보므로
+      # 간선 가중치와 무관하다(directed 분기처럼 unit 으로 고정).
+      indicator_function = get_indicator_function(vertex, edge.other_vertex(vertex), 1)
       indicator_function.scale(2)
       temp = add_polys(indicator_function, BinaryPolynomial({(): -1}, Vartype.BINARY))
       term = add_polys(term, temp)

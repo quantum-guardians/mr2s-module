@@ -250,17 +250,6 @@ def structure_metrics(graph: Graph, chains, n: int) -> dict:
 # --------------------------------------------------------------------------- #
 # SA 결과 지표 (Part B)
 # --------------------------------------------------------------------------- #
-def _reweight_collapsed(result, mode: str) -> Graph:
-  """SA 로 풀 그래프 준비. mode=='unit' 이면 축약 간선 가중치를 1 로 고정한다."""
-  collapsed_ids = {frozenset(chain.endpoints) for chain in result.chains}
-  edges: list[Edge] = []
-  for edge in result.reduced_graph.edges.values():
-    u, v = edge.endpoints()
-    weight = 1 if (mode == "unit" and edge.id in collapsed_ids) else edge.weight
-    edges.append(Edge(u, v, weight, False))
-  return Graph(edges=edges)
-
-
 def build_bqm(graph: Graph):
   n_hop = NHopPolyGenerator()
   n_hop.small_world_spec = SmallWorldSpec(n_hops=[NHop(n=2, weight=1)])
@@ -415,7 +404,7 @@ def main() -> None:
     base_vars, 100.0 * base_strong, base_reads, base_apsp, base_time,
   )
 
-  solve_graph = _reweight_collapsed(result, "unit")
+  solve_graph = result.reduced_graph
   t0 = time.perf_counter()
   reduced_solution, reduced_vars = solve_sa(solve_graph, args.num_reads, args.seed)
   reduced_time = time.perf_counter() - t0
@@ -425,15 +414,15 @@ def main() -> None:
   )
   reduced_apsp = apsp_sum(graph, expand_best(result, reduced_solution))
   logger.info(
-    "[reduced/unit] 변수=%d (절감 %.1f%%) | 강연결 %.1f%% (%d reads) | "
+    "[reduced] 변수=%d (절감 %.1f%%) | 강연결 %.1f%% (%d reads) | "
     "best APSP=%.0f | %.2fs",
     reduced_vars,
     100.0 * (base_vars - reduced_vars) / max(base_vars, 1),
     100.0 * reduced_strong, reduced_reads, reduced_apsp, reduced_time,
   )
   logger.info(
-    "[비고] 축약 간선을 sum 가중치로 풀면 Flow/NHop QUBO 가 왜곡돼 강연결이 붕괴 → "
-    "unit 가중치 사용(1차 실험에서 입증)."
+    "[비고] FlowPoly 가 흐름보존을 가중치 무관(±1)하게 다루므로 축약 간선을 "
+    "sum 가중치 그대로 풀어도 강연결 안전, 거리(NHop/APSP)는 보존."
   )
 
   # 4) 결론 1줄

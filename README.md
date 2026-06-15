@@ -169,15 +169,15 @@ edge `a - b`, then `expand()` restores the directed solution onto the original g
 ~300-vertex planar graph this typically halves the QUBO variable count, improves
 strong-connectivity success, and keeps APSP quality comparable.
 
-> ⚠️ Weight caveat: a collapsed edge's weight is the **sum** of the original chain weights,
-> which distorts the Flow/NHop QUBO and collapses strong connectivity. Solve the reduced
-> graph with **unit weight** on collapsed edges; `expand()` re-applies the original weights
-> when restoring, so APSP distances are preserved.
+> A collapsed edge's weight is the **sum** of the original chain weights, so it carries the
+> chain's true distance for the `NHop`/APSP terms. Flow conservation only counts orientation
+> (`(out − in)²`, ±1 per edge, weight-independent), so the summed weight is solved as-is — no
+> unit re-weighting needed, and distances stay exact.
 
 ### Adapter
 
 `solve_with_chain_reduction` wraps a normal `QuboSolver` call with
-reduce → unit-reweight → solve → expand. The returned `Solution.edges` are directed edges
+reduce → solve → expand. The returned `Solution.edges` are directed edges
 on the **original** graph, so it yields the same result as solving directly — you just
 inject your QUBO builder and solver instead of calling `solver.run` yourself:
 
@@ -204,8 +204,8 @@ print(solution.edges)   # directed edges on the original graph
 ```
 
 If the graph has no degree-2 chains, the adapter solves the original graph directly, so
-behavior is identical to not using it. Helper functions `reweight_collapsed_to_unit` and
-`expand_solution` are also exported for custom pipelines.
+behavior is identical to not using it. The `expand_solution` helper is also exported for
+custom pipelines.
 
 ### Benchmark
 

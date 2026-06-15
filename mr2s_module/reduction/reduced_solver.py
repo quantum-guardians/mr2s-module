@@ -5,17 +5,16 @@
     qubo = build_qubo(graph)          # NHop + Flow 등
     solution = solver.run(qubo, graph)
 
-이 어댑터는 그 한 줄을 **축약 → unit 재가중 → 풀이 → 원본 복원**으로 감싼다::
+이 어댑터는 그 한 줄을 **축약 → 풀이 → 원본 복원**으로 감싼다::
 
     solution = solve_with_chain_reduction(graph, build_qubo, solver)
 
 `solution.edges` 는 *원본* 그래프 위의 directed 간선 집합이라, 호출부 입장에서는
 축약을 쓰지 않은 것과 동일한 인터페이스다(변수만 줄고 강연결은 더 안정적).
 
-⚠️ 가중치 캐비엇: 축약 간선의 `collapsed_weight` 는 원본 간선 가중치의 *합* 이라
-Flow/NHop QUBO 를 왜곡해 강연결이 붕괴한다. 따라서 QUBO 를 푸는 그래프에서는 축약
-간선을 **unit(1) 가중치**로 재설정한다. 복원(`expand`)은 항상 원본 간선 가중치를 쓰므로
-APSP/거리 정보는 보존된다.
+축약 간선의 `collapsed_weight` 는 원본 간선 가중치의 *합* 이라 체인의 거리(APSP/NHop)
+정보를 그대로 들고 있다. FlowPolyGenerator 가 흐름보존을 가중치 무관(±1)하게 다루므로
+축약 간선을 합 가중치 그대로 풀어도 강연결이 깨지지 않는다 → 별도 unit 재가중 불필요.
 """
 
 from __future__ import annotations
@@ -33,32 +32,17 @@ from mr2s_module.reduction.degree_two_chain import (
 QuboBuilder = Callable[[Graph], QuboMatrix]
 
 
-def reweight_collapsed_to_unit(result: ChainReductionResult) -> Graph:
-  """축약 그래프를 QUBO 풀이용으로 정규화: 축약 간선만 가중치를 1 로 고정.
-
-  pass-through(체인이 아니던) 간선은 원본 가중치 그대로 유지한다.
-  """
-  collapsed_ids = {frozenset(chain.endpoints) for chain in result.chains}
-  edges: list[Edge] = []
-  for edge in result.reduced_graph.edges.values():
-    u, v = edge.endpoints()
-    weight = 1 if edge.id in collapsed_ids else edge.weight
-    edges.append(Edge(u, v, weight, edge.directed))
-  return Graph(edges=edges)
-
-
 def expand_solution(
     result: ChainReductionResult,
     reduced_solution: Solution,
-    solve_graph: Graph,
 ) -> set[tuple[int, int]]:
   """축약 그래프의 directed 해를 원본 그래프 위 directed 간선 집합으로 복원.
 
-  reduced_solution.edges 는 (u, v) 튜플이라 가중치가 없으므로, solve_graph 의 가중치를
+  reduced_solution.edges 는 (u, v) 튜플이라 가중치가 없으므로, 축약 그래프의 가중치를
   붙여 Edge 로 만든 뒤 `result.expand` 로 펼친다. (축약 간선 가중치는 expand 가
-  원본 간선 가중치로 덮으므로 여기서 unit 이어도 무방하다.)
+  원본 간선 가중치로 덮으므로 여기 가중치 값 자체는 무방하다.)
   """
-  weight_by_id = {e.id: e.weight for e in solve_graph.edges.values()}
+  weight_by_id = {e.id: e.weight for e in result.reduced_graph.edges.values()}
   oriented = [
     Edge(s, t, weight_by_id[frozenset({s, t})], True)
     for s, t in reduced_solution.edges
@@ -91,10 +75,10 @@ def solve_with_chain_reduction(
   if not result.chains:
     return solver.run(build_qubo(graph), graph)
 
-  solve_graph = reweight_collapsed_to_unit(result)
-  reduced_solution = solver.run(build_qubo(solve_graph), solve_graph)
+  reduced_graph = result.reduced_graph
+  reduced_solution = solver.run(build_qubo(reduced_graph), reduced_graph)
 
-  expanded_edges = expand_solution(result, reduced_solution, solve_graph)
+  expanded_edges = expand_solution(result, reduced_solution)
   return Solution(
     edges=expanded_edges,
     graph=graph,

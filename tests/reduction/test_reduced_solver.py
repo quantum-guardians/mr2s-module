@@ -15,7 +15,6 @@ from mr2s_module import (
 from mr2s_module.domain import Solution
 from mr2s_module.reduction import (
   DegreeTwoChainReducer,
-  reweight_collapsed_to_unit,
   solve_with_chain_reduction,
 )
 from mr2s_module.util import add_polys
@@ -60,7 +59,7 @@ def _build_qubo(graph: Graph):
   return map_binary_poly_to_bqm(add_polys(FlowPolyGenerator().run(graph), n_hop.run(graph)))
 
 
-def test_reweight_collapsed_to_unit_sets_only_collapsed_edges_to_one() -> None:
+def test_collapsed_edge_keeps_summed_weight() -> None:
   graph = Graph(edges=[
     Edge(0, 2, 3, False),
     Edge(2, 3, 5, False),
@@ -73,15 +72,13 @@ def test_reweight_collapsed_to_unit_sets_only_collapsed_edges_to_one() -> None:
   ])
   result = DegreeTwoChainReducer().reduce(graph)
 
-  solve_graph = reweight_collapsed_to_unit(result)
-
-  # 축약 간선 {0,1} 은 sum(15) 대신 unit(1) 로.
-  assert solve_graph.edges[frozenset({0, 1})].weight == 1
+  # 축약 간선 {0,1} 은 체인 가중치 합(3+5+7=15) 을 그대로 보존(거리/NHop).
+  assert result.reduced_graph.edges[frozenset({0, 1})].weight == 15
   # pass-through 간선은 원본 가중치(9) 유지.
-  assert solve_graph.edges[frozenset({0, 4})].weight == 9
+  assert result.reduced_graph.edges[frozenset({0, 4})].weight == 9
 
 
-def test_solve_with_reduction_solves_on_unit_reduced_graph() -> None:
+def test_solve_with_reduction_solves_on_reduced_graph() -> None:
   graph = _ladder_graph_with_chains()
   solver = _RecordingSolver()
 
@@ -90,9 +87,9 @@ def test_solve_with_reduction_solves_on_unit_reduced_graph() -> None:
   reduced = DegreeTwoChainReducer().reduce(graph).reduced_graph
   # 어댑터는 원본이 아닌 '축약' 그래프로 풀어야 한다 (변수 절감).
   assert len(solver.seen_graph.edges) == len(reduced.edges) < len(graph.edges)
-  # 축약 간선은 unit 가중치로 풀린다.
+  # 축약 간선은 합 가중치(체인 간선 3개, 모두 unit → 3)를 보존한다.
   for chain_endpoint in [frozenset({10, 20}), frozenset({20, 30})]:
-    assert solver.seen_graph.edges[chain_endpoint].weight == 1
+    assert solver.seen_graph.edges[chain_endpoint].weight == 3
 
 
 def test_solve_with_reduction_expands_to_full_original_orientation() -> None:
