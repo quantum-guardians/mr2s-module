@@ -47,6 +47,10 @@ class DnCGraphPartitionStrategyProtocol(Protocol):
     def run(self, graph: Graph) -> EmbeddableGraphPartition: ...
 
 
+class QuboBuilderProtocol(Protocol):
+    def __call__(self, graph: Graph) -> QuboMatrix: ...
+
+
 class QuboSolverProtocol(Protocol):
     def run(self, qubo: QuboMatrix, graph: Graph) -> Solution: ...
 

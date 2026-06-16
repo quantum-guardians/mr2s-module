@@ -93,7 +93,7 @@ class DegreeTwoChainReducer:
     self.min_internal_vertices = min_internal_vertices
 
   def reduce(self, graph: Graph) -> ChainReductionResult:
-    neighbors = _build_simple_adjacency(graph)
+    neighbors = graph.simple_adjacency()
     degree_two = {v for v, nbrs in neighbors.items() if len(nbrs) == 2}
 
     chains: list[CollapsedChain] = []
@@ -172,18 +172,6 @@ class DegreeTwoChainReducer:
       original_edges=original_edges,
       collapsed_weight=collapsed_weight,
     )
-
-
-def _build_simple_adjacency(graph: Graph) -> dict[int, set[int]]:
-  """무방향 단순 인접 집합 (self-loop·중복 무시). 차수 = 이웃 수."""
-  neighbors: dict[int, set[int]] = {}
-  for edge in graph.edges.values():
-    u, v = edge.endpoints()
-    if u == v:
-      continue
-    neighbors.setdefault(u, set()).add(v)
-    neighbors.setdefault(v, set()).add(u)
-  return neighbors
 
 
 def _walk_chain(

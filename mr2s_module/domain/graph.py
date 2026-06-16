@@ -32,6 +32,17 @@ class Graph:
   def get_vertices(self) -> set[int]:
     return {v for edge in self.edges.values() for v in edge.vertices}
 
+  def simple_adjacency(self) -> dict[int, set[int]]:
+    """무방향 단순 인접 집합 (self-loop·중복 무시). 차수 = 이웃 수."""
+    neighbors: dict[int, set[int]] = {}
+    for edge in self.edges.values():
+      u, v = edge.endpoints()
+      if u == v:
+        continue
+      neighbors.setdefault(u, set()).add(v)
+      neighbors.setdefault(v, set()).add(u)
+    return neighbors
+
   def get_adjacency_dict(self) -> dict[int, list[AdjEntry]]:
     adj = defaultdict(list)
     for edge in self.edges.values():

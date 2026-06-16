@@ -19,17 +19,15 @@
 
 from __future__ import annotations
 
-from typing import Callable
-
 from mr2s_module.domain import Edge, Graph, Solution
-from mr2s_module.protocols import QuboMatrix, QuboSolverProtocol
+from mr2s_module.protocols import QuboBuilderProtocol, QuboSolverProtocol
 from mr2s_module.reduction.degree_two_chain import (
   ChainReductionResult,
   DegreeTwoChainReducer,
 )
 
 # build_qubo: 무방향 그래프 → QUBO(BQM). 예) NHop+Flow 다항식을 합성해 BQM 으로 매핑.
-QuboBuilder = Callable[[Graph], QuboMatrix]
+# 주입 협력자 컨벤션에 맞춰 Callable 대신 QuboBuilderProtocol 사용(protocols.py).
 
 
 def expand_solution(
@@ -52,7 +50,7 @@ def expand_solution(
 
 def solve_with_chain_reduction(
     graph: Graph,
-    build_qubo: QuboBuilder,
+    build_qubo: QuboBuilderProtocol,
     solver: QuboSolverProtocol,
     *,
     min_internal_vertices: int = 2,
