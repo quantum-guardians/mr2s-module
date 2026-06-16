@@ -89,6 +89,7 @@ __all__ = [
     "create_robbin_solver",
     "create_ils_solver",
     "DnCMr2sSolver",
+    "Mr2sSolverProtocol",
     "create_sa_solver",
     "create_qubo_solver",
     "create_dnc_sa_solver",
