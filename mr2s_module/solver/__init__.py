@@ -1,10 +1,17 @@
 from mr2s_module.solver.mr2s_solver import MR2SSolver
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
 from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver
+from mr2s_module.solver.robbin_mr2s_solver import RobbinMR2SSolver
+from mr2s_module.solver.ils_mr2s_solver import IlsMR2SSolver
+from mr2s_module.solver.base_edge_orientation_solver import BaseEdgeOrientationSolver
 from mr2s_module.solver.solve_context import QuboSolveContext
 from mr2s_module.solver.partition import (
   DegeneracyPruningFaceCyclePartitionStrategy,
   EmbeddingAwareFaceCyclePartitionStrategy,
+)
+from mr2s_module.solver.predefined import (
+  create_robbin_solver,
+  create_ils_solver,
 )
 
 __all__ = [
@@ -12,6 +19,11 @@ __all__ = [
   "QuboMR2SSolver",
   "QuboSolveContext",
   "SAMR2SSolver",
+  "RobbinMR2SSolver",
+  "IlsMR2SSolver",
+  "BaseEdgeOrientationSolver",
   "DegeneracyPruningFaceCyclePartitionStrategy",
   "EmbeddingAwareFaceCyclePartitionStrategy",
+  "create_robbin_solver",
+  "create_ils_solver",
 ]
