@@ -47,6 +47,10 @@ from mr2s_module.solver import (
     create_qubo_solver,
     create_dnc_sa_solver,
     create_dnc_qubo_solver,
+    create_qubo_sa_solver,
+    create_qubo_qa_solver,
+    create_dnc_qubo_sa_solver,
+    create_dnc_qubo_qa_solver,
 )
 from mr2s_module.solver.partition import (
     DegeneracyPruningFaceCyclePartitionStrategy,
@@ -83,6 +87,10 @@ __all__ = [
     "create_qubo_solver",
     "create_dnc_sa_solver",
     "create_dnc_qubo_solver",
+    "create_qubo_sa_solver",
+    "create_qubo_qa_solver",
+    "create_dnc_qubo_sa_solver",
+    "create_dnc_qubo_qa_solver",
     "NHop",
     "NHopPolyGenerator",
     "PolyGeneratorProtocol",

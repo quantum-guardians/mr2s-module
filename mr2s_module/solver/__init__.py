@@ -13,6 +13,10 @@ from mr2s_module.solver.predefined import (
   create_qubo_solver,
   create_dnc_sa_solver,
   create_dnc_qubo_solver,
+  create_qubo_sa_solver,
+  create_qubo_qa_solver,
+  create_dnc_qubo_sa_solver,
+  create_dnc_qubo_qa_solver,
 )
 
 __all__ = [
@@ -28,4 +32,8 @@ __all__ = [
   "create_qubo_solver",
   "create_dnc_sa_solver",
   "create_dnc_qubo_solver",
+  "create_qubo_sa_solver",
+  "create_qubo_qa_solver",
+  "create_dnc_qubo_sa_solver",
+  "create_dnc_qubo_qa_solver",
 ]

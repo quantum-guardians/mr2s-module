@@ -2,6 +2,8 @@ from typing import Any
 
 from mr2s_module.cycle.face_clusterer import KMeansFaceClusterer
 from mr2s_module.cycle.face_cluster_partition import FaceClusterPartition
+from mr2s_module.evaluator import ApspSumRanker
+from mr2s_module.qubo import QuboSolver
 from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver
@@ -31,9 +33,23 @@ def create_sa_solver(
   )
 
 
+def create_qubo_sa_solver() -> QuboMR2SSolver:
+  """Creates a standard QUBO MR2S solver using Simulated Annealing backend."""
+  return QuboMR2SSolver(
+    qubo_solver=QuboSolver.create_sa_solver(ranker=ApspSumRanker())
+  )
+
+
+def create_qubo_qa_solver() -> QuboMR2SSolver:
+  """Creates a QUBO MR2S solver using D-Wave Quantum Annealing Hardware backend."""
+  return QuboMR2SSolver(
+    qubo_solver=QuboSolver.create_qa_solver(ranker=ApspSumRanker())
+  )
+
+
 def create_qubo_solver() -> QuboMR2SSolver:
   """Creates a standard QUBO MR2S solver."""
-  return QuboMR2SSolver()
+  return create_qubo_sa_solver()
 
 
 def create_dnc_sa_solver(
@@ -70,18 +86,14 @@ def create_dnc_sa_solver(
     mr2s_solver=sa_solver,
     face_cycle=face_cycle,
     graph_partition_strategy=partition_strategy,
-    max_vertices=max_vertices,
   )
 
 
-def create_dnc_qubo_solver(
+def create_dnc_qubo_sa_solver(
     target_graph: Any = None,
 ) -> DnCMr2sSolver:
-  """Creates a DnC solver that divides the graph
-
-  and solves subgraphs using QUBO.
-  """
-  qubo_solver = QuboMR2SSolver()
+  """Creates a DnC solver that divides the graph and solves subgraphs using QUBO SA."""
+  qubo_solver = create_qubo_sa_solver()
   face_cycle = FaceClusterPartition(
     target_k=2,
     clusterer=KMeansFaceClusterer(),
@@ -97,3 +109,35 @@ def create_dnc_qubo_solver(
     graph_partition_strategy=partition_strategy,
     target_graph=target_graph,
   )
+
+
+def create_dnc_qubo_qa_solver(
+    target_graph: Any = None,
+) -> DnCMr2sSolver:
+  """Creates a DnC solver that divides the graph and solves subgraphs using QUBO QA."""
+  qubo_solver = create_qubo_qa_solver()
+  face_cycle = FaceClusterPartition(
+    target_k=2,
+    clusterer=KMeansFaceClusterer(),
+  )
+  partition_strategy = DegeneracyPruningFaceCyclePartitionStrategy(
+    mr2s_solver=qubo_solver,
+    face_cycle=face_cycle,
+    target_graph=target_graph,
+  )
+  return DnCMr2sSolver(
+    mr2s_solver=qubo_solver,
+    face_cycle=face_cycle,
+    graph_partition_strategy=partition_strategy,
+    target_graph=target_graph,
+  )
+
+
+def create_dnc_qubo_solver(
+    target_graph: Any = None,
+) -> DnCMr2sSolver:
+  """Creates a DnC solver that divides the graph
+
+  and solves subgraphs using QUBO.
+  """
+  return create_dnc_qubo_sa_solver(target_graph=target_graph)
