@@ -182,7 +182,7 @@ class DnCSolution(Solution):
 
 @dataclass
 class DnCMr2sSolver:
-  mr2s_solver: QuboMR2SSolver
+  mr2s_solver: Any
   face_cycle: FaceClusterPartition = field(
     default_factory=lambda: FaceClusterPartition(
       target_k=2,
@@ -193,6 +193,7 @@ class DnCMr2sSolver:
   subgraph_start_method: ProcessStartMethod | None = None
   target_graph: nx.Graph | None = None
   graph_partition_strategy: DnCGraphPartitionStrategyProtocol | None = None
+  max_vertices: int = 100
   _owns_graph_partition_strategy: bool = field(default=False, init=False)
   _owned_graph_partition_strategy: DnCGraphPartitionStrategyProtocol | None = field(
     default=None,
@@ -213,6 +214,7 @@ class DnCMr2sSolver:
         mr2s_solver=self.mr2s_solver,
         face_cycle=self.face_cycle,
         target_graph=self.target_graph,
+        max_vertices=self.max_vertices,
       )
       self._owned_graph_partition_strategy = self.graph_partition_strategy
 
@@ -234,6 +236,7 @@ class DnCMr2sSolver:
     strategy.mr2s_solver = self.mr2s_solver
     strategy.face_cycle = self.face_cycle
     strategy.target_graph = self.target_graph
+    strategy.max_vertices = self.max_vertices
     if hasattr(strategy, "_resolved_target_degeneracy"):
       strategy._resolved_target_degeneracy = None
 

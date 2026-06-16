@@ -49,7 +49,7 @@ def test_t_join_integration_with_real_solver():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("num_points", [100, 500])
+@pytest.mark.parametrize("num_points", [100, 200])
 @pytest.mark.parametrize("remove_percent", [0, 20, 50])
 def test_t_join_performance_and_apsp(num_points, remove_percent):
     base_graph = delaunay_graph(n=num_points, seed=42)

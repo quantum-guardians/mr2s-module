@@ -34,6 +34,16 @@ class DegeneracyPruningFaceCyclePartitionStrategy(
       graph_context["directed_edges"],
     )
 
+    if len(graph.get_vertices()) > self.max_vertices:
+      logger.info(
+        "DnC pruning estimate skipped by vertex limit "
+        "elapsed_ms=%.3f vertices=%d max_vertices=%d",
+        _elapsed_ms(started_at),
+        len(graph.get_vertices()),
+        self.max_vertices,
+      )
+      return None
+
     try:
       build_started_at = perf_counter()
       context = self._build_solve_context(graph)
