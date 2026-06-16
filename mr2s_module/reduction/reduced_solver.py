@@ -13,8 +13,7 @@
 축약을 쓰지 않은 것과 동일한 인터페이스다(변수만 줄고 강연결은 더 안정적).
 
 축약 간선의 `collapsed_weight` 는 원본 간선 가중치의 *합* 이라 체인의 거리(APSP/NHop)
-정보를 그대로 들고 있다. FlowPolyGenerator 가 흐름보존을 가중치 무관(±1)하게 다루므로
-축약 간선을 합 가중치 그대로 풀어도 강연결이 깨지지 않는다 → 별도 unit 재가중 불필요.
+정보를 그대로 들고 있다. 축약 간선을 합 가중치 그대로 풀어 원본으로 복원한다.
 """
 
 from __future__ import annotations
@@ -33,19 +32,18 @@ from mr2s_module.reduction.degree_two_chain import (
 def expand_solution(
     result: ChainReductionResult,
     reduced_solution: Solution,
-) -> set[tuple[int, int]]:
-  """축약 그래프의 directed 해를 원본 그래프 위 directed 간선 집합으로 복원.
+) -> dict[int, Edge]:
+  """축약 그래프의 directed 해를 원본 그래프 위 directed 간선들로 복원.
 
-  reduced_solution.edges 는 (u, v) 튜플이라 가중치가 없으므로, 축약 그래프의 가중치를
-  붙여 Edge 로 만든 뒤 `result.expand` 로 펼친다. (축약 간선 가중치는 expand 가
-  원본 간선 가중치로 덮으므로 여기 가중치 값 자체는 무방하다.)
+  reduced_solution.edges 는 edge_id → directed Edge dict 라 각 directed Edge 가
+  가중치를 직접 들고 있다. 그대로 `result.expand` 에 넘겨 체인을 펼친다(축약 간선
+  가중치는 expand 가 원본 간선 가중치로 덮는다). 복원된 간선은 신규 id 로 키잉한다.
   """
-  weight_by_id = {e.id: e.weight for e in result.reduced_graph.edges.values()}
   oriented = [
-    Edge(s, t, weight_by_id[frozenset({s, t})], True)
-    for s, t in reduced_solution.edges
+    Edge(edge.vertices[0], edge.vertices[1], edge.weight, True)
+    for edge in reduced_solution.edges.values()
   ]
-  return {edge.vertices for edge in result.expand(oriented)}
+  return {edge.id: edge for edge in result.expand(oriented)}
 
 
 def solve_with_chain_reduction(

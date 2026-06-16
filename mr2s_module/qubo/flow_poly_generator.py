@@ -17,9 +17,12 @@ class FlowPolyGenerator:
         term = add_polys(term, BinaryPolynomial({(): temp}, Vartype.BINARY))
         continue
 
-      # 나가는 방향이 1, 들어오는 방향이 -1. 흐름보존은 방향(±1)만 보므로
-      # 간선 가중치와 무관하다(directed 분기처럼 unit 으로 고정).
-      indicator_function = get_indicator_function(vertex, edge.other_vertex(vertex), 1)
+      # 나가는 방향이 +weight, 들어오는 방향이 -weight. 흐름보존을 가중치 기반으로 다뤄
+      # SA 솔버 _build_flow_score (가중 in/out) 와 목적을 일치시킨다. 변수명은 edge.to_key()
+      # (id 기반) 라 같은 양끝점의 평행간선도 서로 다른 변수를 갖는다.
+      indicator_function = get_indicator_function(
+        vertex, edge.other_vertex(vertex), edge.weight, edge.to_key()
+      )
       indicator_function.scale(2)
       temp = add_polys(indicator_function, BinaryPolynomial({(): -1}, Vartype.BINARY))
       term = add_polys(term, temp)

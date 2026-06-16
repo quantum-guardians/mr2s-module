@@ -53,12 +53,12 @@ class ChainReductionResult:
     축약 간선(`{a,b}`)의 방향에 맞춰 체인을 a→x1→…→b (또는 역방향)로 전개하고,
     체인에 속하지 않은 directed 간선은 그대로 통과시킨다.
     """
-    chain_by_id = {
+    chain_by_endpoints = {
       frozenset(chain.endpoints): chain for chain in self.chains
     }
     expanded: list[Edge] = []
     for edge in oriented_edges:
-      chain = chain_by_id.get(edge.id)
+      chain = chain_by_endpoints.get(edge.endpoint_key())
       if chain is None:
         expanded.append(edge)
         continue
@@ -72,10 +72,12 @@ def _orient_chain(chain: CollapsedChain, collapsed_edge: Edge) -> list[Edge]:
   a, b = chain.endpoints
   # path 는 [a, …, b] 순. tail 이 b 이면 역방향으로 전개한다.
   vertices = chain.path if tail == a else tuple(reversed(chain.path))
-  weight_by_id = {edge.id: edge.weight for edge in chain.original_edges}
+  weight_by_endpoint = {
+    edge.endpoint_key(): edge.weight for edge in chain.original_edges
+  }
   oriented: list[Edge] = []
   for u, v in zip(vertices, vertices[1:]):
-    weight = weight_by_id[frozenset({u, v})]
+    weight = weight_by_endpoint[frozenset({u, v})]
     oriented.append(Edge(u, v, weight, True))
   return oriented
 
@@ -95,9 +97,11 @@ class DegreeTwoChainReducer:
   def reduce(self, graph: Graph) -> ChainReductionResult:
     neighbors = graph.simple_adjacency()
     degree_two = {v for v, nbrs in neighbors.items() if len(nbrs) == 2}
+    # 양끝점→Edge 인덱스 1회 빌드 → _build_chain 의 양끝점 조회를 O(1) 로 (O(E²)→O(E)).
+    edge_index = graph.endpoint_index()
 
     chains: list[CollapsedChain] = []
-    collapsed_edge_ids: set[frozenset[int]] = set()
+    collapsed_edge_ids: set[int] = set()
     visited_internal: set[int] = set()
     # 이미 채택된 체인이 점유한 끝점 쌍. 평행 체인(같은 a,b)이 단일 간선 키를 덮어쓰는 것을 방지.
     reserved_endpoint_ids: set[frozenset[int]] = set()
@@ -108,7 +112,7 @@ class DegreeTwoChainReducer:
       internal = _walk_chain(start, neighbors, degree_two)
       visited_internal.update(internal)
 
-      chain = self._build_chain(internal, neighbors, graph)
+      chain = self._build_chain(internal, neighbors, edge_index)
       if chain is None:
         continue
       endpoint_id = frozenset(chain.endpoints)
@@ -134,7 +138,7 @@ class DegreeTwoChainReducer:
     self,
     internal: list[int],
     neighbors: dict[int, set[int]],
-    graph: Graph,
+    edge_index: dict[frozenset[int], Edge],
   ) -> CollapsedChain | None:
     """차수-2 정점들의 한 경로 성분으로부터 축약 가능한 체인을 구성. 불가하면 None."""
     if len(internal) < self.min_internal_vertices:
@@ -153,13 +157,13 @@ class DegreeTwoChainReducer:
     (head, a), (tail, b) = attachments
     if a == b:
       return None  # 양 끝이 같은 정점 → self-loop 회피.
-    if frozenset({a, b}) in graph.edges:
-      return None  # 직접 간선 존재 → 평행간선/dict 키 충돌 회피.
+    if frozenset({a, b}) in edge_index:
+      return None  # 직접 간선 존재 → 축약 그래프를 단순하게 유지(expand 의 endpoint 매칭 보장).
 
     ordered_internal = _order_path(head, tail, neighbors, internal_set)
     path = (a, *ordered_internal, b)
     original_edges = tuple(
-      graph.edges[frozenset({u, v})] for u, v in zip(path, path[1:])
+      edge_index[frozenset({u, v})] for u, v in zip(path, path[1:])
     )
     collapsed_weight = sum(edge.weight for edge in original_edges)
     endpoints = (a, b) if a < b else (b, a)

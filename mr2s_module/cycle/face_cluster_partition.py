@@ -90,17 +90,17 @@ class FaceClusterPartition:
             if u == v:
                 remaining_edges.append(edge)
                 continue
-            macro_id = edge_to_inner_macro.get(edge.id)
+            macro_id = edge_to_inner_macro.get(edge.endpoint_key())
             if macro_id is not None:
                 sub_graph_edges[macro_id].append(Edge(u, v, edge.weight, False))
                 continue
-            orientation = directed_orientations.get(edge.id)
+            orientation = directed_orientations.get(edge.endpoint_key())
             if orientation is not None:
                 a, b = orientation
                 emitted = Edge(a, b, edge.weight, True)
             else:
                 emitted = edge
-            owning_macros = edge_to_outline_macros.get(edge.id, ())
+            owning_macros = edge_to_outline_macros.get(edge.endpoint_key(), ())
             if owning_macros:
                 for owning in owning_macros:
                     sub_graph_edges[owning].append(emitted)
@@ -123,12 +123,12 @@ class FaceClusterPartition:
             for edge in subgraph.edges.values():
                 if edge.directed:
                     continue
-                prev_owner = owner_by_edge.get(edge.id)
+                prev_owner = owner_by_edge.get(edge.endpoint_key())
                 if prev_owner is None:
-                    owner_by_edge[edge.id] = subgraph_idx
+                    owner_by_edge[edge.endpoint_key()] = subgraph_idx
                     continue
                 if prev_owner != subgraph_idx:
-                    overlaps[edge.id] = (prev_owner, subgraph_idx)
+                    overlaps[edge.endpoint_key()] = (prev_owner, subgraph_idx)
         if overlaps:
             details = ", ".join(
                 f"{tuple(sorted(edge_id))}@({owner0},{owner1})"

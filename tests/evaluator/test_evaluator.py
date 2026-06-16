@@ -12,11 +12,29 @@ def _build_solution(
     energies=None,
     num_occurrences=None,
 ) -> Solution:
+  graph = Graph(edges=edges)
+  # 샘플은 양끝점 키(예: (1, 2)) 로 비트를 주면 실제 Edge.to_key()(=e_{id}) 로 변환한다.
+  key_by_endpoint = {e.endpoint_key(): e.to_key() for e in graph.edges.values()}
+  weight_by_endpoint = {e.endpoint_key(): e.weight for e in graph.edges.values()}
+  translated = (
+    None
+    if samples is None
+    else [
+      {key_by_endpoint[frozenset(endpoint)]: bit for endpoint, bit in sample.items()}
+      for sample in samples
+    ]
+  )
+  # Solution.edges 는 edge_id → directed Edge dict. directed_edges 튜플에 그래프
+  # 가중치를 붙여 directed Edge 로 만든다.
+  edges_dict = {
+    index: Edge(source, target, weight_by_endpoint[frozenset({source, target})], True)
+    for index, (source, target) in enumerate(directed_edges)
+  }
   return Solution(
-    edges=directed_edges,
-    graph=Graph(edges=edges),
+    edges=edges_dict,
+    graph=graph,
     sample_set=SampleSet.from_samples(
-      [] if samples is None else samples,
+      [] if translated is None else translated,
       vartype="BINARY",
       energy=[] if energies is None else energies,
       num_occurrences=num_occurrences,
@@ -50,7 +68,7 @@ def test_run_returns_score_for_solution_object() -> None:
       Edge(1, 3, 1, False),
     ],
     directed_edges={(1, 2), (2, 3), (3, 1)},
-    samples=[{"e_1_2": 0, "e_2_3": 0, "e_1_3": 1}],
+    samples=[{(1, 2): 0, (2, 3): 0, (1, 3): 1}],
     energies=[0.0],
   ))
 
@@ -71,8 +89,8 @@ def test_eval_strong_connect_rate_returns_fraction_of_strongly_connected_samples
     ],
     directed_edges={(1, 2), (2, 3), (3, 1)},
     samples=[
-      {"e_1_2": 0, "e_2_3": 0, "e_1_3": 1},
-      {"e_1_2": 0, "e_2_3": 1, "e_1_3": 0},
+      {(1, 2): 0, (2, 3): 0, (1, 3): 1},
+      {(1, 2): 0, (2, 3): 1, (1, 3): 0},
     ],
     energies=[0.0, 1.0],
   )
@@ -91,8 +109,8 @@ def test_eval_strong_connect_rate_counts_sample_occurrences() -> None:
     ],
     directed_edges={(1, 2), (2, 3), (3, 1)},
     samples=[
-      {"e_1_2": 0, "e_2_3": 0, "e_1_3": 1},
-      {"e_1_2": 0, "e_2_3": 1, "e_1_3": 0},
+      {(1, 2): 0, (2, 3): 0, (1, 3): 1},
+      {(1, 2): 0, (2, 3): 1, (1, 3): 0},
     ],
     energies=[0.0, 1.0],
     num_occurrences=[2, 1],
@@ -106,7 +124,7 @@ def test_eval_sample_score_returns_minimum_energy() -> None:
   solution = _build_solution(
     edges=[Edge(1, 2, 1, False)],
     directed_edges={(1, 2)},
-    samples=[{"e_1_2": 0}, {"e_1_2": 1}],
+    samples=[{(1, 2): 0}, {(1, 2): 1}],
     energies=[3.5, -2.0],
   )
 

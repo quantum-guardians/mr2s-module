@@ -9,7 +9,12 @@ from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver, DnCSolution
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
 from mr2s_module.util import empty_binary_sample_set
 from tests.cycle.conftest import remove_edges_by_percent
-from tests.util.graph_fixtures import delaunay_graph, graph_from_pairs
+from tests.util.graph_fixtures import (
+    delaunay_graph,
+    directed_edges_dict,
+    directed_tuples,
+    graph_from_pairs,
+)
 
 
 def _apply_cycle_directions(graph: Graph, cycle: Tjoin) -> None:
@@ -45,7 +50,7 @@ def test_t_join_integration_with_real_solver():
     assert isinstance(solution, DnCSolution)
     assert len(solution.edges) == 5
     # Cycle 이 결정한 방향은 solver 가 뒤집지 않음.
-    assert expected_directions.issubset(solution.edges)
+    assert expected_directions.issubset(directed_tuples(solution.edges))
 
 
 @pytest.mark.slow
@@ -63,8 +68,10 @@ def test_t_join_performance_and_apsp(num_points, remove_percent):
     directed_edges = cycle.run(graph).get_edges()
     elapsed = time.perf_counter() - start_time
 
-    oriented_ids = {e.id for e in directed_edges}
-    remaining_edges = [e for e in graph.edges.values() if e.id not in oriented_ids]
+    oriented_ids = {e.endpoint_key() for e in directed_edges}
+    remaining_edges = [
+      e for e in graph.edges.values() if e.endpoint_key() not in oriented_ids
+    ]
 
     graph.define_edge_direction(set(directed_edges))
     solver = DnCMr2sSolver(mr2s_solver=QuboMR2SSolver())
@@ -72,7 +79,7 @@ def test_t_join_performance_and_apsp(num_points, remove_percent):
 
     evaluator = Evaluator()
     partial_sol = Solution(
-        edges={(e.vertices[0], e.vertices[1]) for e in directed_edges},
+        edges=directed_edges_dict({(e.vertices[0], e.vertices[1]) for e in directed_edges}),
         graph=Graph(edges=directed_edges + remaining_edges),
         sample_set=empty_binary_sample_set(),
     )
@@ -91,4 +98,4 @@ def test_t_join_performance_and_apsp(num_points, remove_percent):
 
     assert final_apsp < float("inf")
     expected_directions = {e.vertices for e in graph.edges.values() if e.directed}
-    assert expected_directions.issubset(solution.edges)
+    assert expected_directions.issubset(directed_tuples(solution.edges))

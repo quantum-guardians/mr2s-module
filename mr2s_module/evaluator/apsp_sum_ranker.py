@@ -9,7 +9,7 @@ class ApspSumRanker:
   @staticmethod
   def _build_graph(solution: Solution) -> nx.DiGraph:
     graph = nx.DiGraph()
-    graph.add_edges_from(solution.edges)
+    graph.add_edges_from(edge.vertices for edge in solution.edges.values())
     graph.add_nodes_from(solution.graph.get_vertices())
     return graph
 

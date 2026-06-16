@@ -24,7 +24,15 @@ from tests.util.graph_fixtures import graph_from_pairs
 
 
 def _edge_ids(edges) -> set[frozenset[int]]:
-  return {edge.id if isinstance(edge, Edge) else frozenset(edge) for edge in edges}
+  values = edges.values() if isinstance(edges, dict) else edges
+  return {
+    edge.endpoint_key() if isinstance(edge, Edge) else frozenset(edge)
+    for edge in values
+  }
+
+
+def _endpoint_keys(graph: Graph) -> set[frozenset[int]]:
+  return {edge.endpoint_key() for edge in graph.edges.values()}
 
 
 def _ladder_graph_with_chains() -> Graph:
@@ -49,7 +57,10 @@ class _RecordingSolver:
 
   def run(self, qubo, graph: Graph) -> Solution:
     self.seen_graph = graph
-    edges = {edge.endpoints() for edge in graph.edges.values()}
+    edges = {
+      edge.id: Edge(edge.endpoints()[0], edge.endpoints()[1], edge.weight, True)
+      for edge in graph.edges.values()
+    }
     return Solution(edges=edges, graph=graph, sample_set=SampleSet.from_samples(
       {}, vartype="BINARY", energy=0.0))
 
@@ -73,9 +84,9 @@ def test_collapsed_edge_keeps_summed_weight() -> None:
   result = DegreeTwoChainReducer().reduce(graph)
 
   # 축약 간선 {0,1} 은 체인 가중치 합(3+5+7=15) 을 그대로 보존(거리/NHop).
-  assert result.reduced_graph.edges[frozenset({0, 1})].weight == 15
+  assert result.reduced_graph.edge_for_endpoints(0, 1).weight == 15
   # pass-through 간선은 원본 가중치(9) 유지.
-  assert result.reduced_graph.edges[frozenset({0, 4})].weight == 9
+  assert result.reduced_graph.edge_for_endpoints(0, 4).weight == 9
 
 
 def test_solve_with_reduction_solves_on_reduced_graph() -> None:
@@ -88,8 +99,8 @@ def test_solve_with_reduction_solves_on_reduced_graph() -> None:
   # 어댑터는 원본이 아닌 '축약' 그래프로 풀어야 한다 (변수 절감).
   assert len(solver.seen_graph.edges) == len(reduced.edges) < len(graph.edges)
   # 축약 간선은 합 가중치(체인 간선 3개, 모두 unit → 3)를 보존한다.
-  for chain_endpoint in [frozenset({10, 20}), frozenset({20, 30})]:
-    assert solver.seen_graph.edges[chain_endpoint].weight == 3
+  for chain_endpoint in [(10, 20), (20, 30)]:
+    assert solver.seen_graph.edge_for_endpoints(*chain_endpoint).weight == 3
 
 
 def test_solve_with_reduction_expands_to_full_original_orientation() -> None:
@@ -99,7 +110,7 @@ def test_solve_with_reduction_expands_to_full_original_orientation() -> None:
 
   # 반환 해는 원본 그래프 위에 모든 무방향 간선을 정확히 한 번씩 방향배정한다.
   assert solution.graph is graph
-  assert _edge_ids(solution.edges) == set(graph.edges.keys())
+  assert _edge_ids(solution.edges) == _endpoint_keys(graph)
   assert len(solution.edges) == len(graph.edges)
 
 
@@ -111,7 +122,7 @@ def test_solve_without_chains_runs_on_original_graph() -> None:
   solution = solve_with_chain_reduction(graph, _build_qubo, solver)
 
   assert solver.seen_graph is graph
-  assert _edge_ids(solution.edges) == set(graph.edges.keys())
+  assert _edge_ids(solution.edges) == _endpoint_keys(graph)
 
 
 def test_solve_with_real_sa_solver_covers_all_original_edges() -> None:
@@ -121,5 +132,5 @@ def test_solve_with_real_sa_solver_covers_all_original_edges() -> None:
   solution = solve_with_chain_reduction(graph, _build_qubo, solver)
 
   # SA 무작위성과 무관하게 expand 는 항상 원본 간선 전체를 방향배정해 덮는다.
-  assert _edge_ids(solution.edges) == set(graph.edges.keys())
+  assert _edge_ids(solution.edges) == _endpoint_keys(graph)
   assert len(solution.edges) == len(graph.edges)

@@ -75,13 +75,12 @@ class Evaluator:
     incoming_weights: dict[int, float] = {}
     outgoing_weights: dict[int, float] = {}
     vertices = solution.graph.get_vertices()
-    edge_weights = {
-      edge.id: float(edge.weight)
-      for edge in solution.graph.edges.values()
-    }
 
-    for source, target in solution.edges:
-      weight = edge_weights[frozenset({source, target})]
+    # directed Edge 가 weight 를 직접 들고 있어 평행간선도 각자 가중치로 합산된다
+    # (endpoint_key 로 묶으면 평행 weight 가 충돌·붕괴).
+    for edge in solution.edges.values():
+      source, target = edge.vertices
+      weight = float(edge.weight)
       outgoing_weights[source] = outgoing_weights.get(source, 0.0) + weight
       incoming_weights[target] = incoming_weights.get(target, 0.0) + weight
 

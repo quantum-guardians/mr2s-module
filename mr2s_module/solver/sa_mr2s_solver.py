@@ -9,6 +9,7 @@ from dimod import SampleSet
 from mr2s_module.domain import Edge, Graph, Solution
 from mr2s_module.evaluator import Evaluator
 from mr2s_module.protocols import EdgeOrientationProtocol, EvaluatorProtocol
+from mr2s_module.qubo.solution_processing import directed_from_bit
 
 
 class SAMR2SSolver:
@@ -87,29 +88,26 @@ class SAMR2SSolver:
       self,
       variable_edges: list[Edge],
       state_bits: list[int],
-      fixed_edges: set[tuple[int, int]],
-  ) -> set[tuple[int, int]]:
-    directed_edges = set(fixed_edges)
-    directed_edges.update(
-      self._build_direction(edge, bit)
-      for edge, bit in zip(variable_edges, state_bits)
-    )
+      fixed_directed: list[tuple[int, int, float]],
+  ) -> list[tuple[int, int, float]]:
+    # 어닐링 hot loop 이므로 Edge 객체 대신 (source, target, weight) 튜플만 만든다.
+    # list 로 누적해 평행 same-direction 간선이 붕괴하지 않게 한다(set 은 충돌). 실제
+    # directed Edge 는 run() 에서 최종 1회만 생성한다.
+    directed_edges = list(fixed_directed)
+    for edge, bit in zip(variable_edges, state_bits):
+      source, target = self._build_direction(edge, bit)
+      directed_edges.append((source, target, float(edge.weight)))
     return directed_edges
 
   @staticmethod
   def _build_flow_score(
-      directed_edges: set[tuple[int, int]],
+      directed_edges: list[tuple[int, int, float]],
       graph: Graph,
   ) -> float:
     incoming_weights: dict[int, float] = {}
     outgoing_weights: dict[int, float] = {}
-    edge_weights = {
-      edge.id: float(edge.weight)
-      for edge in graph.edges.values()
-    }
 
-    for source, target in directed_edges:
-      weight = edge_weights[frozenset({source, target})]
+    for source, target, weight in directed_edges:
       outgoing_weights[source] = outgoing_weights.get(source, 0.0) + weight
       incoming_weights[target] = incoming_weights.get(target, 0.0) + weight
 
@@ -129,12 +127,12 @@ class SAMR2SSolver:
 
   @staticmethod
   def _build_apsp_and_disconnected_pair_count(
-      directed_edges: set[tuple[int, int]],
+      directed_edges: list[tuple[int, int, float]],
       vertices: list[int],
   ) -> tuple[float, int]:
     directed_graph = nx.DiGraph()
     directed_graph.add_nodes_from(vertices)
-    directed_graph.add_edges_from(directed_edges)
+    directed_graph.add_edges_from((source, target) for source, target, _ in directed_edges)
 
     total_distance = 0.0
     unreachable_pairs = 0
@@ -156,10 +154,10 @@ class SAMR2SSolver:
       graph: Graph,
       variable_edges: list[Edge],
       state_bits: list[int],
-      fixed_edges: set[tuple[int, int]],
+      fixed_directed: list[tuple[int, int, float]],
       vertices: list[int],
   ) -> float:
-    directed_edges = self._state_to_edges(variable_edges, state_bits, fixed_edges)
+    directed_edges = self._state_to_edges(variable_edges, state_bits, fixed_directed)
     apsp_sum, unreachable_pairs = self._build_apsp_and_disconnected_pair_count(
       directed_edges,
       vertices,
@@ -176,17 +174,12 @@ class SAMR2SSolver:
   def _greedy_flow_seed_bits(
       self,
       variable_edges: list[Edge],
-      fixed_edges: set[tuple[int, int]],
+      fixed_directed: list[tuple[int, int, float]],
       graph: Graph,
   ) -> list[int]:
     balance: dict[int, float] = {}
-    edge_weights = {
-      edge.id: float(edge.weight)
-      for edge in graph.edges.values()
-    }
 
-    for source, target in fixed_edges:
-      weight = edge_weights[frozenset({source, target})]
+    for source, target, weight in fixed_directed:
       balance[source] = balance.get(source, 0.0) - weight
       balance[target] = balance.get(target, 0.0) + weight
 
@@ -203,7 +196,7 @@ class SAMR2SSolver:
     seed_bits: list[int] = []
     for edge in variable_edges:
       source, target = edge.vertices
-      weight = edge_weights[edge.id]
+      weight = float(edge.weight)
       forward_penalty = direction_penalty(source, target, weight)
       reverse_penalty = direction_penalty(target, source, weight)
       bit = 0 if forward_penalty <= reverse_penalty else 1
@@ -219,10 +212,10 @@ class SAMR2SSolver:
       self,
       graph: Graph,
       variable_edges: list[Edge],
-      fixed_edges: set[tuple[int, int]],
+      fixed_directed: list[tuple[int, int, float]],
   ) -> tuple[list[int], float]:
     if not variable_edges:
-      return [], self._objective(graph, [], [], fixed_edges, sorted(graph.get_vertices()))
+      return [], self._objective(graph, [], [], fixed_directed, sorted(graph.get_vertices()))
 
     rng = random.Random(self.random_seed)
     vertices = sorted(graph.get_vertices())
@@ -230,7 +223,7 @@ class SAMR2SSolver:
 
     best_bits: list[int] | None = None
     best_objective = float("inf")
-    seed_bits = self._greedy_flow_seed_bits(variable_edges, fixed_edges, graph)
+    seed_bits = self._greedy_flow_seed_bits(variable_edges, fixed_directed, graph)
     for restart in range(self.num_restarts):
       if restart == 0:
         current_bits = list(seed_bits)
@@ -241,7 +234,7 @@ class SAMR2SSolver:
         graph,
         variable_edges,
         current_bits,
-        fixed_edges,
+        fixed_directed,
         vertices,
       )
       if current_objective < best_objective:
@@ -262,7 +255,7 @@ class SAMR2SSolver:
             graph,
             variable_edges,
             current_bits,
-            fixed_edges,
+            fixed_directed,
             vertices,
           )
           delta = next_objective - current_objective
@@ -309,19 +302,24 @@ class SAMR2SSolver:
     if self.edge_orienter is not None:
       graph.define_edge_direction(set(self.edge_orienter.run(graph).get_edges()))
 
-    fixed_edges = {
-      edge.vertices
+    fixed_edges = [
+      edge
       for edge in graph.edges.values()
       if edge.directed
-    }
+    ]
     variable_edges = [
       edge
       for edge in graph.edges.values()
       if not edge.directed
     ]
+    # 어닐링은 경량 (source, target, weight) 튜플로만 돈다(hot loop). 이미 방향이
+    # 정해진 fixed 간선은 그대로 directed Edge 로 최종 해에 들어간다.
+    fixed_directed = [
+      (edge.vertices[0], edge.vertices[1], float(edge.weight))
+      for edge in fixed_edges
+    ]
 
-    best_bits, best_objective = self._anneal_bits(graph, variable_edges, fixed_edges)
-    directed_edges = self._state_to_edges(variable_edges, best_bits, fixed_edges)
+    best_bits, best_objective = self._anneal_bits(graph, variable_edges, fixed_directed)
     sample = {
       edge.to_key(): bit
       for edge, bit in zip(variable_edges, best_bits)
@@ -333,8 +331,13 @@ class SAMR2SSolver:
       num_occurrences=[1],
     )
 
+    # directed Edge 는 여기서 최종 1회만 생성한다(평행간선 id 보존은 directed_from_bit).
+    solution_edges = {edge.id: edge for edge in fixed_edges}
+    for edge, bit in zip(variable_edges, best_bits):
+      solution_edges[edge.id] = directed_from_bit(edge, bit)
+
     solution = Solution(
-      edges=directed_edges,
+      edges=solution_edges,
       graph=graph,
       sample_set=sample_set,
       score=None,

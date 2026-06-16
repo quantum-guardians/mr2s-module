@@ -92,7 +92,7 @@ def describe_result(graph: Graph, score, solution: Solution) -> None:
   print()
 
   print("Selected orientation")
-  sorted_edges = sorted(solution.edges)
+  sorted_edges = sorted(edge.vertices for edge in solution.edges.values())
   preview = sorted_edges[: min(20, len(sorted_edges))]
   print(f"  directed_edges_preview({len(preview)}): {preview}")
   if len(sorted_edges) > len(preview):
@@ -154,7 +154,7 @@ def main() -> None:
 
   nx_graph = nx.DiGraph()
   nx_graph.add_nodes_from(graph.get_vertices())
-  nx_graph.add_edges_from(solution.edges)
+  nx_graph.add_edges_from(edge.vertices for edge in solution.edges.values())
   print(f"Strongly connected: {nx.is_strongly_connected(nx_graph)}")
   print(f"Original edge count: {original_edge_count}")
   print(f"Final edge count: {len(graph.edges)}")

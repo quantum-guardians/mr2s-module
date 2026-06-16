@@ -3,14 +3,20 @@ from dwave.samplers import SimulatedAnnealingSampler
 
 sampler = SimulatedAnnealingSampler()
 
-def get_indicator_function(i: int, j: int, weight: int) -> BinaryPolynomial:
+def get_indicator_function(i: int, j: int, weight: int, var_key: str) -> BinaryPolynomial:
+  """정점 i 에서의 outflow indicator. var_key 는 간선의 QUBO 변수명(Edge.to_key()).
+
+  변수 x(var_key)=1 은 간선이 max→min 방향임을 뜻한다(process_solution 과 동일 규약).
+  indicator 는 간선이 i 에서 나갈 때 weight, 들어올 때 0. i<j 인지로 부호 규약만 정하고
+  변수 이름 자체는 var_key 를 써서 같은 양끝점의 평행간선을 서로 다른 변수로 분리한다.
+  """
   if i == j:
     raise ValueError(f"i and j must be different, but both are {i}")
 
   if i < j:
-    return BinaryPolynomial({(): weight, (f'e_{i}_{j}', ): -weight}, Vartype.BINARY)
+    return BinaryPolynomial({(): weight, (var_key,): -weight}, Vartype.BINARY)
   else:
-    return BinaryPolynomial({(f'e_{j}_{i}',): weight}, Vartype.BINARY)
+    return BinaryPolynomial({(var_key,): weight}, Vartype.BINARY)
 
 def map_binary_poly_to_bqm(polynomial: BinaryPolynomial):
   coeffs = [abs(v) for k, v in polynomial.items() if k != ()]

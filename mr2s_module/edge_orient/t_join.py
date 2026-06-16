@@ -44,7 +44,8 @@ class Tjoin:
             j_edges_keys = {e for e, count in path_edges_count.items() if count % 2 != 0}
 
         # 3. Eulerian subgraph G_E = G \Delta J
-        eulerian_edge_keys = set(graph.edges.keys()) ^ j_edges_keys
+        graph_edge_keys = {edge.endpoint_key() for edge in graph.edges.values()}
+        eulerian_edge_keys = graph_edge_keys ^ j_edges_keys
 
         g_eulerian = nx.Graph()
         for e_key in eulerian_edge_keys:
@@ -52,6 +53,8 @@ class Tjoin:
             g_eulerian.add_edge(u, v)
 
         # 4. Orient edges
+        # 양끝점→Edge 인덱스를 1회만 만들어 circuit 간선마다의 선형스캔(O(E²))을 없앤다.
+        edge_index = graph.endpoint_index()
         oriented_edges: list[Edge] = []
         for component in nx.connected_components(g_eulerian):
             sub = g_eulerian.subgraph(component)
@@ -60,7 +63,7 @@ class Tjoin:
 
             circuit = list(nx.eulerian_circuit(sub))
             for u, v in circuit:
-                orig_edge = graph.edges[frozenset({u, v})]
+                orig_edge = edge_index[frozenset({u, v})]
                 oriented_edges.append(Edge(u, v, orig_edge.weight, True))
 
         return OrientedEdges(edges=oriented_edges)

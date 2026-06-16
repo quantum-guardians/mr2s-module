@@ -15,7 +15,11 @@ from mr2s_module.edge_orient.iterated_local_search import (
 from mr2s_module.evaluator import Evaluator
 from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver
 from tests.cycle.conftest import remove_edges_by_percent
-from tests.util.graph_fixtures import delaunay_graph, graph_from_pairs
+from tests.util.graph_fixtures import (
+    delaunay_graph,
+    directed_tuples,
+    graph_from_pairs,
+)
 
 
 def _edge(tail: int, head: int, weight: int = 1) -> tuple[frozenset[int], Edge]:
@@ -215,7 +219,7 @@ class TestIteratedLocalSearch:
         ])
         result = IteratedLocalSearch().run(graph)
         edges = result.get_edges()
-        weight_map = {e.id: e.weight for e in edges}
+        weight_map = {e.endpoint_key(): e.weight for e in edges}
         assert weight_map[frozenset({0, 1})] == 5
         assert weight_map[frozenset({1, 2})] == 3
         assert weight_map[frozenset({0, 2})] == 2
@@ -287,4 +291,4 @@ def test_ils_integration_with_sa_solver():
 
     assert final_apsp < float("inf")
     expected_directions = {e.vertices for e in graph.edges.values() if e.directed}
-    assert expected_directions.issubset(solution.edges)
+    assert expected_directions.issubset(directed_tuples(solution.edges))

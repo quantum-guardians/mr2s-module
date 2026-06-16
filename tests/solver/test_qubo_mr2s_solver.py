@@ -5,6 +5,7 @@ from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, Solution
 from mr2s_module.domain.orientation_result import OrientedEdges
 from mr2s_module.solver import QuboMR2SSolver
 from mr2s_module.util import empty_binary_sample_set
+from tests.util.graph_fixtures import directed_tuples
 
 
 class StubEdgeOrienter:
@@ -38,7 +39,10 @@ class StubQuboSolver:
         self.received_qubo = qubo
         self.received_graph = graph
         return Solution(
-            edges={(edge.vertices[0], edge.vertices[1]) for edge in graph.edges.values()},
+            edges={
+                edge.id: Edge(edge.vertices[0], edge.vertices[1], edge.weight, True)
+                for edge in graph.edges.values()
+            },
             graph=graph,
             sample_set=empty_binary_sample_set(),
             score=None,
@@ -49,7 +53,10 @@ class StubQuboSolver:
         self.received_graph = graph
         self.received_embedding = embedding
         return Solution(
-            edges={(edge.vertices[0], edge.vertices[1]) for edge in graph.edges.values()},
+            edges={
+                edge.id: Edge(edge.vertices[0], edge.vertices[1], edge.weight, True)
+                for edge in graph.edges.values()
+            },
             graph=graph,
             sample_set=empty_binary_sample_set(),
             score=None,
@@ -83,10 +90,10 @@ def test_run_skips_preprocessing_when_edge_orienter_is_none() -> None:
     result = solver.run(graph)
 
     assert result.score == 1.0
-    assert result.edges == {(1, 2)}
+    assert directed_tuples(result.edges) == {(1, 2)}
     assert poly_generator.seen_graphs == [graph]
     assert qubo_solver.received_graph is graph
-    assert graph.edges[frozenset({1, 2})].directed is False
+    assert graph.edge_for_endpoints(1, 2).directed is False
     assert evaluator.received_solution.score == 1.0
 
 
@@ -107,9 +114,9 @@ def test_run_applies_preprocessing_when_edge_orienter_is_provided() -> None:
     result = solver.run(graph)
 
     assert result.score == 1.0
-    assert result.edges == {(1, 2)}
+    assert directed_tuples(result.edges) == {(1, 2)}
     assert edge_orienter.calls == 1
-    assert graph.edges == {frozenset({1, 2}): predefined_edge}
+    assert graph.edges == {predefined_edge.id: predefined_edge}
     assert qubo_solver.received_graph is graph
     assert evaluator.received_solution.score == 1.0
 
@@ -136,7 +143,7 @@ def test_run_with_embedding_passes_embedding_to_qubo_solver() -> None:
     result = solver.run_with_embedding(graph, embedding_estimate)
 
     assert result.score == 1.0
-    assert result.edges == {(1, 2)}
+    assert directed_tuples(result.edges) == {(1, 2)}
     assert qubo_solver.received_graph is graph
     assert qubo_solver.received_embedding == {1: ["q1"], 2: ["q2"]}
 

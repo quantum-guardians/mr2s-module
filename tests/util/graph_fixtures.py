@@ -85,3 +85,27 @@ def nx_graph_to_domain_graph(graph: nx.Graph, *, weight: int = 1) -> Graph:
 def domain_graph_to_nx_graph(graph: Graph) -> nx.Graph:
     """Convert a project Graph fixture to an unweighted NetworkX graph."""
     return domain_graph_to_networkx(graph)
+
+
+def directed_tuples(edges: dict[int, Edge]) -> set[tuple[int, int]]:
+    """Solution.edges (dict[edge_id, directed Edge]) → directed (source, target) 튜플 집합.
+
+    평행간선을 구분하지 않는 단순그래프 단언용 헬퍼. 멀티그래프에서는 평행
+    same-direction 간선이 한 튜플로 합쳐지므로 개수 검증엔 len(edges) 를 쓸 것.
+    """
+    return {edge.vertices for edge in edges.values()}
+
+
+def directed_edges_dict(
+    tuples: list[tuple[int, int]] | set[tuple[int, int]],
+    *,
+    weight: int = 1,
+) -> dict[int, Edge]:
+    """directed (source, target) 튜플들 → Solution.edges 형태 dict[id, directed Edge].
+
+    테스트 스텁이 Solution 을 직접 만들 때 사용. 키는 합성 인덱스(merge 는 양끝점
+    기준으로 매칭하므로 그래프 id 와 일치할 필요 없음)."""
+    return {
+        index: Edge(source, target, weight, True)
+        for index, (source, target) in enumerate(tuples)
+    }

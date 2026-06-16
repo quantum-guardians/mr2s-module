@@ -126,7 +126,7 @@ def _solve_subgraph(
   )
   if sub_graph.edges and all(edge.directed for edge in sub_graph.edges.values()):
     solution = Solution(
-      edges={edge.vertices for edge in sub_graph.edges.values()},
+      edges={edge.id: edge for edge in sub_graph.edges.values()},
       graph=sub_graph,
       sample_set=empty_sample_set,
     )
@@ -258,6 +258,13 @@ class DnCMr2sSolver:
       solutions: Iterable[Solution],
       graph: Graph
   ) -> Solution:
+    """자식 해들을 원본 그래프 방향으로 병합한다.
+
+    멀티그래프 한계: 방향 후보는 양끝점(frozenset) 기준으로 모은다. 평행간선은
+    구조적으로는 각자 id 로 보존되지만, 한 양끝점 쌍의 모든 평행간선은 하나의 후보
+    집합·하나의 방향 결정을 공유한다(평행끼리 서로 다른 방향으로 갈라지지 못함).
+    평행간선의 방향까지 독립 최적화가 필요하면 DnC 대신 SA 경로를 쓸 것.
+    """
     started_at = perf_counter()
     solution_list = list(solutions)
     logger.info(
@@ -269,13 +276,16 @@ class DnCMr2sSolver:
     balance: dict[int, float] = {}
 
     for solution in solution_list:
-      for source, target in solution.edges:
+      for sub_edge in solution.edges.values():
+        source, target = sub_edge.vertices
         edge_id = frozenset({source, target})
         candidate_edges.setdefault(edge_id, set()).add((source, target))
 
-    merged_edges: set[tuple[int, int]] = set()
+    # 각 그래프 간선(평행 포함)을 자기 id 로 키잉해 directed Edge 로 보존한다.
+    # 양끝점 단위 방향 공유 한계는 merge_solutions docstring 참고.
+    merged_edges: dict[int, Edge] = {}
     for edge in graph.edges.values():
-      candidates = candidate_edges.get(edge.id, set())
+      candidates = candidate_edges.get(edge.endpoint_key(), set())
       if not candidates:
         continue
       if edge.directed:
@@ -285,7 +295,7 @@ class DnCMr2sSolver:
       else:
         direction = self._select_merge_direction(candidates, edge.weight, balance)
 
-      merged_edges.add(direction)
+      merged_edges[edge.id] = Edge(direction[0], direction[1], edge.weight, True, id=edge.id)
       self._apply_flow_balance(direction, edge.weight, balance)
 
     sample_set = (
@@ -402,18 +412,9 @@ class DnCMr2sSolver:
 
   @staticmethod
   def _apply_merged_directions(graph: Graph, solution: Solution) -> None:
-    weights_by_edge = {
-      edge.id: edge.weight
-      for edge in graph.edges.values()
-    }
     predefined_edges = {
-      Edge(
-        source,
-        target,
-        weights_by_edge[frozenset({source, target})],
-        True,
-      )
-      for source, target in solution.edges
+      Edge(edge.vertices[0], edge.vertices[1], edge.weight, True)
+      for edge in solution.edges.values()
     }
     graph.define_edge_direction(predefined_edges)
 

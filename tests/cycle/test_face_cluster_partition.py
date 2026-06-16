@@ -47,7 +47,7 @@ def test_triangle_directs_its_three_boundary_edges() -> None:
     result = FaceClusterPartition().run(graph)
 
     directed = result.directed_edges()
-    assert {e.id for e in directed} == {_fset(0, 1), _fset(0, 2), _fset(1, 2)}
+    assert {e.endpoint_key() for e in directed} == {_fset(0, 1), _fset(0, 2), _fset(1, 2)}
 
 
 def test_k4_directed_boundary_is_subset_of_input() -> None:
@@ -55,9 +55,9 @@ def test_k4_directed_boundary_is_subset_of_input() -> None:
     graph = graph_from_pairs(pairs)
     result = FaceClusterPartition().run(graph)
 
-    input_ids = set(graph.edges.keys())
+    input_ids = {e.endpoint_key() for e in graph.edges.values()}
     directed = result.directed_edges()
-    assert {e.id for e in directed}.issubset(input_ids)
+    assert {e.endpoint_key() for e in directed}.issubset(input_ids)
     assert len(directed) >= 3  # at least one face boundary survives
 
 
@@ -70,7 +70,7 @@ def test_cut_vertex_components_are_processed_independently() -> None:
         (2, 3), (3, 4), (2, 4),
     ])
     result = FaceClusterPartition().run(graph)
-    ids = {e.id for e in result.directed_edges()}
+    ids = {e.endpoint_key() for e in result.directed_edges()}
 
     assert {_fset(0, 1), _fset(0, 2), _fset(1, 2)}.issubset(ids)
     assert {_fset(2, 3), _fset(2, 4), _fset(3, 4)}.issubset(ids)
@@ -84,18 +84,18 @@ def test_directed_edges_carry_input_weight() -> None:
         Edge(1, 2, 11, False),
         Edge(0, 2, 13, False),
     ])
-    weight_by_id = {e.id: e.weight for e in graph.edges.values()}
+    weight_by_id = {e.endpoint_key(): e.weight for e in graph.edges.values()}
 
     directed = FaceClusterPartition().run(graph).directed_edges()
     assert len(directed) == 3
 
     for produced in directed:
         assert produced.directed is True
-        assert produced.id in weight_by_id
-        assert produced.weight == weight_by_id[produced.id]
+        assert produced.endpoint_key() in weight_by_id
+        assert produced.weight == weight_by_id[produced.endpoint_key()]
         u, v = produced.vertices
         assert u != v
-        assert frozenset({u, v}) == produced.id
+        assert frozenset({u, v}) == produced.endpoint_key()
 
 
 def test_directions_form_consistent_cycle_on_triangle() -> None:
@@ -124,11 +124,11 @@ def test_bridge_edges_pass_through_remaining_undirected() -> None:
     ])
     result = FaceClusterPartition().run(graph)
 
-    by_id = {e.id: e for e in result.remaining_edges}
+    by_id = {e.endpoint_key(): e for e in result.remaining_edges}
     assert _fset(3, 4) in by_id and not by_id[_fset(3, 4)].directed
     assert _fset(2, 3) in by_id and not by_id[_fset(2, 3)].directed
     triangle_ids = {_fset(0, 1), _fset(0, 2), _fset(1, 2)}
-    assert triangle_ids.issubset({e.id for e in result.directed_edges()})
+    assert triangle_ids.issubset({e.endpoint_key() for e in result.directed_edges()})
 
 
 def test_self_loops_are_never_directed() -> None:
@@ -155,14 +155,14 @@ def test_delaunay_partition_is_complete_cover(seed: int) -> None:
     graph = delaunay_graph(n=60, seed=seed)
     result = FaceClusterPartition(target_k=6).run(graph)
 
-    input_ids = set(graph.edges.keys())
-    directed_ids = {e.id for e in result.directed_edges()}
+    input_ids = {e.endpoint_key() for e in graph.edges.values()}
+    directed_ids = {e.endpoint_key() for e in result.directed_edges()}
     assert directed_ids.issubset(input_ids)
     assert len(directed_ids) > 0
     covered_ids = {
-        e.id for sg in result.sub_graphs for e in sg.edges.values()
+        e.endpoint_key() for sg in result.sub_graphs for e in sg.edges.values()
     } | {
-        e.id for e in result.remaining_edges
+        e.endpoint_key() for e in result.remaining_edges
     }
     assert covered_ids == input_ids
 
@@ -171,7 +171,9 @@ def test_target_k_is_capped_to_face_count() -> None:
     # Triangle has only one inner face; target_k=50 must not crash or stall.
     graph = graph_from_pairs([(0, 1), (1, 2), (0, 2)])
     result = FaceClusterPartition(target_k=50).run(graph)
-    assert {e.id for e in result.directed_edges()} == {_fset(0, 1), _fset(0, 2), _fset(1, 2)}
+    assert {e.endpoint_key() for e in result.directed_edges()} == {
+        _fset(0, 1), _fset(0, 2), _fset(1, 2)
+    }
 
 
 def test_directed_boundary_edges_belong_to_input_graph() -> None:
@@ -199,7 +201,9 @@ def test_outline_of_returns_directed_boundary_touching_macro() -> None:
     triangle_partition = FaceClusterPartition().run(triangle)
     assert len(triangle_partition.sub_graphs) == 1
     triangle_outline = triangle_partition.outline_of(0)
-    assert {e.id for e in triangle_outline} == {_fset(0, 1), _fset(0, 2), _fset(1, 2)}
+    assert {e.endpoint_key() for e in triangle_outline} == {
+        _fset(0, 1), _fset(0, 2), _fset(1, 2)
+    }
     assert all(e.directed for e in triangle_outline)
 
     # Multi-face: outline_of(i) 는 sub_graphs[i] 의 directed 간선과 동일 (id 기준).
@@ -217,7 +221,7 @@ def test_outline_of_returns_directed_boundary_touching_macro() -> None:
 
     # 공유 boundary 는 양쪽 macro 에 동일 Edge 인스턴스로 등장해야 한다.
     n = len(partition.sub_graphs)
-    by_id = [{e.id: id(e) for e in partition.outline_of(i)} for i in range(n)]
+    by_id = [{e.endpoint_key(): id(e) for e in partition.outline_of(i)} for i in range(n)]
     for i in range(n):
         for j in range(i + 1, n):
             for shared_id in by_id[i].keys() & by_id[j].keys():

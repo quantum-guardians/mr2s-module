@@ -120,7 +120,7 @@ def _fill_partition_faces(
         return
 
     macro_edge_ids = [
-        set(sub_graph.edges.keys())
+        {edge.endpoint_key() for edge in sub_graph.edges.values()}
         for sub_graph in partition.sub_graphs
     ]
 

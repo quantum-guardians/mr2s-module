@@ -8,11 +8,11 @@ from tests.util.graph_fixtures import graph_from_pairs
 
 
 def _edge_ids(edges) -> set[frozenset[int]]:
-  return {edge.id for edge in edges}
+  return {edge.endpoint_key() for edge in edges}
 
 
 def _undirected_ids(graph: Graph) -> set[frozenset[int]]:
-  return set(graph.edges.keys())
+  return {edge.endpoint_key() for edge in graph.edges.values()}
 
 
 def _chain_graph_with_hubs() -> Graph:
@@ -35,7 +35,7 @@ def test_reduce_collapses_chain_of_two_into_single_edge() -> None:
   chain = result.chains[0]
   assert chain.endpoints == (0, 1)
   assert chain.path == (0, 2, 3, 1)
-  assert frozenset({0, 1}) in result.reduced_graph.edges
+  assert result.reduced_graph.has_endpoint_edge(0, 1)
   # 내부 정점 2, 3 은 축약 그래프에서 사라진다.
   assert result.reduced_graph.get_vertices() == {0, 1, 4, 5}
 
@@ -54,7 +54,7 @@ def test_collapsed_weight_is_sum_of_chain_edge_weights() -> None:
 
   result = DegreeTwoChainReducer().reduce(graph)
 
-  collapsed = result.reduced_graph.edges[frozenset({0, 1})]
+  collapsed = result.reduced_graph.edge_for_endpoints(0, 1)
   assert collapsed.weight == 3 + 5 + 7
   assert result.chains[0].collapsed_weight == 15
 
@@ -83,7 +83,7 @@ def test_reduce_collapses_single_when_min_is_one() -> None:
 
   assert len(result.chains) == 1
   assert result.chains[0].path == (0, 2, 1)
-  assert frozenset({0, 1}) in result.reduced_graph.edges
+  assert result.reduced_graph.has_endpoint_edge(0, 1)
 
 
 def test_reduce_skips_isolated_cycle() -> None:
@@ -121,14 +121,14 @@ def test_reduce_skips_parallel_chains_sharing_endpoints() -> None:
   assert len(result.reduced_graph.edges) == len(
     _undirected_ids(result.reduced_graph)
   )
-  assert frozenset({0, 1}) in result.reduced_graph.edges
+  assert result.reduced_graph.has_endpoint_edge(0, 1)
 
 
 def test_expand_restores_chain_orientation_forward_and_reverse() -> None:
   result = DegreeTwoChainReducer().reduce(_chain_graph_with_hubs())
 
   forward = result.expand([Edge(0, 1, 3, True)])
-  forward_dirs = {edge.vertices for edge in forward if edge.id != frozenset({0, 1})}
+  forward_dirs = {edge.vertices for edge in forward if edge.endpoint_key() != frozenset({0, 1})}
   assert (0, 2) in forward_dirs
   assert (2, 3) in forward_dirs
   assert (3, 1) in forward_dirs
@@ -199,12 +199,9 @@ def test_sa_solve_on_reduced_graph_expands_to_valid_original_orientation() -> No
   solver = SAMR2SSolver(num_restarts=1, random_seed=0)
   reduced_solution = solver.run(result.reduced_graph)
 
-  weight_by_id = {
-    edge.id: edge.weight for edge in result.reduced_graph.edges.values()
-  }
   oriented = [
-    Edge(source, target, weight_by_id[frozenset({source, target})], True)
-    for source, target in reduced_solution.edges
+    Edge(edge.vertices[0], edge.vertices[1], edge.weight, True)
+    for edge in reduced_solution.edges.values()
   ]
   expanded = result.expand(oriented)
 

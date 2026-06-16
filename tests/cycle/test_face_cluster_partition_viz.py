@@ -192,8 +192,8 @@ def test_face_cycle_visualization_renders_three_panels(seed: int) -> None:
     # 1. FaceClusterPartition.run() 자체가 정상적으로 boundary 를 반환하는지.
     np.random.seed(seed)
     partition = FaceClusterPartition(target_k=target_k).run(graph)
-    boundary_run = {e.id for e in partition.directed_edges()}
-    input_ids = set(graph.edges.keys())
+    boundary_run = {e.endpoint_key() for e in partition.directed_edges()}
+    input_ids = {e.endpoint_key() for e in graph.edges.values()}
     assert boundary_run, "run() should produce non-empty directed boundary edges"
     assert boundary_run.issubset(input_ids)
 

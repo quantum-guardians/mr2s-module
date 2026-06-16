@@ -276,7 +276,9 @@ def strong_rate(sample_set, canonical_edges, vertices: set[int]) -> tuple[float,
   strong = 0
   reads = 0
   for sample in sample_set.samples():
-    directed = process_solution(sample, canonical_edges)
+    directed = [
+      edge.vertices for edge in process_solution(sample, canonical_edges).values()
+    ]
     reads += 1
     if strongly_connected(vertices, directed):
       strong += 1
@@ -286,6 +288,9 @@ def strong_rate(sample_set, canonical_edges, vertices: set[int]) -> tuple[float,
 
 
 def apsp_sum(graph: Graph, directed_edges) -> float:
+  # Solution.edges(dict[id, Edge]) 도, (u,v) 튜플 리스트도 받도록 정규화.
+  if isinstance(directed_edges, dict):
+    directed_edges = [edge.vertices for edge in directed_edges.values()]
   digraph = nx.DiGraph()
   digraph.add_nodes_from(graph.get_vertices())
   digraph.add_edges_from(directed_edges)
@@ -298,10 +303,9 @@ def apsp_sum(graph: Graph, directed_edges) -> float:
 
 def expand_best(result, reduced_solution) -> list[tuple[int, int]]:
   """축약 그래프 best 해(directed)를 원본 위 directed 간선으로 펼쳐 (u,v) 리스트 반환."""
-  weight_by_id = {e.id: e.weight for e in result.reduced_graph.edges.values()}
   oriented = [
-    Edge(s, t, weight_by_id[frozenset({s, t})], True)
-    for s, t in reduced_solution.edges
+    Edge(edge.vertices[0], edge.vertices[1], edge.weight, True)
+    for edge in reduced_solution.edges.values()
   ]
   return [edge.vertices for edge in result.expand(oriented)]
 
