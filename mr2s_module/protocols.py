@@ -68,6 +68,7 @@ class Mr2sSolverProtocol(Protocol):
 
 
 
+
 class SolutionRankerProtocol(Protocol):
     def run(self, solution: Solution) -> float: ...
 

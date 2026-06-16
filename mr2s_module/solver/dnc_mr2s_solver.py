@@ -17,7 +17,10 @@ from mr2s_module.domain import (
   Score,
   Solution,
 )
-from mr2s_module.protocols import DnCGraphPartitionStrategyProtocol
+from mr2s_module.protocols import (
+  DnCGraphPartitionStrategyProtocol,
+  Mr2sSolverProtocol,
+)
 from mr2s_module.qubo import InvalidEmbeddingError
 from mr2s_module.solver.partition import (
   DegeneracyPruningFaceCyclePartitionStrategy,
@@ -182,7 +185,7 @@ class DnCSolution(Solution):
 
 @dataclass
 class DnCMr2sSolver:
-  mr2s_solver: QuboMR2SSolver
+  mr2s_solver: Mr2sSolverProtocol
   face_cycle: FaceClusterPartition = field(
     default_factory=lambda: FaceClusterPartition(
       target_k=2,
