@@ -75,10 +75,9 @@ def create_dnc_sa_solver(
 
 
 def create_dnc_qubo_solver(
-    max_vertices: int = 100,
     target_graph: Any = None,
 ) -> DnCMr2sSolver:
-  """Creates a DnC solver that divides the graph to have <= max_vertices variables
+  """Creates a DnC solver that divides the graph
 
   and solves subgraphs using QUBO.
   """
@@ -91,12 +90,10 @@ def create_dnc_qubo_solver(
     mr2s_solver=qubo_solver,
     face_cycle=face_cycle,
     target_graph=target_graph,
-    max_vertices=max_vertices,
   )
   return DnCMr2sSolver(
     mr2s_solver=qubo_solver,
     face_cycle=face_cycle,
     graph_partition_strategy=partition_strategy,
-    max_vertices=max_vertices,
     target_graph=target_graph,
   )

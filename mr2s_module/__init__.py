@@ -29,6 +29,7 @@ from mr2s_module.protocols import (
     Score,
     Solution,
     SolutionRankerProtocol,
+    Mr2sSolverProtocol,
 )
 from mr2s_module.qubo import (
     FlowPolyGenerator,
@@ -77,6 +78,7 @@ __all__ = [
     "KMeansFaceClusterer",
     "MR2SSolver",
     "DnCMr2sSolver",
+    "Mr2sSolverProtocol",
     "create_sa_solver",
     "create_qubo_solver",
     "create_dnc_sa_solver",

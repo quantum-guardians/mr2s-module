@@ -62,6 +62,11 @@ class EvaluatorProtocol(Protocol):
     def run(self, solution: Solution) -> Score: ...
 
 
+class Mr2sSolverProtocol(Protocol):
+    evaluator: EvaluatorProtocol
+    def run(self, graph: Graph) -> Solution: ...
+
+
 class SolutionRankerProtocol(Protocol):
     def run(self, solution: Solution) -> float: ...
 

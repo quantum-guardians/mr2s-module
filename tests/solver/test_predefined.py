@@ -34,10 +34,8 @@ def test_create_dnc_sa_solver() -> None:
 
 
 def test_create_dnc_qubo_solver() -> None:
-  solver = create_dnc_qubo_solver(max_vertices=80)
-  assert solver.max_vertices == 80
+  solver = create_dnc_qubo_solver()
   assert solver.graph_partition_strategy is not None
-  assert solver.graph_partition_strategy.max_vertices == 80
 
 
 def test_vertex_count_partition_strategy_small_graph() -> None:
