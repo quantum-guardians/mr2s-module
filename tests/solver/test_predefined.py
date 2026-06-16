@@ -18,6 +18,10 @@ from mr2s_module.solver.predefined import (
   create_dnc_qubo_solver,
   create_qubo_solver,
   create_sa_solver,
+  create_qubo_sa_solver,
+  create_qubo_qa_solver,
+  create_dnc_qubo_sa_solver,
+  create_dnc_qubo_qa_solver,
 )
 from tests.util.graph_fixtures import delaunay_graph
 
@@ -43,15 +47,56 @@ def test_create_qubo_solver() -> None:
   assert solver.edge_orienter is None
 
 
+def test_create_qubo_sa_solver() -> None:
+  solver = create_qubo_sa_solver()
+  assert solver.qubo_solver is not None
+
+
+def test_create_qubo_qa_solver(monkeypatch) -> None:
+  class FakeDWaveSampler:
+    pass
+
+  class FakeEmbeddingComposite:
+    def __init__(self, child):
+      self.child = child
+
+  import mr2s_module.qubo.qubo_solver as qubo_solver_module
+  monkeypatch.setattr(qubo_solver_module, "DWaveSampler", FakeDWaveSampler)
+  monkeypatch.setattr(qubo_solver_module, "EmbeddingComposite", FakeEmbeddingComposite)
+
+  solver = create_qubo_qa_solver()
+  assert solver.qubo_solver is not None
+
+
 def test_create_dnc_sa_solver() -> None:
   solver = create_dnc_sa_solver(max_vertices=50, random_seed=42)
-  assert solver.max_vertices == 50
   assert solver.graph_partition_strategy is not None
   assert solver.graph_partition_strategy.max_vertices == 50
 
 
 def test_create_dnc_qubo_solver() -> None:
   solver = create_dnc_qubo_solver()
+  assert solver.graph_partition_strategy is not None
+
+
+def test_create_dnc_qubo_sa_solver() -> None:
+  solver = create_dnc_qubo_sa_solver()
+  assert solver.graph_partition_strategy is not None
+
+
+def test_create_dnc_qubo_qa_solver(monkeypatch) -> None:
+  class FakeDWaveSampler:
+    pass
+
+  class FakeEmbeddingComposite:
+    def __init__(self, child):
+      self.child = child
+
+  import mr2s_module.qubo.qubo_solver as qubo_solver_module
+  monkeypatch.setattr(qubo_solver_module, "DWaveSampler", FakeDWaveSampler)
+  monkeypatch.setattr(qubo_solver_module, "EmbeddingComposite", FakeEmbeddingComposite)
+
+  solver = create_dnc_qubo_qa_solver()
   assert solver.graph_partition_strategy is not None
 
 
