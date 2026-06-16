@@ -29,6 +29,7 @@ from mr2s_module.protocols import (
     Score,
     Solution,
     SolutionRankerProtocol,
+    Mr2sSolverProtocol,
 )
 from mr2s_module.qubo import (
     FlowPolyGenerator,
@@ -41,6 +42,11 @@ from mr2s_module.solver import (
     MR2SSolver,
     QuboMR2SSolver,
     SAMR2SSolver,
+    RobbinMR2SSolver,
+    IlsMR2SSolver,
+    BaseEdgeOrientationSolver,
+    create_robbin_solver,
+    create_ils_solver,
 )
 from mr2s_module.solver.partition import (
     DegeneracyPruningFaceCyclePartitionStrategy,
@@ -69,6 +75,12 @@ __all__ = [
     "GraphType",
     "KMeansFaceClusterer",
     "MR2SSolver",
+    "RobbinMR2SSolver",
+    "IlsMR2SSolver",
+    "BaseEdgeOrientationSolver",
+    "Mr2sSolverProtocol",
+    "create_robbin_solver",
+    "create_ils_solver",
     "NHop",
     "NHopPolyGenerator",
     "PolyGeneratorProtocol",
