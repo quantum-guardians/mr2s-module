@@ -32,14 +32,20 @@ def test_non_planar_graph_opts_out() -> None:
     assert not any(e.directed for e in result.remaining_edges)
 
 
-def test_directed_input_graph_raises_error() -> None:
+def test_directed_input_graph_preserves_directions() -> None:
     graph = Graph(edges=[
         Edge(0, 1, 1, True),
         Edge(1, 2, 1, False),
+        Edge(0, 2, 1, False),
     ])
 
-    with pytest.raises(ValueError, match="undirected input graph"):
-        FaceClusterPartition().run(graph)
+    result = FaceClusterPartition().run(graph)
+    assert any(e.directed for e in result.directed_edges())
+    # Find the edge corresponding to 0-1
+    edge_01 = next(e for e in result.directed_edges() if e.id == frozenset({0, 1}))
+    assert edge_01.directed is True
+    # The direction of the predefined edge (0, 1) is preserved
+    assert edge_01.vertices == (0, 1)
 
 
 def test_triangle_directs_its_three_boundary_edges() -> None:

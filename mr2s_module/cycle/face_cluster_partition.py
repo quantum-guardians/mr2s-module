@@ -47,9 +47,6 @@ class FaceClusterPartition:
         self.repair_mode = repair_mode
 
     def run(self, graph: Graph) -> GraphPartitionResult:
-        if any(edge.directed for edge in graph.edges.values()):
-            raise ValueError("FaceClusterPartition requires an undirected input graph")
-
         nx_graph = domain_graph_to_networkx(graph)
         is_planar, _ = nx.check_planarity(nx_graph)
         if not is_planar:
@@ -92,12 +89,15 @@ class FaceClusterPartition:
                 continue
             macro_id = edge_to_inner_macro.get(edge.id)
             if macro_id is not None:
-                sub_graph_edges[macro_id].append(Edge(u, v, edge.weight, False))
+                sub_graph_edges[macro_id].append(Edge(u, v, edge.weight, edge.directed))
                 continue
             orientation = directed_orientations.get(edge.id)
             if orientation is not None:
-                a, b = orientation
-                emitted = Edge(a, b, edge.weight, True)
+                if edge.directed:
+                    emitted = edge
+                else:
+                    a, b = orientation
+                    emitted = Edge(a, b, edge.weight, True)
             else:
                 emitted = edge
             owning_macros = edge_to_outline_macros.get(edge.id, ())

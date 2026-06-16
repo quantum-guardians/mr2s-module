@@ -41,6 +41,7 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
   face_cycle: FaceCycleProtocol
   target_graph: nx.Graph | None
   embedding_estimator: EmbeddingEstimator = estimate_required_qubits
+  max_vertices: int = 100
   _fallback_target_graph_cache: nx.Graph | None = field(default=None, init=False)
 
   @staticmethod
@@ -82,6 +83,15 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
       graph_context["edges"],
       graph_context["directed_edges"],
     )
+    if len(graph.get_vertices()) > self.max_vertices:
+      logger.info(
+        "DnC embedding estimate skipped by vertex limit "
+        "elapsed_ms=%.3f vertices=%d max_vertices=%d",
+        _elapsed_ms(started_at),
+        len(graph.get_vertices()),
+        self.max_vertices,
+      )
+      return None
     try:
       build_started_at = perf_counter()
       context = self._build_solve_context(graph)

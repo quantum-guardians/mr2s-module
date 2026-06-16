@@ -47,10 +47,16 @@ from mr2s_module.solver import (
     BaseEdgeOrientationSolver,
     create_robbin_solver,
     create_ils_solver,
+    DnCMr2sSolver,
+    create_sa_solver,
+    create_qubo_solver,
+    create_dnc_sa_solver,
+    create_dnc_qubo_solver,
 )
 from mr2s_module.solver.partition import (
     DegeneracyPruningFaceCyclePartitionStrategy,
     EmbeddingAwareFaceCyclePartitionStrategy,
+    VertexCountPartitionStrategy,
 )
 from mr2s_module.util import estimate_required_qubits, map_binary_poly_to_bqm
 
@@ -65,6 +71,7 @@ __all__ = [
     "EmbeddingEstimate",
     "EmbeddingAwareFaceCyclePartitionStrategy",
     "DegeneracyPruningFaceCyclePartitionStrategy",
+    "VertexCountPartitionStrategy",
     "Evaluator",
     "EvaluatorProtocol",
     "DnCGraphPartitionStrategyProtocol",
@@ -81,6 +88,11 @@ __all__ = [
     "Mr2sSolverProtocol",
     "create_robbin_solver",
     "create_ils_solver",
+    "DnCMr2sSolver",
+    "create_sa_solver",
+    "create_qubo_solver",
+    "create_dnc_sa_solver",
+    "create_dnc_qubo_solver",
     "NHop",
     "NHopPolyGenerator",
     "PolyGeneratorProtocol",
