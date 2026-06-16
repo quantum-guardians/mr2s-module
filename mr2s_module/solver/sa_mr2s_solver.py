@@ -119,9 +119,10 @@ class SAMR2SSolver:
     ))
 
   @staticmethod
-  def _build_graph_weight_scale(graph: Graph) -> float:
+  def _build_graph_weight_scale(graph: Graph, treewidth: float) -> float:
     total_weight = sum(float(edge.weight) for edge in graph.edges.values())
-    return max(1.0, total_weight * total_weight)
+    num_edges = max(1.0, float(len(graph.edges)))
+    return max(1.0, (total_weight * total_weight) / (num_edges * treewidth))
 
   @staticmethod
   def _build_pair_scale(vertices: list[int]) -> float:
@@ -158,6 +159,7 @@ class SAMR2SSolver:
       state_bits: list[int],
       fixed_edges: set[tuple[int, int]],
       vertices: list[int],
+      treewidth: float,
   ) -> float:
     directed_edges = self._state_to_edges(variable_edges, state_bits, fixed_edges)
     apsp_sum, unreachable_pairs = self._build_apsp_and_disconnected_pair_count(
@@ -166,7 +168,7 @@ class SAMR2SSolver:
     )
     flow_score = self._build_flow_score(directed_edges, graph)
     pair_scale = self._build_pair_scale(vertices)
-    weight_scale = self._build_graph_weight_scale(graph)
+    weight_scale = self._build_graph_weight_scale(graph, treewidth)
     return (
       self.apsp_weight * (apsp_sum / pair_scale)
       + self.flow_weight * (flow_score / weight_scale)
@@ -220,9 +222,10 @@ class SAMR2SSolver:
       graph: Graph,
       variable_edges: list[Edge],
       fixed_edges: set[tuple[int, int]],
+      treewidth: float,
   ) -> tuple[list[int], float]:
     if not variable_edges:
-      return [], self._objective(graph, [], [], fixed_edges, sorted(graph.get_vertices()))
+      return [], self._objective(graph, [], [], fixed_edges, sorted(graph.get_vertices()), treewidth)
 
     rng = random.Random(self.random_seed)
     vertices = sorted(graph.get_vertices())
@@ -243,6 +246,7 @@ class SAMR2SSolver:
         current_bits,
         fixed_edges,
         vertices,
+        treewidth,
       )
       if current_objective < best_objective:
         best_objective = current_objective
@@ -264,6 +268,7 @@ class SAMR2SSolver:
             current_bits,
             fixed_edges,
             vertices,
+            treewidth,
           )
           delta = next_objective - current_objective
           accept = delta <= 0.0 or rng.random() < math.exp(-delta / temperature)
@@ -309,6 +314,14 @@ class SAMR2SSolver:
     if self.edge_orienter is not None:
       graph.define_edge_direction(set(self.edge_orienter.run(graph).get_edges()))
 
+    # Calculate treewidth approximation once at solver start
+    from networkx.algorithms.approximation import treewidth_min_degree
+    nx_graph = nx.Graph()
+    nx_graph.add_nodes_from(graph.get_vertices())
+    nx_graph.add_edges_from(edge.endpoints() for edge in graph.edges.values())
+    tw, _ = treewidth_min_degree(nx_graph)
+    treewidth = max(1.0, float(tw))
+
     fixed_edges = {
       edge.vertices
       for edge in graph.edges.values()
@@ -320,7 +333,7 @@ class SAMR2SSolver:
       if not edge.directed
     ]
 
-    best_bits, best_objective = self._anneal_bits(graph, variable_edges, fixed_edges)
+    best_bits, best_objective = self._anneal_bits(graph, variable_edges, fixed_edges, treewidth)
     directed_edges = self._state_to_edges(variable_edges, best_bits, fixed_edges)
     sample = {
       edge.to_key(): bit
