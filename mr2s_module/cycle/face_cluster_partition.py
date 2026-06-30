@@ -85,22 +85,38 @@ class FaceClusterPartition:
 
         # Step 3. 원본 간선을 단일 순회로 분류 (O(E))
         # 공유 boundary 는 인접 macro 양쪽 sub_graphs 에 같은 Edge 인스턴스로 push 한다.
+        # 평행 boundary 간선(같은 pair_key 의 outline 간선이 여러 개)은 anchor-one-free-rest:
+        # 첫 copy 만 directed anchor 로 boundary/순환을 책임지고, 나머지 평행 copy 는
+        # undirected 자유변수로 한쪽 macro subgraph 에 넣어 QUBO 가 방향을 결정한다.
+        anchored_outline: set[frozenset[int]] = set()
         for edge in graph.edges.values():
             u, v = edge.endpoints()
             if u == v:
                 remaining_edges.append(edge)
                 continue
-            macro_id = edge_to_inner_macro.get(edge.id)
+            macro_id = edge_to_inner_macro.get(edge.pair_key())
             if macro_id is not None:
-                sub_graph_edges[macro_id].append(Edge(u, v, edge.weight, False))
+                # 입력은 전부 무방향 → 원본 인스턴스 재사용(id 보존, 새 객체 0).
+                sub_graph_edges[macro_id].append(edge)
                 continue
-            orientation = directed_orientations.get(edge.id)
+            pair = edge.pair_key()
+            owning_macros = edge_to_outline_macros.get(pair, ())
+            if pair in anchored_outline:
+                # 평행 copy: anchor 가 directed boundary 를 책임지므로 undirected 자유변수로.
+                # 결정성/재현성 위해 딱 한쪽 macro(min)에만 넣는다(없으면 remaining).
+                if owning_macros:
+                    sub_graph_edges[min(owning_macros)].append(edge)
+                else:
+                    remaining_edges.append(edge)
+                continue
+            anchored_outline.add(pair)
+            orientation = directed_orientations.get(pair)
             if orientation is not None:
                 a, b = orientation
-                emitted = Edge(a, b, edge.weight, True)
+                # 같은 논리 간선의 방향 버전. id 보존 → DnC merge 가 부모 id 로 왕복.
+                emitted = edge.oriented(a, b)
             else:
                 emitted = edge
-            owning_macros = edge_to_outline_macros.get(edge.id, ())
             if owning_macros:
                 for owning in owning_macros:
                     sub_graph_edges[owning].append(emitted)
@@ -123,12 +139,12 @@ class FaceClusterPartition:
             for edge in subgraph.edges.values():
                 if edge.directed:
                     continue
-                prev_owner = owner_by_edge.get(edge.id)
+                prev_owner = owner_by_edge.get(edge.pair_key())
                 if prev_owner is None:
-                    owner_by_edge[edge.id] = subgraph_idx
+                    owner_by_edge[edge.pair_key()] = subgraph_idx
                     continue
                 if prev_owner != subgraph_idx:
-                    overlaps[edge.id] = (prev_owner, subgraph_idx)
+                    overlaps[edge.pair_key()] = (prev_owner, subgraph_idx)
         if overlaps:
             details = ", ".join(
                 f"{tuple(sorted(edge_id))}@({owner0},{owner1})"
