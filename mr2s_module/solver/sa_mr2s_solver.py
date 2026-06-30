@@ -104,7 +104,7 @@ class SAMR2SSolver:
     incoming_weights: dict[int, float] = {}
     outgoing_weights: dict[int, float] = {}
     edge_weights = {
-      edge.id: float(edge.weight)
+      edge.pair_key(): float(edge.weight)
       for edge in graph.edges.values()
     }
 
@@ -183,7 +183,7 @@ class SAMR2SSolver:
   ) -> list[int]:
     balance: dict[int, float] = {}
     edge_weights = {
-      edge.id: float(edge.weight)
+      edge.pair_key(): float(edge.weight)
       for edge in graph.edges.values()
     }
 
@@ -205,7 +205,7 @@ class SAMR2SSolver:
     seed_bits: list[int] = []
     for edge in variable_edges:
       source, target = edge.vertices
-      weight = edge_weights[edge.id]
+      weight = edge.weight
       forward_penalty = direction_penalty(source, target, weight)
       reverse_penalty = direction_penalty(target, source, weight)
       bit = 0 if forward_penalty <= reverse_penalty else 1
@@ -346,8 +346,17 @@ class SAMR2SSolver:
       num_occurrences=[1],
     )
 
+    # edge id → 방향. 단순그래프 전제(쌍당 1 간선)로 끝점 매칭.
+    solution_edges: dict[int, tuple[int, int]] = {}
+    for edge in graph.edges.values():
+      u, v = edge.endpoints()
+      if (u, v) in directed_edges:
+        solution_edges[edge.id] = (u, v)
+      elif (v, u) in directed_edges:
+        solution_edges[edge.id] = (v, u)
+
     solution = Solution(
-      edges=directed_edges,
+      edges=solution_edges,
       graph=graph,
       sample_set=sample_set,
       score=None,

@@ -49,7 +49,7 @@ def test_robbin_integration_with_real_solver():
 
     assert isinstance(solution, DnCSolution)
     assert len(solution.edges) == 3
-    assert solution.edges == expected_directions
+    assert set(solution.edges.values()) == expected_directions
 
 
 @pytest.mark.slow
@@ -68,8 +68,8 @@ def test_robbin_performance_and_apsp(num_points, remove_percent):
     elapsed = time.perf_counter() - start_time
 
     oriented_edges = [e for e in directed_edges if e.directed]
-    oriented_ids = {e.id for e in oriented_edges}
-    undirected_edges = [e for e in graph.edges.values() if e.id not in oriented_ids]
+    oriented_pairs = {e.pair_key() for e in oriented_edges}
+    undirected_edges = [e for e in graph.edges.values() if e.pair_key() not in oriented_pairs]
 
     # Cycle 방향을 graph 에 박은 뒤 실제 솔버 통과.
     graph.define_edge_direction(set(directed_edges))
@@ -78,7 +78,7 @@ def test_robbin_performance_and_apsp(num_points, remove_percent):
 
     evaluator = Evaluator()
     partial_sol = Solution(
-        edges={(e.vertices[0], e.vertices[1]) for e in oriented_edges},
+        edges={e.id: e.vertices for e in oriented_edges},
         graph=Graph(edges=oriented_edges + undirected_edges),
         sample_set=empty_binary_sample_set(),
     )
@@ -98,4 +98,4 @@ def test_robbin_performance_and_apsp(num_points, remove_percent):
     assert final_apsp < float("inf")
     # Cycle 이 결정한 방향은 solver 통과 후에도 그대로 살아있어야 함.
     expected_directions = {e.vertices for e in graph.edges.values() if e.directed}
-    assert expected_directions.issubset(solution.edges)
+    assert expected_directions.issubset(set(solution.edges.values()))

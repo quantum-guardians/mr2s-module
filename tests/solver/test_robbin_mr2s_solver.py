@@ -15,7 +15,7 @@ def test_robbin_solver_triangle_graph() -> None:
 
   assert len(solution.edges) == 3
   # 모든 간선에 대해 방향이 결정되어 있어야 함
-  assert {frozenset({u, v}) for u, v in solution.edges} == set(graph.edges.keys())
+  assert {frozenset(d) for d in solution.edges.values()} == {e.pair_key() for e in graph.edges.values()}
   
   # score 검증
   assert solution.score is not None

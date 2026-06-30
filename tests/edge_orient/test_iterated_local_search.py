@@ -215,7 +215,7 @@ class TestIteratedLocalSearch:
         ])
         result = IteratedLocalSearch().run(graph)
         edges = result.get_edges()
-        weight_map = {e.id: e.weight for e in edges}
+        weight_map = {e.pair_key(): e.weight for e in edges}
         assert weight_map[frozenset({0, 1})] == 5
         assert weight_map[frozenset({1, 2})] == 3
         assert weight_map[frozenset({0, 2})] == 2
@@ -287,4 +287,4 @@ def test_ils_integration_with_sa_solver():
 
     assert final_apsp < float("inf")
     expected_directions = {e.vertices for e in graph.edges.values() if e.directed}
-    assert expected_directions.issubset(solution.edges)
+    assert expected_directions.issubset(set(solution.edges.values()))

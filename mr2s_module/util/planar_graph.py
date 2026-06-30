@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Hashable
-
 import networkx as nx
+from collections.abc import Hashable
 
 from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph

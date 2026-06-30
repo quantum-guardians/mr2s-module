@@ -14,6 +14,9 @@ class Tjoin:
 
         nx_graph = domain_graph_to_networkx(graph)
 
+        # 정체성(int id) 과 분리된 끝점 뷰. 단순그래프 전제(쌍당 1 간선).
+        pair_to_edge = {e.pair_key(): e for e in graph.edges.values()}
+
         # 1. Identify odd-degree nodes
         odd_nodes = [v for v, d in nx_graph.degree() if d % 2 != 0]
 
@@ -44,7 +47,7 @@ class Tjoin:
             j_edges_keys = {e for e, count in path_edges_count.items() if count % 2 != 0}
 
         # 3. Eulerian subgraph G_E = G \Delta J
-        eulerian_edge_keys = set(graph.edges.keys()) ^ j_edges_keys
+        eulerian_edge_keys = set(pair_to_edge.keys()) ^ j_edges_keys
 
         g_eulerian = nx.Graph()
         for e_key in eulerian_edge_keys:
@@ -60,7 +63,7 @@ class Tjoin:
 
             circuit = list(nx.eulerian_circuit(sub))
             for u, v in circuit:
-                orig_edge = graph.edges[frozenset({u, v})]
+                orig_edge = pair_to_edge[frozenset({u, v})]
                 oriented_edges.append(Edge(u, v, orig_edge.weight, True))
 
         return OrientedEdges(edges=oriented_edges)
