@@ -9,7 +9,6 @@ from dimod import SampleSet
 from mr2s_module.cycle import FaceClusterPartition
 from mr2s_module.cycle.face_clusterer import KMeansFaceClusterer
 from mr2s_module.domain import (
-  Edge,
   EmbeddableGraphPartition,
   EmbeddingEstimate,
   Graph,
@@ -129,7 +128,7 @@ def _solve_subgraph(
   )
   if sub_graph.edges and all(edge.directed for edge in sub_graph.edges.values()):
     solution = Solution(
-      edges={edge.vertices for edge in sub_graph.edges.values()},
+      edges={edge.id: edge.vertices for edge in sub_graph.edges.values()},
       graph=sub_graph,
       sample_set=empty_sample_set,
     )
@@ -268,15 +267,15 @@ class DnCMr2sSolver:
       len(solution_list),
       len(graph.edges),
     )
-    candidate_edges: dict[frozenset[int], set[tuple[int, int]]] = {}
+    # 자식 solution 의 방향을 edge id 로 키잉. 평행 간선/공유 boundary 정체성 왕복.
+    candidate_edges: dict[int, set[tuple[int, int]]] = {}
     balance: dict[int, float] = {}
 
     for solution in solution_list:
-      for source, target in solution.edges:
-        edge_id = frozenset({source, target})
-        candidate_edges.setdefault(edge_id, set()).add((source, target))
+      for edge_id, direction in solution.edges.items():
+        candidate_edges.setdefault(edge_id, set()).add(direction)
 
-    merged_edges: set[tuple[int, int]] = set()
+    merged_edges: dict[int, tuple[int, int]] = {}
     for edge in graph.edges.values():
       candidates = candidate_edges.get(edge.id, set())
       if not candidates:
@@ -288,7 +287,7 @@ class DnCMr2sSolver:
       else:
         direction = self._select_merge_direction(candidates, edge.weight, balance)
 
-      merged_edges.add(direction)
+      merged_edges[edge.id] = direction
       self._apply_flow_balance(direction, edge.weight, balance)
 
     sample_set = (
@@ -405,20 +404,11 @@ class DnCMr2sSolver:
 
   @staticmethod
   def _apply_merged_directions(graph: Graph, solution: Solution) -> None:
-    weights_by_edge = {
-      edge.id: edge.weight
-      for edge in graph.edges.values()
-    }
-    predefined_edges = {
-      Edge(
-        source,
-        target,
-        weights_by_edge[frozenset({source, target})],
-        True,
-      )
-      for source, target in solution.edges
-    }
-    graph.define_edge_direction(predefined_edges)
+    # solution 은 edge id → 방향. 원본 Edge 를 id 로 찾아 방향만 in-place 로 박는다.
+    for edge_id, (source, target) in solution.edges.items():
+      edge = graph.edges.get(edge_id)
+      if edge is not None:
+        edge.set_direction(source, target)
 
   def score_merged_solution(
       self,

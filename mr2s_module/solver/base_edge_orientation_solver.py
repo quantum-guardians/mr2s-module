@@ -31,14 +31,17 @@ class BaseEdgeOrientationSolver:
           f"This solver requires all edges to be oriented."
         )
 
-    # sample_set 구축
+    # sample_set + edge id → 방향 매핑 구축
     sample: dict[str, int] = {}
+    solution_edges: dict[int, tuple[int, int]] = {}
     for edge in graph.edges.values():
       u, v = edge.endpoints()
       if (u, v) in directed_edges:
         sample[edge.to_key()] = 0
+        solution_edges[edge.id] = (u, v)
       elif (v, u) in directed_edges:
         sample[edge.to_key()] = 1
+        solution_edges[edge.id] = (v, u)
 
     sample_set = SampleSet.from_samples(
       [sample],
@@ -48,7 +51,7 @@ class BaseEdgeOrientationSolver:
     )
 
     solution = Solution(
-      edges=directed_edges,
+      edges=solution_edges,
       graph=graph,
       sample_set=sample_set,
       score=None,

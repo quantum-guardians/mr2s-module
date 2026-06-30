@@ -125,7 +125,7 @@ class StubRunningMr2sSolver:
   def run(self, graph: Graph) -> Solution:
     self.run_graphs.append(graph)
     return Solution(
-      edges={(edge.vertices[0], edge.vertices[1]) for edge in graph.edges.values()},
+      edges={edge.id: edge.vertices for edge in graph.edges.values()},
       graph=graph,
       sample_set=empty_binary_sample_set(),
     )
@@ -143,7 +143,7 @@ class StubEmbeddingAwareRunningMr2sSolver(StubRunningMr2sSolver):
   ) -> Solution:
     self.run_with_embedding_calls.append((graph, embedding_estimate))
     return Solution(
-      edges={(edge.vertices[1], edge.vertices[0]) for edge in graph.edges.values()},
+      edges={edge.id: (edge.vertices[1], edge.vertices[0]) for edge in graph.edges.values()},
       graph=graph,
       sample_set=empty_binary_sample_set(),
       score=Score(apsp_sum=1.0, strong_connect_rate=1.0, flow_score=0.0),
@@ -231,16 +231,17 @@ def test_merge_solutions_combines_solution_edges() -> None:
   ])
   sample_set = empty_binary_sample_set()
   solver = DnCMr2sSolver(mr2s_solver=object())
+  pid = {e.pair_key(): e.id for e in graph.edges.values()}
 
   merged = solver.merge_solutions(
     solutions=[
       Solution(
-        edges={(1, 2), (2, 3)},
+        edges={pid[frozenset({1, 2})]: (1, 2), pid[frozenset({2, 3})]: (2, 3)},
         graph=Graph(edges=[Edge(1, 2, 1, False), Edge(2, 3, 1, False)]),
         sample_set=sample_set,
       ),
       Solution(
-        edges={(2, 3), (4, 3)},
+        edges={pid[frozenset({2, 3})]: (2, 3), pid[frozenset({3, 4})]: (4, 3)},
         graph=Graph(edges=[Edge(2, 3, 1, False), Edge(3, 4, 1, False)]),
         sample_set=empty_binary_sample_set(),
       ),
@@ -248,7 +249,7 @@ def test_merge_solutions_combines_solution_edges() -> None:
     graph=graph,
   )
 
-  assert merged.edges == {(1, 2), (2, 3), (4, 3)}
+  assert set(merged.edges.values()) == {(1, 2), (2, 3), (4, 3)}
   assert merged.graph is graph
   assert merged.sample_set is sample_set
   assert merged.score is None
@@ -260,16 +261,17 @@ def test_merge_solutions_keeps_one_direction_per_input_edge() -> None:
     Edge(2, 3, 1, False),
   ])
   solver = DnCMr2sSolver(mr2s_solver=object())
+  pid = {e.pair_key(): e.id for e in graph.edges.values()}
 
   merged = solver.merge_solutions(
     solutions=[
       Solution(
-        edges={(1, 2), (2, 3)},
+        edges={pid[frozenset({1, 2})]: (1, 2), pid[frozenset({2, 3})]: (2, 3)},
         graph=graph,
         sample_set=empty_binary_sample_set(),
       ),
       Solution(
-        edges={(2, 1), (3, 2)},
+        edges={pid[frozenset({1, 2})]: (2, 1), pid[frozenset({2, 3})]: (3, 2)},
         graph=graph,
         sample_set=empty_binary_sample_set(),
       ),
@@ -278,12 +280,12 @@ def test_merge_solutions_keeps_one_direction_per_input_edge() -> None:
   )
 
   selected_undirected_edges = {
-    frozenset({source, target})
-    for source, target in merged.edges
+    frozenset(direction)
+    for direction in merged.edges.values()
   }
 
   assert len(merged.edges) == len(graph.edges)
-  assert selected_undirected_edges == set(graph.edges.keys())
+  assert selected_undirected_edges == {e.pair_key() for e in graph.edges.values()}
 
 
 def test_merge_solutions_selects_direction_that_reduces_flow_imbalance() -> None:
@@ -292,16 +294,17 @@ def test_merge_solutions_selects_direction_that_reduces_flow_imbalance() -> None
     Edge(2, 3, 1, False),
   ])
   solver = DnCMr2sSolver(mr2s_solver=object())
+  pid = {e.pair_key(): e.id for e in graph.edges.values()}
 
   merged = solver.merge_solutions(
     solutions=[
       Solution(
-        edges={(1, 3), (2, 3)},
+        edges={pid[frozenset({1, 3})]: (1, 3), pid[frozenset({2, 3})]: (2, 3)},
         graph=graph,
         sample_set=empty_binary_sample_set(),
       ),
       Solution(
-        edges={(3, 2)},
+        edges={pid[frozenset({2, 3})]: (3, 2)},
         graph=graph,
         sample_set=empty_binary_sample_set(),
       ),
@@ -309,8 +312,8 @@ def test_merge_solutions_selects_direction_that_reduces_flow_imbalance() -> None
     graph=graph,
   )
 
-  assert (1, 3) in merged.edges
-  assert (3, 2) in merged.edges
+  assert (1, 3) in merged.edges.values()
+  assert (3, 2) in merged.edges.values()
 
 
 def test_score_merged_solution_multiplies_child_strong_connect_rates() -> None:
@@ -479,7 +482,7 @@ def test_solve_subgraphs_skips_qubo_solver_for_directed_only_graph() -> None:
 
   assert mr2s_solver.run_graphs == []
   assert len(solutions) == 1
-  assert solutions[0].edges == {(1, 2), (2, 3)}
+  assert set(solutions[0].edges.values()) == {(1, 2), (2, 3)}
   assert solutions[0].graph is sub_graph
   assert solutions[0].score is not None
 
@@ -514,7 +517,7 @@ def test_solve_subgraphs_reuses_matching_physical_embedding() -> None:
     (graph_a, estimate_a),
     (graph_b, estimate_b),
   ]
-  assert [solution.edges for solution in solutions] == [{(2, 1)}, {(4, 3)}]
+  assert [set(solution.edges.values()) for solution in solutions] == [{(2, 1)}, {(4, 3)}]
 
 
 def test_solve_subgraphs_falls_back_for_placeholder_embedding() -> None:
@@ -536,7 +539,7 @@ def test_solve_subgraphs_falls_back_for_placeholder_embedding() -> None:
 
   assert mr2s_solver.run_with_embedding_calls == []
   assert mr2s_solver.run_graphs == [graph]
-  assert solutions[0].edges == {(1, 2)}
+  assert set(solutions[0].edges.values()) == {(1, 2)}
 
 
 def test_solve_subgraphs_keeps_directed_only_skip_before_embedding_reuse() -> None:
@@ -558,7 +561,7 @@ def test_solve_subgraphs_keeps_directed_only_skip_before_embedding_reuse() -> No
 
   assert mr2s_solver.run_with_embedding_calls == []
   assert mr2s_solver.run_graphs == []
-  assert solutions[0].edges == {(1, 2)}
+  assert set(solutions[0].edges.values()) == {(1, 2)}
 
 
 def test_solve_subgraphs_falls_back_when_context_embedding_is_invalid() -> None:
@@ -586,7 +589,7 @@ def test_solve_subgraphs_falls_back_when_context_embedding_is_invalid() -> None:
 
   assert mr2s_solver.run_with_context_calls == [context]
   assert mr2s_solver.run_graphs == [graph]
-  assert solutions[0].edges == {(1, 2)}
+  assert set(solutions[0].edges.values()) == {(1, 2)}
 
 
 def test_solve_subgraphs_falls_back_when_reused_embedding_raises_value_error() -> None:
@@ -608,7 +611,7 @@ def test_solve_subgraphs_falls_back_when_reused_embedding_raises_value_error() -
 
   assert mr2s_solver.run_with_embedding_calls == [(graph, estimate)]
   assert mr2s_solver.run_graphs == [graph]
-  assert solutions[0].edges == {(1, 2)}
+  assert set(solutions[0].edges.values()) == {(1, 2)}
 
 
 def test_solve_subgraphs_falls_back_when_reused_context_raises_value_error() -> None:
@@ -636,7 +639,7 @@ def test_solve_subgraphs_falls_back_when_reused_context_raises_value_error() -> 
 
   assert mr2s_solver.run_with_context_calls == [context]
   assert mr2s_solver.run_graphs == [graph]
-  assert solutions[0].edges == {(1, 2)}
+  assert set(solutions[0].edges.values()) == {(1, 2)}
 
 
 def test_run_direct_partition_falls_back_when_context_embedding_is_invalid() -> None:
@@ -669,7 +672,7 @@ def test_run_direct_partition_falls_back_when_context_embedding_is_invalid() -> 
 
   assert mr2s_solver.run_with_context_calls == [context]
   assert mr2s_solver.run_graphs == [graph]
-  assert solution.edges == {(1, 2)}
+  assert set(solution.edges.values()) == {(1, 2)}
   assert solution.solve_contexts == [context]
 
 
@@ -705,7 +708,7 @@ def test_run_delegates_once_when_graph_is_not_divided(
 
   assert isinstance(solution, DnCSolution)
   assert mr2s_solver.run_graphs == [graph]
-  assert solution.edges == {(1, 2)}
+  assert set(solution.edges.values()) == {(1, 2)}
   assert solution.sub_graphs == [graph]
   assert len(solution.embedding_estimates) == 1
 
@@ -871,8 +874,9 @@ def test_run_solves_full_graph_after_applying_merged_directions(
     Edge(1, 2, 1, False),
     Edge(2, 3, 1, False),
   ])
-  child = Graph(edges=[Edge(1, 2, 1, False)])
-  remaining = Edge(2, 3, 1, False)
+  # 실제 face_cluster 처럼 서브그래프/remaining 은 부모 Edge 정체성(id)을 공유한다.
+  child = Graph(edges=[graph.edge_by_pair(1, 2)])
+  remaining = graph.edge_by_pair(2, 3)
 
   def estimate_fails_for_parent(bqm, target_graph=None):
     if len(bqm.edges) > 1:
@@ -898,12 +902,12 @@ def test_run_solves_full_graph_after_applying_merged_directions(
 
   assert isinstance(solution, DnCSolution)
   assert mr2s_solver.run_graphs == [child, graph]
-  child_edge = graph.edges[frozenset({1, 2})]
+  child_edge = graph.edge_by_pair(1, 2)
   assert child_edge.directed is True
   assert child_edge.vertices == (1, 2)
-  remaining_edge_in_graph = graph.edges[remaining.id]
+  remaining_edge_in_graph = graph.edge_by_pair(2, 3)
   assert remaining_edge_in_graph.directed is False
-  assert solution.edges == {(1, 2), (2, 3)}
+  assert set(solution.edges.values()) == {(1, 2), (2, 3)}
   assert solution.sub_graphs == [child]
   assert len(solution.embedding_estimates) == 1
 

@@ -80,8 +80,8 @@ class Evaluator:
       for edge in solution.graph.edges.values()
     }
 
-    for source, target in solution.edges:
-      weight = edge_weights[frozenset({source, target})]
+    for edge_id, (source, target) in solution.edges.items():
+      weight = edge_weights[edge_id]
       outgoing_weights[source] = outgoing_weights.get(source, 0.0) + weight
       incoming_weights[target] = incoming_weights.get(target, 0.0) + weight
 
