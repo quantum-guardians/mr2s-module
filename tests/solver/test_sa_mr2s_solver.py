@@ -19,7 +19,7 @@ def test_run_finds_strongly_connected_triangle_orientation() -> None:
   assert len(solution.edges) == 3
   assert {frozenset(d) for d in solution.edges.values()} == {e.pair_key() for e in graph.edges.values()}
   assert solution.score is not None
-  assert solution.score.apsp_sum == 9.0
+  assert solution.score.apsp_sum == 1.5
   assert solution.score.flow_score == 0.0
   assert solution.score.strong_connect_rate == 1.0
 

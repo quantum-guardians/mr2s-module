@@ -7,6 +7,10 @@ from mr2s_module.evaluator.apsp_sum_ranker import ApspSumRanker
 
 class Evaluator:
 
+  def __init__(self):
+    # 인스턴스로 들고 있어야 무방향 APSP 캐시가 solution 간에 재사용된다.
+    self._apsp_ranker = ApspSumRanker()
+
   @staticmethod
   def _build_graph_from_edges(
       directed_edges: set[tuple[int, int]],
@@ -45,7 +49,8 @@ class Evaluator:
     return directed_edges
 
   def eval_apsp_sum(self, solution: Solution) -> float:
-    return ApspSumRanker().run(solution)
+    """기본 method(stretch) 값. Score.apsp_sum 은 평균 스트레치 의미."""
+    return self._apsp_ranker.run(solution)
 
   def eval_strong_connect_rate(self, solution: Solution) -> float:
     vertices = solution.graph.get_vertices()

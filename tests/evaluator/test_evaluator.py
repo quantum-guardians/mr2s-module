@@ -71,7 +71,7 @@ def test_run_returns_score_for_solution_object() -> None:
     energies=[0.0],
   ))
 
-  assert score.apsp_sum == 9.0
+  assert score.apsp_sum == 1.5
   assert score.strong_connect_rate == 1.0
   assert score.flow_score == 0.0
   assert score.sample_score == 0.0

@@ -20,7 +20,7 @@ def test_robbin_solver_triangle_graph() -> None:
   # score 검증
   assert solution.score is not None
   assert solution.score.strong_connect_rate == 1.0
-  assert solution.score.apsp_sum == 9.0  # 1->2->3->1 (3 + 3 + 3 = 9) 혹은 반대방향 동일
+  assert solution.score.apsp_sum == 1.5  # 사이클 방향화: 정방향 stretch 1, 역방향 2 → 평균 1.5
 
   # sample_set 검증
   assert solution.sample_set is not None
