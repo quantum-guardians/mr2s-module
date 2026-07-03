@@ -133,6 +133,12 @@ def evaluate_score(
     edges: EdgeMap,
     nodes: list,
 ) -> float:
+    """강연결 게이트 + 플로우 불균형 최소화.
+
+    홉 거리는 무시(도메인 목적은 flow balance). weight = 각 정점 유입/유출
+    플로우 양. 반환값 = Σ_v (in_weight − out_weight)². 낮을수록 균형.
+    Evaluator.eval_flow 와 동일 정의라 orienter/최종 평가가 정렬됨.
+    """
     if not nodes:
         return float('inf')
 
@@ -140,17 +146,23 @@ def evaluate_score(
     D.add_nodes_from(nodes)
     for edge in edges.values():
         u, v = edge.vertices
-        D.add_edge(u, v, weight=edge.weight)
+        D.add_edge(u, v)
 
     if not nx.is_strongly_connected(D):
         return float('inf')
 
-    lengths = dict(nx.all_pairs_dijkstra_path_length(D, weight="weight"))
+    incoming_weights: dict[int, float] = {}
+    outgoing_weights: dict[int, float] = {}
+    for edge in edges.values():
+        source, target = edge.vertices
+        weight = float(edge.weight)
+        outgoing_weights[source] = outgoing_weights.get(source, 0.0) + weight
+        incoming_weights[target] = incoming_weights.get(target, 0.0) + weight
 
-    total_distance = 0
-    for targets in lengths.values():
-        total_distance += sum(targets.values())
-    return float(total_distance)
+    return float(sum(
+        (incoming_weights.get(vertex, 0.0) - outgoing_weights.get(vertex, 0.0)) ** 2
+        for vertex in nodes
+    ))
 
 
 def n1_search(

@@ -2,20 +2,8 @@ from dimod import BinaryPolynomial, Vartype
 import networkx as nx
 
 from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, Solution
-from mr2s_module.domain.orientation_result import OrientedEdges
 from mr2s_module.solver import QuboMR2SSolver
 from mr2s_module.util import empty_binary_sample_set
-
-
-class StubEdgeOrienter:
-    def __init__(self, predefined_edges: set[Edge]) -> None:
-        self.predefined_edges = predefined_edges
-        self.calls = 0
-
-    def run(self, graph: Graph) -> OrientedEdges:
-        self.calls += 1
-        return OrientedEdges(edges=list(self.predefined_edges))
-
 
 
 class StubPolyGenerator:
@@ -68,13 +56,12 @@ class StubEvaluator:
         return float(len(solution.edges))
 
 
-def test_run_skips_preprocessing_when_edge_orienter_is_none() -> None:
+def test_run_solves_and_evaluates() -> None:
     graph = Graph(edges=[Edge(1, 2, 1, False)])
     poly_generator = StubPolyGenerator()
     qubo_solver = StubQuboSolver()
     evaluator = StubEvaluator()
     solver = QuboMR2SSolver(
-        edge_orienter=None,
         qubo_solver=qubo_solver,
         evaluator=evaluator,
         poly_generators={poly_generator},
@@ -90,40 +77,12 @@ def test_run_skips_preprocessing_when_edge_orienter_is_none() -> None:
     assert evaluator.received_solution.score == 1.0
 
 
-def test_run_applies_preprocessing_when_edge_orienter_is_provided() -> None:
-    graph = Graph(edges=[Edge(1, 2, 1, False)])
-    predefined_edge = Edge(1, 2, 1, True)
-    edge_orienter = StubEdgeOrienter(predefined_edges={predefined_edge})
-    poly_generator = StubPolyGenerator()
-    qubo_solver = StubQuboSolver()
-    evaluator = StubEvaluator()
-    solver = QuboMR2SSolver(
-        edge_orienter=edge_orienter,
-        qubo_solver=qubo_solver,
-        evaluator=evaluator,
-        poly_generators={poly_generator},
-    )
-
-    result = solver.run(graph)
-
-    assert result.score == 1.0
-    assert set(result.edges.values()) == {(1, 2)}
-    assert edge_orienter.calls == 1
-    # define_edge_direction 은 원본 간선을 끝점으로 찾아 방향만 in-place 로 박는다(id 유지).
-    assert len(graph.edges) == 1
-    applied = graph.edge_by_pair(1, 2)
-    assert applied.directed is True and applied.vertices == (1, 2)
-    assert qubo_solver.received_graph is graph
-    assert evaluator.received_solution.score == 1.0
-
-
 def test_run_with_embedding_passes_embedding_to_qubo_solver() -> None:
     graph = Graph(edges=[Edge(1, 2, 1, False)])
     poly_generator = StubPolyGenerator()
     qubo_solver = StubQuboSolver()
     evaluator = StubEvaluator()
     solver = QuboMR2SSolver(
-        edge_orienter=None,
         qubo_solver=qubo_solver,
         evaluator=evaluator,
         poly_generators={poly_generator},
@@ -149,7 +108,6 @@ def test_build_solve_context_uses_qubo_solver_target_graph() -> None:
     poly_generator = StubPolyGenerator()
     qubo_solver = StubQuboSolver()
     solver = QuboMR2SSolver(
-        edge_orienter=None,
         qubo_solver=qubo_solver,
         poly_generators={poly_generator},
     )
@@ -168,7 +126,6 @@ def test_run_with_context_uses_context_bqm_and_embedding() -> None:
     qubo_solver = StubQuboSolver()
     evaluator = StubEvaluator()
     solver = QuboMR2SSolver(
-        edge_orienter=None,
         qubo_solver=qubo_solver,
         evaluator=evaluator,
         poly_generators={poly_generator},

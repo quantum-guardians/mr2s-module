@@ -45,16 +45,17 @@ class TestEvaluateScore:
 
     def test_directed_cycle_score(self):
         edges = _edges((0, 1), (1, 2), (2, 0))
-        assert evaluate_score(edges, [0, 1, 2]) == 9.0
+        # 단위 가중치 사이클: 모든 정점 in=out=1 → 플로우 불균형 0
+        assert evaluate_score(edges, [0, 1, 2]) == 0.0
 
     def test_weighted_score_differs_from_unweighted(self):
         edges = _edges(
             (0, 1), (1, 2), (2, 0),
             weights={(0, 1): 1, (1, 2): 1, (2, 0): 100},
         )
-        # 0->1: 1, 0->2: 1+1=2, 1->2: 1, 1->0: 1+100=101, 2->0: 100, 2->1: 100+1=101
-        # total = 1+2+1+101+100+101 = 306
-        assert evaluate_score(edges, [0, 1, 2]) == 306.0
+        # v0: in=100, out=1 → 99² / v1: in=1, out=1 → 0 / v2: in=1, out=100 → 99²
+        # total = 9801 + 0 + 9801 = 19602
+        assert evaluate_score(edges, [0, 1, 2]) == 19602.0
 
     def test_weighted_disconnected_returns_inf(self):
         edges = _edges((0, 1), (1, 2), weights={(0, 1): 10, (1, 2): 10})
@@ -76,7 +77,7 @@ class TestN1Search:
         rng = np.random.default_rng(0)
         base = nx.Graph([(0, 1), (1, 2), (0, 2)])
         optimal = _edges((0, 1), (1, 2), (2, 0))
-        score = 9.0
+        score = 0.0  # 완전 균형 사이클의 플로우 불균형 최솟값
         new_edges, new_score = n1_search(optimal, score, base, [0, 1, 2], rng)
         assert new_score == score
         assert new_edges == optimal
@@ -97,7 +98,7 @@ class TestN2Search:
         rng = np.random.default_rng(0)
         base = nx.Graph([(0, 1), (1, 2), (0, 2)])
         optimal = _edges((0, 1), (1, 2), (2, 0))
-        score = 9.0
+        score = 0.0  # 완전 균형 사이클의 플로우 불균형 최솟값
         new_edges, new_score = n2_search(optimal, score, base, [0, 1, 2], rng)
         assert new_score == score
         assert new_edges == optimal
@@ -134,7 +135,7 @@ class TestN3Search:
         rng = np.random.default_rng(0)
         base = nx.Graph([(0, 1), (1, 2), (0, 2)])
         optimal = _edges((0, 1), (1, 2), (2, 0))
-        score = 9.0
+        score = 0.0  # 완전 균형 사이클의 플로우 불균형 최솟값
         new_edges, new_score = n3_search(optimal, score, base, [0, 1, 2], rng)
         assert new_score == score
         assert new_edges == optimal

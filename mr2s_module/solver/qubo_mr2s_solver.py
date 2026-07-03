@@ -4,7 +4,6 @@ from mr2s_module.evaluator import ApspSumRanker, Evaluator
 from mr2s_module.domain import EmbeddingEstimate
 from mr2s_module.protocols import (
   QuboSolverProtocol,
-  EdgeOrientationProtocol,
   EvaluatorProtocol,
   Graph,
   PolyGeneratorProtocol, Solution
@@ -25,7 +24,6 @@ from mr2s_module.solver.solve_context import QuboSolveContext
 class QuboMR2SSolver:
   def __init__(
       self,
-      edge_orienter: EdgeOrientationProtocol | None = None,
       qubo_solver: QuboSolverProtocol = QuboSolver.create_sa_solver(ranker=ApspSumRanker()),
       evaluator: EvaluatorProtocol = Evaluator(),
       poly_generators: list[PolyGeneratorProtocol] | set[PolyGeneratorProtocol] | None = None,
@@ -35,7 +33,6 @@ class QuboMR2SSolver:
         FlowPolyGenerator(),
         NHopPolyGenerator(small_world_spec=SmallWorldSpec(n_hops=[NHop(2, 1), NHop(3, 1)]))
       ]
-    self.edge_orienter = edge_orienter
     self.qubo_solver = qubo_solver
     self.evaluator = evaluator
     self.poly_generators = poly_generators
@@ -50,9 +47,6 @@ class QuboMR2SSolver:
     return terms
 
   def build_bqm(self, graph) -> BinaryQuadraticModel:
-    if self.edge_orienter is not None:
-      graph.define_edge_direction(set(self.edge_orienter.run(graph).get_edges()))
-
     # build qubo
     binary_polynomial = self._build_polynomial(graph)
     return map_binary_poly_to_bqm(binary_polynomial)

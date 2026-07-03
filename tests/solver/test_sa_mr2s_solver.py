@@ -1,16 +1,5 @@
 from mr2s_module.domain import Edge, Graph
-from mr2s_module.domain.orientation_result import OrientedEdges
 from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver
-
-
-class StubEdgeOrienter:
-  def __init__(self, predefined_edges: set[Edge]) -> None:
-    self.predefined_edges = predefined_edges
-    self.calls = 0
-
-  def run(self, graph: Graph) -> OrientedEdges:
-    self.calls += 1
-    return OrientedEdges(edges=list(self.predefined_edges))
 
 
 def test_run_finds_strongly_connected_triangle_orientation() -> None:
@@ -33,25 +22,6 @@ def test_run_finds_strongly_connected_triangle_orientation() -> None:
   assert solution.score.apsp_sum == 9.0
   assert solution.score.flow_score == 0.0
   assert solution.score.strong_connect_rate == 1.0
-
-
-def test_run_applies_preprocessing_directed_edges_from_edge_orienter() -> None:
-  graph = Graph(edges=[
-    Edge(1, 2, 1, False),
-    Edge(2, 3, 1, False),
-  ])
-  predefined_edge = Edge(1, 2, 1, True)
-  solver = SAMR2SSolver(
-    edge_orienter=StubEdgeOrienter(predefined_edges={predefined_edge}),
-    random_seed=3,
-  )
-
-  solution = solver.run(graph)
-
-  edge = graph.edge_by_pair(1, 2)
-  assert edge.directed is True
-  assert edge.vertices == (1, 2)
-  assert (1, 2) in solution.edges.values()
 
 
 def test_run_allows_disconnected_soft_solution() -> None:

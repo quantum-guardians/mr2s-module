@@ -1,4 +1,6 @@
 import itertools
+import warnings
+
 import networkx as nx
 
 
@@ -8,7 +10,32 @@ from mr2s_module.util import domain_graph_to_networkx
 
 
 class Tjoin:
+    """DEPRECATED. T-join 기반 부분 방향 배정.
+
+    문제점:
+    - Eulerian 부분그래프를 대칭차(G \\ J)로 만들어 J 간선을 '제거'한다.
+      간선 집합 제거는 2-connected planar 그래프에서도 내부 정점을 고립시킬 수
+      있어(경로 내부 차수-2 정점의 두 간선이 모두 J에 포함되는 경우) 전역
+      강연결을 보장하지 못한다.
+    - 고립된 정점을 남은 QUBO 자유변수로 복구할 수 있다는 보장도 없다
+      (고정된 Euler-circuit 방향이 강방향으로 확장 가능하란 보장 없음 +
+      QUBO 는 soft-penalty 휴리스틱).
+    - `pair_to_edge` 가 쌍당 1 간선(단순그래프)을 전제하므로 멀티그래프의
+      평행 간선을 잃는다.
+
+    강연결이 필요하면 IteratedLocalSearch/Robbin(완전 방향) 을 쓰거나,
+    T-join 을 되살릴 경우 제거 대신 복제(supergraph)로 재구현해야 한다.
+    """
+
     def run(self, graph: Graph) -> OrientedEdges:
+        warnings.warn(
+            "Tjoin is deprecated: symmetric-difference removal can isolate "
+            "vertices and does not guarantee strong connectivity, and it "
+            "loses parallel edges on multigraphs. Use IteratedLocalSearch or "
+            "Robbin for a full orientation.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if graph.is_empty():
             return OrientedEdges()
 

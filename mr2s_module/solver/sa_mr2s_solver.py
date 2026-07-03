@@ -8,13 +8,12 @@ from dimod import SampleSet
 
 from mr2s_module.domain import Edge, Graph, Solution
 from mr2s_module.evaluator import Evaluator
-from mr2s_module.protocols import EdgeOrientationProtocol, EvaluatorProtocol
+from mr2s_module.protocols import EvaluatorProtocol
 
 
 class SAMR2SSolver:
   def __init__(
       self,
-      edge_orienter: EdgeOrientationProtocol | None = None,
       evaluator: EvaluatorProtocol = Evaluator(),
       *,
       apsp_weight: float = 1.0,
@@ -58,7 +57,6 @@ class SAMR2SSolver:
     if min_objective_improvement < 0.0:
       raise ValueError("min_objective_improvement must be non-negative")
 
-    self.edge_orienter = edge_orienter
     self.evaluator = evaluator
     self.apsp_weight = apsp_weight
     self.flow_weight = flow_weight
@@ -311,9 +309,6 @@ class SAMR2SSolver:
     return best_bits, best_objective
 
   def run(self, graph: Graph) -> Solution:
-    if self.edge_orienter is not None:
-      graph.define_edge_direction(set(self.edge_orienter.run(graph).get_edges()))
-
     # Calculate treewidth approximation once at solver start
     from networkx.algorithms.approximation import treewidth_min_degree
     nx_graph = nx.Graph()

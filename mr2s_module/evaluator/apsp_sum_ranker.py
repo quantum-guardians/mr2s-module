@@ -8,6 +8,7 @@ class ApspSumRanker:
 
   @staticmethod
   def _build_graph(solution: Solution) -> nx.DiGraph:
+    # TODO: 가중치를 무시함.
     graph = nx.DiGraph()
     graph.add_edges_from(solution.edges.values())
     graph.add_nodes_from(solution.graph.get_vertices())
