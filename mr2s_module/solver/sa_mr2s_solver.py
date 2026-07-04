@@ -327,7 +327,6 @@ class SAMR2SSolver:
     ]
 
     best_bits, best_objective = self._anneal_bits(graph, variable_edges, fixed_edges, treewidth)
-    directed_edges = self._state_to_edges(variable_edges, best_bits, fixed_edges)
     sample = {
       edge.to_key(): bit
       for edge, bit in zip(variable_edges, best_bits)
@@ -339,14 +338,14 @@ class SAMR2SSolver:
       num_occurrences=[1],
     )
 
-    # edge id → 방향. 단순그래프 전제(쌍당 1 간선)로 끝점 매칭.
-    solution_edges: dict[int, tuple[int, int]] = {}
+    # edge id → 방향. 비트가 variable_edges 와 같은 순서라 평행 간선도 id 별 독립 복원.
+    solution_edges: dict[int, tuple[int, int]] = {
+      edge.id: self._build_direction(edge, bit)
+      for edge, bit in zip(variable_edges, best_bits)
+    }
     for edge in graph.edges.values():
-      u, v = edge.endpoints()
-      if (u, v) in directed_edges:
-        solution_edges[edge.id] = (u, v)
-      elif (v, u) in directed_edges:
-        solution_edges[edge.id] = (v, u)
+      if edge.directed:
+        solution_edges[edge.id] = edge.vertices
 
     solution = Solution(
       edges=solution_edges,

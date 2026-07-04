@@ -38,6 +38,27 @@ def test_run_allows_disconnected_soft_solution() -> None:
   assert len(solution.edges) == 2
 
 
+def test_run_orients_parallel_pair_anti_parallel() -> None:
+  graph = Graph(edges=[
+    Edge(0, 1, 3, False),
+    Edge(0, 1, 3, False),
+  ])
+  solver = SAMR2SSolver(
+    random_seed=7,
+    num_restarts=8,
+    sweeps_per_temperature=3,
+  )
+
+  solution = solver.run(graph)
+
+  assert len(solution.edges) == 2
+  assert set(solution.edges.values()) == {(0, 1), (1, 0)}
+  assert solution.score is not None
+  assert solution.score.flow_score == 0.0
+  assert solution.score.strong_connect_rate == 1.0
+  assert solution.score.apsp_sum != float("inf")
+
+
 def test_run_stops_each_restart_after_consecutive_stale_steps(monkeypatch) -> None:
   graph = Graph(edges=[Edge(1, 2, 1, False)])
   solver = SAMR2SSolver(
