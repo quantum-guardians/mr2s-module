@@ -2,7 +2,7 @@
 
 - Date: 2026-07-02
 - GitHub Issue: None
-- Status: Draft
+- Status: Done (2026-07-04, on feat/ISSUE-52-taking-multigraph)
 
 ## Goal
 
@@ -35,15 +35,15 @@ QUBO poly 버그 상세:
 - 현재 브랜치 `feat/ISSUE-52-taking-multigraph` 작업(멀티그래프 edge id) 과 순서 맞음 — SA 키잉 전환이 자연스럽게 겹침.
 
 ## Approach (Checklist)
-- [ ] **Step 0: Recon** — `util/` 배치 확인, BinaryPolynomial `.energy()` 평가 API 확인, w≠1 기대값 가진 기존 테스트 목록화
-- [ ] **Step 1: 수치 코어** — `mr2s_module/util/flow_score.py`에 `flow_imbalance(directed: Iterable[tuple[int, int, float]]) -> float` (source, target, weight 튜플들 → 정점별 (Σin−Σout)² 합). 순수 함수, 그래프 객체 의존 없음.
+- [x] **Step 0: Recon** — `util/` 배치 확인, BinaryPolynomial `.energy()` 평가 API 확인, w≠1 기대값 가진 기존 테스트 목록화 (w≠1 에너지 기대값 테스트 없음 확인)
+- [x] **Step 1: 수치 코어** — `mr2s_module/util/flow_score.py`에 `flow_imbalance(directed: Iterable[tuple[int, int, float]]) -> float` (source, target, weight 튜플들 → 정점별 (Σin−Σout)² 합). 순수 함수, 그래프 객체 의존 없음.
   - `Evaluator.eval_flow` → id→weight 매핑 후 코어 위임
-  - `SAMR2SSolver._build_flow_score` → 삭제, 코어 호출 (pair_key 키잉 제거, edge 순회로 (src, tgt, w) 생성)
-- [ ] **Step 2: FlowPolyGenerator 수정** — 같은 수식이 되도록:
-  - `flow_poly_generator.py:23` 상수 `−1` → `−weight` (미방향 기여 ±w)
-  - `flow_poly_generator.py:16` 방향 고정 간선 `±1` → `±weight`
-- [ ] **Step 3: 동치성 테스트** — `tests/qubo/test_flow_poly_equivalence.py`: 작은 그래프(가중치 혼합, 방향 고정 간선 포함) × 전 비트 할당 전수에 대해 `poly.energy(sample) == flow_imbalance(해당 방향들)` 검증
-- [ ] **Step 4: 기존 테스트 정리** — w≠1 QUBO 에너지 기대값 흔들리는 테스트 갱신 (w=1 테스트는 ±1 동일이라 그대로 통과 예상)
+  - `SAMR2SSolver._build_flow_score` → 삭제, 코어 호출 (`_directed_weighted_edges` helper. `_greedy_flow_seed_bits`의 pair_key 매핑도 directed 간선 직접 순회로 대체)
+- [x] **Step 2: FlowPolyGenerator 수정** — 같은 수식이 되도록:
+  - `flow_poly_generator.py` 상수 `−1` → `−weight` (미방향 기여 ±w)
+  - `flow_poly_generator.py` 방향 고정 간선 `±1` → `±weight`
+- [x] **Step 3: 동치성 테스트** — `tests/qubo/test_flow_poly_equivalence.py`: 작은 그래프(가중치 혼합, 방향 고정 간선, 평행 간선 멀티그래프) × 전 비트 할당 전수에 대해 `poly.energy(sample) == flow_imbalance(해당 방향들)` 검증
+- [x] **Step 4: 기존 테스트 정리** — 갱신 필요 없음 (w≠1 기대값 테스트 부재, 전체 스위트 그대로 통과)
 
 ## Validation
 - **Commands to run:** `pytest tests/qubo/ tests/evaluator/ tests/solver/test_sa_mr2s_solver.py tests/solver/test_qubo_mr2s_solver.py`
