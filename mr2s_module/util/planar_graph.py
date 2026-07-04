@@ -15,7 +15,8 @@ def domain_graph_to_networkx(graph: Graph) -> nx.Graph:
 
   Self-loops are ignored because NetworkX planar embedding helpers operate on
   simple planar edges. Duplicate undirected edges are collapsed by keeping the
-  smallest weight.
+  smallest weight. This is a planar-only shim: consumers that must see every
+  parallel edge should use domain_graph_to_networkx_multi() instead.
   """
   nx_graph = nx.Graph()
   for edge in graph.edges.values():
@@ -27,6 +28,24 @@ def domain_graph_to_networkx(graph: Graph) -> nx.Graph:
         nx_graph[u][v]["weight"] = edge.weight
     else:
       nx_graph.add_edge(u, v, weight=edge.weight)
+  return nx_graph
+
+
+def domain_graph_to_networkx_multi(graph: Graph) -> nx.MultiGraph:
+  """Convert the project Graph model to a weighted NetworkX multigraph.
+
+  Every parallel edge is preserved as its own nx edge, keyed by the domain
+  edge id so downstream consumers can map results back per edge identity.
+  Isolated vertices are kept. Self-loops are skipped because edge
+  orientation is meaningless for them.
+  """
+  nx_graph = nx.MultiGraph()
+  nx_graph.add_nodes_from(graph.get_vertices())
+  for edge in graph.edges.values():
+    u, v = edge.endpoints()
+    if u == v:
+      continue
+    nx_graph.add_edge(u, v, key=edge.id, weight=edge.weight)
   return nx_graph
 
 
