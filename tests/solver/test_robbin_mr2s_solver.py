@@ -30,6 +30,22 @@ def test_robbin_solver_triangle_graph() -> None:
     assert edge.to_key() in samples[0]
 
 
+def test_robbin_solver_orients_parallel_pair_anti_parallel() -> None:
+  # 평행쌍만으로 이뤄진 멀티그래프: 다중도 2 라 브릿지가 아니고,
+  # robbins 교대 배정으로 반평행 강연결 방향이 나와야 함
+  edge_a = Edge(0, 1, 3, False)
+  edge_b = Edge(0, 1, 3, False)
+  graph = Graph(edges=[edge_a, edge_b])
+
+  solution = RobbinMR2SSolver().run(graph)
+
+  assert len(solution.edges) == 2
+  assert solution.edges[edge_a.id] == tuple(reversed(solution.edges[edge_b.id]))
+  assert solution.score is not None
+  assert solution.score.flow_score == 0.0
+  assert solution.score.strong_connect_rate == 1.0
+
+
 def test_create_robbin_solver_factory() -> None:
   solver = create_robbin_solver()
   assert isinstance(solver, RobbinMR2SSolver)

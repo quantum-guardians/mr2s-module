@@ -6,10 +6,10 @@ import numpy as np
 from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.orientation_result import OrientedEdges
-from mr2s_module.util import domain_graph_to_networkx, robbins_orient
+from mr2s_module.util import domain_graph_to_networkx_multi, flow_imbalance, robbins_orient
 
 
-EdgeMap = dict[frozenset[int], Edge]
+EdgeMap = dict[int, Edge]
 
 
 class IteratedLocalSearch:
@@ -32,7 +32,7 @@ class IteratedLocalSearch:
         if graph.is_empty():
             return OrientedEdges()
 
-        nx_graph = domain_graph_to_networkx(graph)
+        nx_graph = domain_graph_to_networkx_multi(graph)
         nodes = list(nx_graph.nodes())
 
         best_edges: EdgeMap | None = None
@@ -135,9 +135,8 @@ def evaluate_score(
 ) -> float:
     """강연결 게이트 + 플로우 불균형 최소화.
 
-    홉 거리는 무시(도메인 목적은 flow balance). weight = 각 정점 유입/유출
-    플로우 양. 반환값 = Σ_v (in_weight − out_weight)². 낮을수록 균형.
-    Evaluator.eval_flow 와 동일 정의라 orienter/최종 평가가 정렬됨.
+    홉 거리는 무시(도메인 목적은 flow balance). 합산은 util.flow_score.flow_imbalance
+    단일 코어에 위임 — Evaluator/SA/QUBO poly 와 같은 수식이라 orienter/최종 평가가 정렬됨.
     """
     if not nodes:
         return float('inf')
@@ -151,18 +150,10 @@ def evaluate_score(
     if not nx.is_strongly_connected(D):
         return float('inf')
 
-    incoming_weights: dict[int, float] = {}
-    outgoing_weights: dict[int, float] = {}
-    for edge in edges.values():
-        source, target = edge.vertices
-        weight = float(edge.weight)
-        outgoing_weights[source] = outgoing_weights.get(source, 0.0) + weight
-        incoming_weights[target] = incoming_weights.get(target, 0.0) + weight
-
-    return float(sum(
-        (incoming_weights.get(vertex, 0.0) - outgoing_weights.get(vertex, 0.0)) ** 2
-        for vertex in nodes
-    ))
+    return flow_imbalance(
+        (*edge.vertices, float(edge.weight))
+        for edge in edges.values()
+    )
 
 
 def n1_search(
@@ -200,7 +191,9 @@ def n2_search(
 
     for node in shuffled_nodes:
         incident = [
-            frozenset({node, nb}) for nb in base_graph.neighbors(node)
+            edge_id
+            for nb in base_graph.neighbors(node)
+            for edge_id in base_graph[node][nb]
         ]
         if not incident:
             continue
@@ -239,7 +232,13 @@ def n3_search(
         except nx.NetworkXNoCycle:
             continue
 
-        cycle_keys = [frozenset({u, v}) for u, v in cycle_edges]
+        # 순환 방향과 일치하는 copy 만 뒤집는다. 평행 copy 는 각자 id 로 독립 판정.
+        cycle_keys = [
+            edge_id
+            for u, v in cycle_edges
+            for edge_id, edge in working.items()
+            if edge.vertices == (u, v)
+        ]
         originals = {ek: working[ek] for ek in cycle_keys}
         for ek in cycle_keys:
             working[ek] = working[ek].flip()

@@ -18,17 +18,24 @@ from tests.cycle.conftest import remove_edges_by_percent
 from tests.util.graph_fixtures import delaunay_graph, graph_from_pairs
 
 
-def _edge(tail: int, head: int, weight: int = 1) -> tuple[frozenset[int], Edge]:
-    return frozenset({tail, head}), Edge(tail, head, weight, True)
+def _fixture(
+    *pairs: tuple[int, int],
+    weights: dict[tuple[int, int], int] | None = None,
+) -> tuple[nx.MultiGraph, dict[int, Edge]]:
+    """(base MultiGraph, id 키 EdgeMap). pairs 는 (tail, head) 방향."""
+    weights = weights or {}
+    base = nx.MultiGraph()
+    out: dict[int, Edge] = {}
+    for tail, head in pairs:
+        w = weights.get((tail, head), 1)
+        edge = Edge(tail, head, w, True)
+        base.add_edge(tail, head, key=edge.id, weight=w)
+        out[edge.id] = edge
+    return base, out
 
 
 def _edges(*pairs: tuple[int, int], weights: dict[tuple[int, int], int] | None = None) -> dict:
-    weights = weights or {}
-    out: dict[frozenset[int], Edge] = {}
-    for tail, head in pairs:
-        w = weights.get((tail, head), 1)
-        out[frozenset({tail, head})] = Edge(tail, head, w, True)
-    return out
+    return _fixture(*pairs, weights=weights)[1]
 
 
 class TestEvaluateScore:
@@ -65,8 +72,7 @@ class TestEvaluateScore:
 class TestN1Search:
     def test_improves_bad_orientation(self):
         rng = np.random.default_rng(0)
-        base = nx.Graph([(0, 1), (1, 2), (0, 2)])
-        bad = _edges((0, 1), (1, 2), (0, 2))
+        base, bad = _fixture((0, 1), (1, 2), (0, 2))
         snapshot = dict(bad)
         new_edges, new_score = n1_search(bad, float('inf'), base, [0, 1, 2], rng)
         assert new_score < float('inf')
@@ -75,8 +81,7 @@ class TestN1Search:
 
     def test_no_improvement_returns_original(self):
         rng = np.random.default_rng(0)
-        base = nx.Graph([(0, 1), (1, 2), (0, 2)])
-        optimal = _edges((0, 1), (1, 2), (2, 0))
+        base, optimal = _fixture((0, 1), (1, 2), (2, 0))
         score = 0.0  # 완전 균형 사이클의 플로우 불균형 최솟값
         new_edges, new_score = n1_search(optimal, score, base, [0, 1, 2], rng)
         assert new_score == score
@@ -86,8 +91,7 @@ class TestN1Search:
 class TestN2Search:
     def test_improves_bad_orientation(self):
         rng = np.random.default_rng(0)
-        base = nx.Graph([(0, 1), (1, 2), (0, 2)])
-        bad = _edges((0, 1), (1, 2), (0, 2))
+        base, bad = _fixture((0, 1), (1, 2), (0, 2))
         snapshot = dict(bad)
         new_edges, new_score = n2_search(bad, float('inf'), base, [0, 1, 2], rng)
         assert new_score < float('inf')
@@ -96,8 +100,7 @@ class TestN2Search:
 
     def test_no_improvement_returns_original(self):
         rng = np.random.default_rng(0)
-        base = nx.Graph([(0, 1), (1, 2), (0, 2)])
-        optimal = _edges((0, 1), (1, 2), (2, 0))
+        base, optimal = _fixture((0, 1), (1, 2), (2, 0))
         score = 0.0  # 완전 균형 사이클의 플로우 불균형 최솟값
         new_edges, new_score = n2_search(optimal, score, base, [0, 1, 2], rng)
         assert new_score == score
@@ -107,8 +110,7 @@ class TestN2Search:
 class TestN3Search:
     def test_with_cyclic_graph_returns_sc_orientation(self):
         rng = np.random.default_rng(0)
-        base = nx.Graph([(0, 1), (1, 2), (2, 3), (3, 0)])
-        edges = _edges((0, 1), (1, 2), (2, 3), (3, 0))
+        base, edges = _fixture((0, 1), (1, 2), (2, 3), (3, 0))
         score = evaluate_score(edges, [0, 1, 2, 3])
         assert score < float('inf')
         new_edges, new_score = n3_search(edges, score, base, [0, 1, 2, 3], rng)
@@ -116,16 +118,14 @@ class TestN3Search:
 
     def test_with_dag_orientation_returns_original(self):
         rng = np.random.default_rng(0)
-        base = nx.Graph([(0, 1), (1, 2), (0, 2)])
-        dag = _edges((0, 1), (1, 2), (0, 2))
+        base, dag = _fixture((0, 1), (1, 2), (0, 2))
         new_edges, new_score = n3_search(dag, float('inf'), base, [0, 1, 2], rng)
         assert new_score == float('inf')
         assert new_edges == dag
 
     def test_acyclic_graph_returns_original(self):
         rng = np.random.default_rng(0)
-        base = nx.Graph([(0, 1), (1, 2)])
-        tree = _edges((0, 1), (1, 2))
+        base, tree = _fixture((0, 1), (1, 2))
         score = float('inf')
         new_edges, new_score = n3_search(tree, score, base, [0, 1, 2], rng)
         assert new_score == score
@@ -133,8 +133,7 @@ class TestN3Search:
 
     def test_no_improvement_returns_original(self):
         rng = np.random.default_rng(0)
-        base = nx.Graph([(0, 1), (1, 2), (0, 2)])
-        optimal = _edges((0, 1), (1, 2), (2, 0))
+        base, optimal = _fixture((0, 1), (1, 2), (2, 0))
         score = 0.0  # 완전 균형 사이클의 플로우 불균형 최솟값
         new_edges, new_score = n3_search(optimal, score, base, [0, 1, 2], rng)
         assert new_score == score
