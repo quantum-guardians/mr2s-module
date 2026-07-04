@@ -2,6 +2,7 @@ import networkx as nx
 
 from mr2s_module.domain import Score, Solution
 from mr2s_module.evaluator.apsp_sum_ranker import ApspSumRanker
+from mr2s_module.util import flow_imbalance
 
 
 
@@ -77,23 +78,14 @@ class Evaluator:
     return strongly_connected_samples / total_samples
 
   def eval_flow(self, solution: Solution) -> float:
-    incoming_weights: dict[int, float] = {}
-    outgoing_weights: dict[int, float] = {}
-    vertices = solution.graph.get_vertices()
     edge_weights = {
       edge.id: float(edge.weight)
       for edge in solution.graph.edges.values()
     }
-
-    for edge_id, (source, target) in solution.edges.items():
-      weight = edge_weights[edge_id]
-      outgoing_weights[source] = outgoing_weights.get(source, 0.0) + weight
-      incoming_weights[target] = incoming_weights.get(target, 0.0) + weight
-
-    return float(sum(
-      (incoming_weights.get(vertex, 0.0) - outgoing_weights.get(vertex, 0.0)) ** 2
-      for vertex in vertices
-    ))
+    return flow_imbalance(
+      (source, target, edge_weights[edge_id])
+      for edge_id, (source, target) in solution.edges.items()
+    )
 
   @staticmethod
   def eval_sample_score(solution: Solution) -> float:

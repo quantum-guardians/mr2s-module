@@ -20,6 +20,7 @@ from mr2s_module.util.planar_graph import (
   polygon_area,
   select_outer_face,
 )
+from mr2s_module.util.flow_score import flow_imbalance
 from mr2s_module.util.graph_orient import robbins_orient
 from mr2s_module.util.sample_set import empty_binary_sample_set
 
@@ -40,6 +41,7 @@ __all__ = [
   "empty_binary_sample_set",
   "enumerate_faces",
   "face_edges",
+  "flow_imbalance",
   "inner_faces",
   "normalize_planar_input",
   "polygon_area",

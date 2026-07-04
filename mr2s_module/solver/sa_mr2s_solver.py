@@ -9,6 +9,7 @@ from dimod import SampleSet
 from mr2s_module.domain import Edge, Graph, Solution
 from mr2s_module.evaluator import Evaluator
 from mr2s_module.protocols import EvaluatorProtocol
+from mr2s_module.util import flow_imbalance
 
 
 class SAMR2SSolver:
@@ -94,27 +95,24 @@ class SAMR2SSolver:
     )
     return directed_edges
 
-  @staticmethod
-  def _build_flow_score(
-      directed_edges: set[tuple[int, int]],
+  @classmethod
+  def _directed_weighted_edges(
+      cls,
       graph: Graph,
-  ) -> float:
-    incoming_weights: dict[int, float] = {}
-    outgoing_weights: dict[int, float] = {}
-    edge_weights = {
-      edge.pair_key(): float(edge.weight)
+      variable_edges: list[Edge],
+      state_bits: list[int],
+  ) -> list[tuple[int, int, float]]:
+    # 간선 단위 (source, target, weight) — pair 키잉 없이 평행 간선 독립 합산.
+    triples = [
+      (edge.vertices[0], edge.vertices[1], float(edge.weight))
       for edge in graph.edges.values()
-    }
-
-    for source, target in directed_edges:
-      weight = edge_weights[frozenset({source, target})]
-      outgoing_weights[source] = outgoing_weights.get(source, 0.0) + weight
-      incoming_weights[target] = incoming_weights.get(target, 0.0) + weight
-
-    return float(sum(
-      (incoming_weights.get(vertex, 0.0) - outgoing_weights.get(vertex, 0.0)) ** 2
-      for vertex in graph.get_vertices()
-    ))
+      if edge.directed
+    ]
+    triples.extend(
+      (*cls._build_direction(edge, bit), float(edge.weight))
+      for edge, bit in zip(variable_edges, state_bits)
+    )
+    return triples
 
   @staticmethod
   def _build_graph_weight_scale(graph: Graph, treewidth: float) -> float:
@@ -164,7 +162,9 @@ class SAMR2SSolver:
       directed_edges,
       vertices,
     )
-    flow_score = self._build_flow_score(directed_edges, graph)
+    flow_score = flow_imbalance(
+      self._directed_weighted_edges(graph, variable_edges, state_bits)
+    )
     pair_scale = self._build_pair_scale(vertices)
     weight_scale = self._build_graph_weight_scale(graph, treewidth)
     return (
@@ -176,17 +176,15 @@ class SAMR2SSolver:
   def _greedy_flow_seed_bits(
       self,
       variable_edges: list[Edge],
-      fixed_edges: set[tuple[int, int]],
       graph: Graph,
   ) -> list[int]:
     balance: dict[int, float] = {}
-    edge_weights = {
-      edge.pair_key(): float(edge.weight)
-      for edge in graph.edges.values()
-    }
 
-    for source, target in fixed_edges:
-      weight = edge_weights[frozenset({source, target})]
+    for edge in graph.edges.values():
+      if not edge.directed:
+        continue
+      source, target = edge.vertices
+      weight = float(edge.weight)
       balance[source] = balance.get(source, 0.0) - weight
       balance[target] = balance.get(target, 0.0) + weight
 
@@ -231,7 +229,7 @@ class SAMR2SSolver:
 
     best_bits: list[int] | None = None
     best_objective = float("inf")
-    seed_bits = self._greedy_flow_seed_bits(variable_edges, fixed_edges, graph)
+    seed_bits = self._greedy_flow_seed_bits(variable_edges, graph)
     for restart in range(self.num_restarts):
       if restart == 0:
         current_bits = list(seed_bits)
