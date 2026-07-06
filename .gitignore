@@ -219,3 +219,6 @@ __marimo__/
 *.png
 *.jpg
 .gstack/
+
+# Claude Code local worktrees
+.claude/worktrees/
