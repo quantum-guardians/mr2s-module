@@ -39,6 +39,10 @@ class Tjoin:
         if graph.is_empty():
             return OrientedEdges()
 
+        endpoints = [edge.endpoints() for edge in graph.edges.values()]
+        if len(endpoints) != len(set(endpoints)):
+            raise ValueError("Tjoin does not support multigraph input.")
+
         nx_graph = domain_graph_to_networkx(graph)
 
         # 정체성(int id) 과 분리된 끝점 뷰. 단순그래프 전제(쌍당 1 간선).
