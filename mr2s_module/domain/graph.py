@@ -20,32 +20,15 @@ class Graph:
       f"Graph.edges must be a dict or an iterable of Edge, got {type(self.edges)!r}"
     )
 
-  def edge_by_pair(self, u: int, v: int) -> Edge | None:
-    """끝점 (u,v) 로 간선 룩업(단순그래프 뷰). 평행 간선이면 첫 매치."""
-    key = frozenset({u, v})
-    for edge in self.edges.values():
-      if edge.pair_key() == key:
-        return edge
-    return None
-
-  def edges_by_pair(self, u: int, v: int) -> list[Edge]:
-    """끝점 (u,v) 의 모든 간선(평행 간선 포함)."""
-    key = frozenset({u, v})
-    return [edge for edge in self.edges.values() if edge.pair_key() == key]
-
   def define_edge_direction(self, predefined_edges: Iterable[Edge]):
-    """외부 orienter 결과(독립 directed Edge)를 끝점으로 찾아 방향을 in-place 로 박는다.
-
-    predefined 는 nx 기반 orienter 가 (u,v) 만 알고 만든 별개 Edge 라 자체 id 는 무관.
-    원본 graph 간선을 끝점으로 찾아(set_direction) 정체성(id)을 유지한다.
-    """
+    """외부 orienter 결과를 id 로 찾아 방향을 in-place 로 박는다."""
     for p_edge in predefined_edges:
       if not p_edge.directed:
         continue
       tail, head = p_edge.vertices
-      target = self.edge_by_pair(tail, head)
+      target = self.edges.get(p_edge.id)
       if target is None:
-        continue
+        raise ValueError(f"Directed edge id {p_edge.id} is not in this graph.")
       target.set_direction(tail, head)
 
   def is_empty(self):

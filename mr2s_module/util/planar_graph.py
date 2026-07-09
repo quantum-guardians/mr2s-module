@@ -8,6 +8,20 @@ from mr2s_module.domain.graph import Graph
 
 
 EdgeKey = frozenset[int]
+EdgeNode = tuple[str, int]
+SubdivisionNode = int | EdgeNode
+EdgeStep = tuple[int, int, int]
+_EDGE_NODE_KIND = "edge"
+
+
+def is_edge_node(node: Hashable) -> bool:
+  """Return True when node is a synthetic domain-edge node."""
+  return (
+    isinstance(node, tuple)
+    and len(node) == 2
+    and node[0] == _EDGE_NODE_KIND
+    and isinstance(node[1], int)
+  )
 
 
 def domain_graph_to_networkx(graph: Graph) -> nx.Graph:
@@ -49,6 +63,32 @@ def domain_graph_to_networkx_multi(graph: Graph) -> nx.MultiGraph:
   return nx_graph
 
 
+def domain_graph_to_edge_subdivision(graph: Graph) -> nx.Graph:
+  """Convert each domain edge into a synthetic node for planar face traversal.
+
+  A domain edge `(u, v, id=eid)` becomes `u -- ("edge", eid) -- v`.
+  Parallel edges therefore remain distinct in simple NetworkX topology while
+  still giving planar embedding code a graph it can traverse.
+  """
+  nx_graph = nx.Graph()
+  nx_graph.add_nodes_from(graph.get_vertices())
+  for edge in graph.edges.values():
+    u, v = edge.endpoints()
+    if u == v:
+      continue
+    edge_node = (_EDGE_NODE_KIND, edge.id)
+    nx_graph.add_node(
+      edge_node,
+      kind=_EDGE_NODE_KIND,
+      edge_id=edge.id,
+      endpoints=(u, v),
+      weight=edge.weight,
+    )
+    nx_graph.add_edge(u, edge_node, edge_id=edge.id)
+    nx_graph.add_edge(edge_node, v, edge_id=edge.id)
+  return nx_graph
+
+
 def normalize_planar_input(
     graph: nx.Graph | nx.PlanarEmbedding,
 ) -> tuple[nx.Graph, nx.PlanarEmbedding]:
@@ -82,7 +122,9 @@ def check_planar_embedding(graph: nx.Graph) -> tuple[bool, nx.PlanarEmbedding | 
   return is_planar, embedding if is_planar else None
 
 
-def enumerate_faces(graph_or_embedding: nx.Graph | nx.PlanarEmbedding) -> list[list[int]]:
+def enumerate_faces(
+    graph_or_embedding: nx.Graph | nx.PlanarEmbedding,
+) -> list[list[SubdivisionNode]]:
   """Enumerate every face as a cyclic vertex list.
 
   The outer face is included. Call select_outer_face() or inner_faces() when an
@@ -95,14 +137,30 @@ def enumerate_faces(graph_or_embedding: nx.Graph | nx.PlanarEmbedding) -> list[l
     if not is_planar:
       return []
 
-  faces: list[list[int]] = []
-  visited: set[tuple[int, int]] = set()
+  faces: list[list[SubdivisionNode]] = []
+  visited: set[tuple[SubdivisionNode, SubdivisionNode]] = set()
   for u in embedding.nodes:
     for v in embedding.neighbors_cw_order(u):
       if (u, v) in visited:
         continue
       faces.append(list(embedding.traverse_face(u, v, mark_half_edges=visited)))
   return faces
+
+
+def face_edge_steps(face: list[SubdivisionNode] | tuple[SubdivisionNode, ...]) -> list[EdgeStep]:
+  """Return `(edge_id, tail, head)` steps from one subdivision face."""
+  steps: list[EdgeStep] = []
+  for index, node in enumerate(face):
+    if not is_edge_node(node):
+      continue
+    previous_node = face[(index - 1) % len(face)]
+    next_node = face[(index + 1) % len(face)]
+    if is_edge_node(previous_node) or is_edge_node(next_node):
+      raise ValueError(
+        "subdivision face must traverse each edge node between two vertices"
+      )
+    steps.append((node[1], previous_node, next_node))
+  return steps
 
 
 def face_edges(face: list[int] | tuple[int, ...]) -> set[EdgeKey]:
@@ -113,7 +171,7 @@ def face_edges(face: list[int] | tuple[int, ...]) -> set[EdgeKey]:
   }
 
 
-def polygon_area(face: list[int], pos: dict[Hashable, object]) -> float:
+def polygon_area(face: list[Hashable], pos: dict[Hashable, object]) -> float:
   """Return signed polygon area for a face under the supplied 2D positions."""
   area = 0.0
   for index, vertex in enumerate(face):
@@ -179,8 +237,19 @@ def build_face_edges_map(
   return face_edges_map
 
 
+def build_edge_id_face_edges_map(
+    faces: list[list[EdgeStep]],
+) -> dict[int, list[int]]:
+  """Map each domain edge id to the face indices that contain it."""
+  face_edges_map: dict[int, list[int]] = {}
+  for face_index, face in enumerate(faces):
+    for edge_id in {step[0] for step in face}:
+      face_edges_map.setdefault(edge_id, []).append(face_index)
+  return face_edges_map
+
+
 def build_dual_base(
-    face_edges_map: dict[EdgeKey, list[int]],
+    face_edges_map: dict[Hashable, list[int]],
 ) -> nx.Graph:
   """Build the face adjacency graph from a face-edge incidence map."""
   dual = nx.Graph()

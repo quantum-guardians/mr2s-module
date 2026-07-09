@@ -22,6 +22,21 @@ from mr2s_module.solver.partition import (
 from mr2s_module.util import empty_binary_sample_set
 
 
+def _edge_id_for_endpoints(graph: Graph, u: int, v: int) -> int:
+  endpoints = (u, v) if u <= v else (v, u)
+  ids = [
+    edge.id
+    for edge in graph.edges.values()
+    if edge.endpoints() == endpoints
+  ]
+  assert len(ids) == 1
+  return ids[0]
+
+
+def _edge_for_endpoints(graph: Graph, u: int, v: int) -> Edge:
+  return graph.edges[_edge_id_for_endpoints(graph, u, v)]
+
+
 class StubMr2sSolver:
   def build_bqm(self, graph: Graph):
     return StubBqm(
@@ -231,17 +246,22 @@ def test_merge_solutions_combines_solution_edges() -> None:
   ])
   sample_set = empty_binary_sample_set()
   solver = DnCMr2sSolver(mr2s_solver=object())
-  pid = {e.pair_key(): e.id for e in graph.edges.values()}
 
   merged = solver.merge_solutions(
     solutions=[
       Solution(
-        edges={pid[frozenset({1, 2})]: (1, 2), pid[frozenset({2, 3})]: (2, 3)},
+        edges={
+          _edge_id_for_endpoints(graph, 1, 2): (1, 2),
+          _edge_id_for_endpoints(graph, 2, 3): (2, 3),
+        },
         graph=Graph(edges=[Edge(1, 2, 1, False), Edge(2, 3, 1, False)]),
         sample_set=sample_set,
       ),
       Solution(
-        edges={pid[frozenset({2, 3})]: (2, 3), pid[frozenset({3, 4})]: (4, 3)},
+        edges={
+          _edge_id_for_endpoints(graph, 2, 3): (2, 3),
+          _edge_id_for_endpoints(graph, 3, 4): (4, 3),
+        },
         graph=Graph(edges=[Edge(2, 3, 1, False), Edge(3, 4, 1, False)]),
         sample_set=empty_binary_sample_set(),
       ),
@@ -261,17 +281,22 @@ def test_merge_solutions_keeps_one_direction_per_input_edge() -> None:
     Edge(2, 3, 1, False),
   ])
   solver = DnCMr2sSolver(mr2s_solver=object())
-  pid = {e.pair_key(): e.id for e in graph.edges.values()}
 
   merged = solver.merge_solutions(
     solutions=[
       Solution(
-        edges={pid[frozenset({1, 2})]: (1, 2), pid[frozenset({2, 3})]: (2, 3)},
+        edges={
+          _edge_id_for_endpoints(graph, 1, 2): (1, 2),
+          _edge_id_for_endpoints(graph, 2, 3): (2, 3),
+        },
         graph=graph,
         sample_set=empty_binary_sample_set(),
       ),
       Solution(
-        edges={pid[frozenset({1, 2})]: (2, 1), pid[frozenset({2, 3})]: (3, 2)},
+        edges={
+          _edge_id_for_endpoints(graph, 1, 2): (2, 1),
+          _edge_id_for_endpoints(graph, 2, 3): (3, 2),
+        },
         graph=graph,
         sample_set=empty_binary_sample_set(),
       ),
@@ -279,13 +304,10 @@ def test_merge_solutions_keeps_one_direction_per_input_edge() -> None:
     graph=graph,
   )
 
-  selected_undirected_edges = {
-    frozenset(direction)
-    for direction in merged.edges.values()
-  }
+  selected_ids = set(merged.edges)
 
   assert len(merged.edges) == len(graph.edges)
-  assert selected_undirected_edges == {e.pair_key() for e in graph.edges.values()}
+  assert selected_ids == set(graph.edges)
 
 
 def test_merge_solutions_selects_direction_that_reduces_flow_imbalance() -> None:
@@ -294,17 +316,19 @@ def test_merge_solutions_selects_direction_that_reduces_flow_imbalance() -> None
     Edge(2, 3, 1, False),
   ])
   solver = DnCMr2sSolver(mr2s_solver=object())
-  pid = {e.pair_key(): e.id for e in graph.edges.values()}
 
   merged = solver.merge_solutions(
     solutions=[
       Solution(
-        edges={pid[frozenset({1, 3})]: (1, 3), pid[frozenset({2, 3})]: (2, 3)},
+        edges={
+          _edge_id_for_endpoints(graph, 1, 3): (1, 3),
+          _edge_id_for_endpoints(graph, 2, 3): (2, 3),
+        },
         graph=graph,
         sample_set=empty_binary_sample_set(),
       ),
       Solution(
-        edges={pid[frozenset({2, 3})]: (3, 2)},
+        edges={_edge_id_for_endpoints(graph, 2, 3): (3, 2)},
         graph=graph,
         sample_set=empty_binary_sample_set(),
       ),
@@ -875,8 +899,8 @@ def test_run_solves_full_graph_after_applying_merged_directions(
     Edge(2, 3, 1, False),
   ])
   # 실제 face_cluster 처럼 서브그래프/remaining 은 부모 Edge 정체성(id)을 공유한다.
-  child = Graph(edges=[graph.edge_by_pair(1, 2)])
-  remaining = graph.edge_by_pair(2, 3)
+  child = Graph(edges=[_edge_for_endpoints(graph, 1, 2)])
+  remaining = _edge_for_endpoints(graph, 2, 3)
 
   def estimate_fails_for_parent(bqm, target_graph=None):
     if len(bqm.edges) > 1:
@@ -902,10 +926,10 @@ def test_run_solves_full_graph_after_applying_merged_directions(
 
   assert isinstance(solution, DnCSolution)
   assert mr2s_solver.run_graphs == [child, graph]
-  child_edge = graph.edge_by_pair(1, 2)
+  child_edge = _edge_for_endpoints(graph, 1, 2)
   assert child_edge.directed is True
   assert child_edge.vertices == (1, 2)
-  remaining_edge_in_graph = graph.edge_by_pair(2, 3)
+  remaining_edge_in_graph = _edge_for_endpoints(graph, 2, 3)
   assert remaining_edge_in_graph.directed is False
   assert set(solution.edges.values()) == {(1, 2), (2, 3)}
   assert solution.sub_graphs == [child]

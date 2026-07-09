@@ -215,10 +215,10 @@ class TestIteratedLocalSearch:
         ])
         result = IteratedLocalSearch().run(graph)
         edges = result.get_edges()
-        weight_map = {e.pair_key(): e.weight for e in edges}
-        assert weight_map[frozenset({0, 1})] == 5
-        assert weight_map[frozenset({1, 2})] == 3
-        assert weight_map[frozenset({0, 2})] == 2
+        weight_map = {e.endpoints(): e.weight for e in edges}
+        assert weight_map[(0, 1)] == 5
+        assert weight_map[(1, 2)] == 3
+        assert weight_map[(0, 2)] == 2
 
     def test_early_stopping_with_patience_1(self):
         ils = IteratedLocalSearch(max_iter=100, patience=1)

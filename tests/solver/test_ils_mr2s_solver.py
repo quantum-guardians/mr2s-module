@@ -13,7 +13,7 @@ def test_ils_solver_triangle_graph() -> None:
   solution = solver.run(graph)
 
   assert len(solution.edges) == 3
-  assert {frozenset(d) for d in solution.edges.values()} == {e.pair_key() for e in graph.edges.values()}
+  assert set(solution.edges) == set(graph.edges)
 
   # score 검증
   assert solution.score is not None

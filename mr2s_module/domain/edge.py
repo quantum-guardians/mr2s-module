@@ -24,10 +24,6 @@ class Edge:
     """무방향 정렬된 (u, v). self-loop 면 (v, v)."""
     return self._endpoints
 
-  def pair_key(self) -> frozenset[int]:
-    """정점쌍 룩업 키. 정체성(id) 과 분리된 끝점 뷰 (shim 소비자용)."""
-    return frozenset(self._endpoints)
-
   def other_vertex(self, vertex: int) -> int:
     if vertex not in self.vertices:
       raise ValueError(f"Vertex {vertex} is not in this edge.")
@@ -40,12 +36,20 @@ class Edge:
 
   def oriented(self, tail: int, head: int) -> "Edge":
     """같은 논리 간선의 방향 버전(directed). 원본 id 를 잇는다(비파괴)."""
+    if tuple(sorted((tail, head))) != self._endpoints:
+      raise ValueError(
+        f"Direction ({tail}, {head}) does not match edge endpoints {self._endpoints}."
+      )
     edge = Edge(tail, head, self.weight, True)
     edge.id = self.id
     return edge
 
   def set_direction(self, tail: int, head: int) -> None:
     """방향을 in-place 로 박는다. id/끝점 유지."""
+    if tuple(sorted((tail, head))) != self._endpoints:
+      raise ValueError(
+        f"Direction ({tail}, {head}) does not match edge endpoints {self._endpoints}."
+      )
     self.vertices = (tail, head)
     self.directed = True
 

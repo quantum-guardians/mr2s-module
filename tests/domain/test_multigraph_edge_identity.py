@@ -40,7 +40,7 @@ def test_set_direction_is_in_place_and_keeps_id() -> None:
   assert e.id == original_id
   assert e.directed is True
   assert e.vertices == (1, 0)
-  assert e.pair_key() == frozenset({0, 1})
+  assert e.endpoints() == (0, 1)
 
 
 def test_parallel_edges_keyed_independently_in_graph() -> None:
@@ -49,10 +49,9 @@ def test_parallel_edges_keyed_independently_in_graph() -> None:
   graph = Graph(edges=[e1, e2])
 
   assert len(graph.edges) == 2  # 안 뭉개짐
-  assert graph.edge_by_pair(0, 1) in (e1, e2)
-  parallel = graph.edges_by_pair(0, 1)
-  assert len(parallel) == 2
-  assert {e.weight for e in parallel} == {3, 5}
+  assert graph.edges[e1.id] is e1
+  assert graph.edges[e2.id] is e2
+  assert {e.weight for e in graph.edges.values()} == {3, 5}
 
 
 def test_parallel_edges_produce_distinct_qubo_variables() -> None:

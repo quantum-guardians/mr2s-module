@@ -70,8 +70,8 @@ def test_t_join_performance_and_apsp(num_points, remove_percent):
     directed_edges = cycle.run(graph).get_edges()
     elapsed = time.perf_counter() - start_time
 
-    oriented_pairs = {e.pair_key() for e in directed_edges}
-    remaining_edges = [e for e in graph.edges.values() if e.pair_key() not in oriented_pairs]
+    oriented_ids = {e.id for e in directed_edges}
+    remaining_edges = [e for e in graph.edges.values() if e.id not in oriented_ids]
 
     graph.define_edge_direction(set(directed_edges))
     solver = DnCMr2sSolver(mr2s_solver=QuboMR2SSolver())
