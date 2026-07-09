@@ -20,7 +20,9 @@ def _build_solution(
   for edge in graph.edges.values():
     u, v = edge.endpoints()
     key_map[f"e_{u}_{v}"] = edge.to_key()
-    if (u, v) in directed_edges:
+    if edge.directed and edge.vertices in directed_edges:
+      edges_by_id[edge.id] = edge.vertices
+    elif (u, v) in directed_edges:
       edges_by_id[edge.id] = (u, v)
     elif (v, u) in directed_edges:
       edges_by_id[edge.id] = (v, u)
@@ -116,6 +118,20 @@ def test_eval_strong_connect_rate_counts_sample_occurrences() -> None:
   )
 
   assert evaluator.eval_strong_connect_rate(solution) == pytest.approx(2 / 3)
+
+
+def test_eval_strong_connect_rate_uses_solution_edges_when_samples_empty() -> None:
+  evaluator = Evaluator()
+
+  solution = _build_solution(
+    edges=[
+      Edge(1, 2, 1, True),
+      Edge(2, 1, 1, True),
+    ],
+    directed_edges={(1, 2), (2, 1)},
+  )
+
+  assert evaluator.eval_strong_connect_rate(solution) == 1.0
 
 
 def test_eval_sample_score_returns_minimum_energy() -> None:

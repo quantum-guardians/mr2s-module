@@ -49,6 +49,18 @@ class Evaluator:
 
     return directed_edges
 
+  @staticmethod
+  def _solution_to_directed_edges(solution: Solution) -> set[tuple[int, int]]:
+    return set(solution.edges.values())
+
+  @staticmethod
+  def _is_strongly_connected(
+      directed_edges: set[tuple[int, int]],
+      vertices: set[int],
+  ) -> bool:
+    graph = Evaluator._build_graph_from_edges(directed_edges, vertices)
+    return nx.is_strongly_connected(graph)
+
   def eval_apsp_sum(self, solution: Solution) -> float:
     """기본 method(stretch) 값. Score.apsp_sum 은 평균 스트레치 의미."""
     return self._apsp_ranker.run(solution)
@@ -59,21 +71,29 @@ class Evaluator:
     if not vertices:
       return 0.0
 
+    if len(solution.sample_set) == 0:
+      return float(self._is_strongly_connected(
+        self._solution_to_directed_edges(solution),
+        vertices,
+      ))
+
     total_samples = 0
     strongly_connected_samples = 0
 
     for datum in solution.sample_set.data(["sample", "num_occurrences"]):
       directed_edges = self._sample_to_directed_edges(datum.sample, solution)
-      graph = self._build_graph_from_edges(directed_edges, vertices)
       occurrences = int(datum.num_occurrences)
 
       total_samples += occurrences
-      if nx.is_strongly_connected(graph):
+      if self._is_strongly_connected(directed_edges, vertices):
         strongly_connected_samples += occurrences
 
 
     if total_samples == 0:
-      return 0.0
+      return float(self._is_strongly_connected(
+        self._solution_to_directed_edges(solution),
+        vertices,
+      ))
 
     return strongly_connected_samples / total_samples
 
