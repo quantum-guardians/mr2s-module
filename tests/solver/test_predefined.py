@@ -22,7 +22,10 @@ from mr2s_module.solver.predefined import (
   create_qubo_qa_solver,
   create_dnc_qubo_sa_solver,
   create_dnc_qubo_qa_solver,
+  create_reduction_dnc_qubo_sa_solver,
 )
+from mr2s_module.reduction import ReductionMr2sSolver, SuperEdgeWeight
+from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver
 from tests.util.graph_fixtures import delaunay_graph
 
 
@@ -82,6 +85,13 @@ def test_create_dnc_qubo_solver() -> None:
 def test_create_dnc_qubo_sa_solver() -> None:
   solver = create_dnc_qubo_sa_solver()
   assert solver.graph_partition_strategy is not None
+
+
+def test_create_reduction_dnc_qubo_sa_solver() -> None:
+  solver = create_reduction_dnc_qubo_sa_solver()
+  assert isinstance(solver, ReductionMr2sSolver)
+  assert isinstance(solver.mr2s_solver, DnCMr2sSolver)
+  assert solver.super_edge_weight == SuperEdgeWeight.HARMONIC
 
 
 def test_create_dnc_qubo_qa_solver(monkeypatch) -> None:

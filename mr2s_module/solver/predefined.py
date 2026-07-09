@@ -13,6 +13,7 @@ from mr2s_module.qubo import QuboSolver
 from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver
+from mr2s_module.reduction import ReductionMr2sSolver
 from mr2s_module.solver.partition.vertex_count import VertexCountPartitionStrategy
 from mr2s_module.solver.partition.degeneracy_pruning import (
   DegeneracyPruningFaceCyclePartitionStrategy,
@@ -141,6 +142,19 @@ def create_dnc_qubo_sa_solver(
   )
 
 
+def create_reduction_dnc_qubo_sa_solver() -> ReductionMr2sSolver:
+  """Creates a DnC QUBO SA solver wrapped with degree-2 chain contraction presolve.
+
+  Contracts degree-2 chains into super edges (and removes hanging cycles) to cut
+  QUBO variables, solves the contracted graph with DnC QUBO SA, then lifts the
+  directions back onto the original edges. The returned Solution is expressed on
+  the original graph and its score is None — evaluate it with an Evaluator on the
+  caller side. target_graph is not supported because the partition strategy would
+  see the contracted graph, not the original.
+  """
+  return ReductionMr2sSolver(mr2s_solver=create_dnc_qubo_sa_solver())
+
+
 def create_dnc_qubo_qa_solver(
     target_graph: Any = None,
 ) -> DnCMr2sSolver:
@@ -161,6 +175,20 @@ def create_dnc_qubo_qa_solver(
     graph_partition_strategy=partition_strategy,
     target_graph=target_graph,
   )
+
+
+def create_reduction_dnc_qubo_qa_solver() -> ReductionMr2sSolver:
+  """Creates a DnC QUBO QA solver wrapped with degree-2 chain contraction presolve.
+
+  QA counterpart of create_reduction_dnc_qubo_sa_solver: contracts degree-2 chains
+  into super edges (and removes hanging cycles) to cut QUBO variables, solves the
+  contracted graph with DnC QUBO QA on D-Wave hardware, then lifts the directions
+  back onto the original edges. The returned Solution is expressed on the original
+  graph and its score is None — evaluate it with an Evaluator on the caller side.
+  target_graph is not supported because the partition strategy would see the
+  contracted graph, not the original.
+  """
+  return ReductionMr2sSolver(mr2s_solver=create_dnc_qubo_qa_solver())
 
 
 def create_dnc_qubo_solver(
