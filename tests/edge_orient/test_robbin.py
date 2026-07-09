@@ -67,9 +67,8 @@ def test_robbin_performance_and_apsp(num_points, remove_percent):
     directed_edges = cycle.run(graph).get_edges()
     elapsed = time.perf_counter() - start_time
 
-    oriented_edges = [e for e in directed_edges if e.directed]
-    oriented_pairs = {e.pair_key() for e in oriented_edges}
-    undirected_edges = [e for e in graph.edges.values() if e.pair_key() not in oriented_pairs]
+    oriented_ids = {e.id for e in directed_edges if e.directed}
+    undirected_edges = [e for e in graph.edges.values() if e.id not in oriented_ids]
 
     # Cycle 방향을 graph 에 박은 뒤 실제 솔버 통과.
     graph.define_edge_direction(set(directed_edges))
@@ -78,8 +77,8 @@ def test_robbin_performance_and_apsp(num_points, remove_percent):
 
     evaluator = Evaluator()
     partial_sol = Solution(
-        edges={e.id: e.vertices for e in oriented_edges},
-        graph=Graph(edges=oriented_edges + undirected_edges),
+        edges={e.id: e.vertices for e in directed_edges},
+        graph=Graph(edges=directed_edges + undirected_edges),
         sample_set=empty_binary_sample_set(),
     )
     partial_apsp = evaluator.eval_apsp_sum(partial_sol)
@@ -90,7 +89,7 @@ def test_robbin_performance_and_apsp(num_points, remove_percent):
     print(f"  original_edges: {len(base_graph.edges)}")
     print(f"  removed_edges: {removed_count}")
     print(f"  final_edges: {len(graph.edges)}")
-    print(f"  directed_by_algo: {len(oriented_edges)}")
+    print(f"  directed_by_algo: {len(directed_edges)}")
     print(f"  undirected_by_algo: {len(undirected_edges)}")
     print(f"  partial_apsp: {partial_apsp}")
     print(f"  final_apsp (after solver): {final_apsp}")

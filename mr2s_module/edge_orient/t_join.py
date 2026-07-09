@@ -9,6 +9,10 @@ from mr2s_module.domain.orientation_result import OrientedEdges
 from mr2s_module.util import domain_graph_to_networkx
 
 
+def _endpoint_key(u: int, v: int) -> tuple[int, int]:
+    return (u, v) if u <= v else (v, u)
+
+
 class Tjoin:
     """DEPRECATED. T-join 기반 부분 방향 배정.
 
@@ -45,14 +49,15 @@ class Tjoin:
 
         nx_graph = domain_graph_to_networkx(graph)
 
-        # 정체성(int id) 과 분리된 끝점 뷰. 단순그래프 전제(쌍당 1 간선).
-        pair_to_edge = {e.pair_key(): e for e in graph.edges.values()}
+        # Deprecated simple-graph path: multigraphs fail above, so endpoints map
+        # to exactly one source edge and can only be used to preserve its id.
+        endpoint_to_edge = {e.endpoints(): e for e in graph.edges.values()}
 
         # 1. Identify odd-degree nodes
         odd_nodes = [v for v, d in nx_graph.degree() if d % 2 != 0]
 
         # 2. Minimum Weight T-join
-        j_edges_keys: set[frozenset[int]] = set()
+        j_edges_keys: set[tuple[int, int]] = set()
         if odd_nodes:
             # All-pairs shortest paths
             dist_map = dict(nx.all_pairs_dijkstra_path_length(nx_graph, weight="weight"))
@@ -67,22 +72,22 @@ class Tjoin:
             matching = nx.min_weight_matching(complete, weight="weight")
 
             # Edges in the paths
-            path_edges_count: dict[frozenset[int], int] = {}
+            path_edges_count: dict[tuple[int, int], int] = {}
             for u, v in matching:
                 path = nx.shortest_path(nx_graph, u, v, weight="weight")
                 for a, b in zip(path[:-1], path[1:]):
-                    e = frozenset({a, b})
+                    e = _endpoint_key(a, b)
                     path_edges_count[e] = path_edges_count.get(e, 0) + 1
 
             # Symmetric difference J: edges that appear an odd number of times in the matching paths
             j_edges_keys = {e for e, count in path_edges_count.items() if count % 2 != 0}
 
         # 3. Eulerian subgraph G_E = G \Delta J
-        eulerian_edge_keys = set(pair_to_edge.keys()) ^ j_edges_keys
+        eulerian_edge_keys = set(endpoint_to_edge.keys()) ^ j_edges_keys
 
         g_eulerian = nx.Graph()
         for e_key in eulerian_edge_keys:
-            u, v = sorted(e_key)
+            u, v = e_key
             g_eulerian.add_edge(u, v)
 
         # 4. Orient edges
@@ -94,7 +99,7 @@ class Tjoin:
 
             circuit = list(nx.eulerian_circuit(sub))
             for u, v in circuit:
-                orig_edge = pair_to_edge[frozenset({u, v})]
-                oriented_edges.append(Edge(u, v, orig_edge.weight, True))
+                orig_edge = endpoint_to_edge[_endpoint_key(u, v)]
+                oriented_edges.append(orig_edge.oriented(u, v))
 
         return OrientedEdges(edges=oriented_edges)

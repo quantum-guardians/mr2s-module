@@ -28,10 +28,13 @@ from mr2s_module.cycle import FaceClusterPartition
 from mr2s_module.cycle.face_clusterer import SnowballFaceClusterer
 from mr2s_module.domain import Graph
 from mr2s_module.util import (
+    build_edge_id_face_edges_map,
     build_dual_base,
-    build_face_edges_map,
+    domain_graph_to_edge_subdivision,
     domain_graph_to_networkx,
     enumerate_faces,
+    face_edge_steps,
+    is_edge_node,
     polygon_area,
 )
 from tests.util.graph_fixtures import delaunay_graph_with_pos
@@ -46,16 +49,25 @@ def _run_diagnostic(
     """`FaceClusterPartition._partition_component` 와 동일한 흐름을 순수 함수로 재현,
     중간 산출물(면, 컴포넌트, 2-coloring) 을 함께 반환."""
     nx_graph = domain_graph_to_networkx(graph)
-    is_planar, _ = nx.check_planarity(nx_graph)
+    subdivision = domain_graph_to_edge_subdivision(graph)
+    edge_endpoints = {edge.id: edge.endpoints() for edge in graph.edges.values()}
+    sub_pos = dict(pos)
+    for node in subdivision.nodes:
+        if is_edge_node(node):
+            u, v = edge_endpoints[node[1]]
+            sub_pos[node] = (pos[u] + pos[v]) / 2.0
+
+    is_planar, _ = nx.check_planarity(subdivision)
     assert is_planar, "test fixture must be planar"
-    assert nx.is_biconnected(nx_graph), "test fixture must be biconnected"
+    assert nx.is_biconnected(subdivision), "test fixture must be biconnected"
 
-    raw_faces = enumerate_faces(nx_graph)
-    outer_idx = int(np.argmax([abs(polygon_area(f, pos)) for f in raw_faces]))
+    raw_faces = enumerate_faces(subdivision)
+    outer_idx = int(np.argmax([abs(polygon_area(f, sub_pos)) for f in raw_faces]))
     inner_faces = [f for i, f in enumerate(raw_faces) if i != outer_idx]
+    inner_face_steps = [face_edge_steps(face) for face in inner_faces]
 
-    face_edges_map = build_face_edges_map(inner_faces)
-    centroids = [np.mean([pos[v] for v in f], axis=0) for f in inner_faces]
+    face_edges_map = build_edge_id_face_edges_map(inner_face_steps)
+    centroids = [np.mean([sub_pos[v] for v in f], axis=0) for f in inner_faces]
     dual_base = build_dual_base(face_edges_map)
 
     k = max(1, min(target_k, len(inner_faces)))
@@ -64,7 +76,7 @@ def _run_diagnostic(
     boundary, outer = FaceClusterPartition._collect_boundary_edges(
         face_edges_map, face_to_cluster
     )
-    repair = FaceClusterPartition._wall_protected_repair(nx_graph, boundary, outer)
+    repair = FaceClusterPartition._wall_protected_repair(subdivision, boundary, outer)
     final_boundary = boundary.symmetric_difference(repair)
 
     face_graph = nx.Graph()
@@ -73,11 +85,11 @@ def _run_diagnostic(
         if len(f_idxs) == 2 and e not in final_boundary:
             face_graph.add_edge(f_idxs[0], f_idxs[1])
     components = FaceClusterPartition._filter_ghost_components(
-        face_graph, inner_faces, outer, final_boundary
+        face_graph, inner_face_steps, outer, final_boundary
     )
 
     merged = FaceClusterPartition._build_merged_dual(
-        components, inner_faces, face_edges_map, final_boundary
+        components, inner_face_steps, face_edges_map, final_boundary
     )
     if merged.number_of_nodes() > 0 and nx.is_bipartite(merged):
         coloring = nx.bipartite.color(merged)
@@ -87,9 +99,12 @@ def _run_diagnostic(
     return {
         "nx_graph": nx_graph,
         "inner_faces": inner_faces,
+        "inner_face_steps": inner_face_steps,
         "components": components,
         "final_boundary": final_boundary,
         "coloring": coloring,
+        "edge_endpoints": edge_endpoints,
+        "sub_pos": sub_pos,
     }
 
 
@@ -114,7 +129,7 @@ def _draw_faces(ax, diag: dict, pos: dict[int, np.ndarray]) -> None:
         for f_idx in comp:
             face = diag["inner_faces"][f_idx]
             poly = plt.Polygon(
-                [pos[v] for v in face],
+                [diag["sub_pos"][v] for v in face],
                 facecolor=color,
                 alpha=0.65,
                 edgecolor="none",
@@ -124,7 +139,10 @@ def _draw_faces(ax, diag: dict, pos: dict[int, np.ndarray]) -> None:
         diag["nx_graph"],
         pos,
         ax=ax,
-        edgelist=[tuple(sorted(e)) for e in diag["final_boundary"]],
+        edgelist=[
+            diag["edge_endpoints"][edge_id]
+            for edge_id in diag["final_boundary"]
+        ],
         edge_color="black",
         width=2.5,
     )
@@ -142,7 +160,7 @@ def _draw_rotations(ax, diag: dict, pos: dict[int, np.ndarray]) -> None:
         diag["nx_graph"], pos, ax=ax, alpha=0.08, edge_color="gray", width=0.5
     )
 
-    inner_faces = diag["inner_faces"]
+    inner_face_steps = diag["inner_face_steps"]
     final_boundary = diag["final_boundary"]
     face_to_color: dict[int, int] = {}
     for c_idx, comp in enumerate(diag["components"]):
@@ -155,15 +173,18 @@ def _draw_rotations(ax, diag: dict, pos: dict[int, np.ndarray]) -> None:
     # - color 1 → 뒤집어서 traversal (CW)
     # 인접한 두 컴포넌트의 색이 다르면 양쪽에서 같은 방향이 나오므로 dedupe.
     drawn: set[tuple[int, int]] = set()
-    for f_idx, face in enumerate(inner_faces):
+    for f_idx, face in enumerate(inner_face_steps):
         if f_idx not in face_to_color:
             continue
         color_idx = face_to_color[f_idx]
         color = _PALETTE[color_idx]
-        traversal = face if color_idx == 0 else list(reversed(face))
-        for i in range(len(traversal)):
-            a, b = traversal[i], traversal[(i + 1) % len(traversal)]
-            if frozenset({a, b}) not in final_boundary:
+        traversal = (
+            face
+            if color_idx == 0
+            else [(edge_id, head, tail) for edge_id, tail, head in reversed(face)]
+        )
+        for edge_id, a, b in traversal:
+            if edge_id not in final_boundary:
                 continue
             if (a, b) in drawn:
                 continue
@@ -206,9 +227,7 @@ def test_face_cycle_visualization_renders_three_panels(seed: int) -> None:
 
     assert len(diag["components"]) > 0
     assert len(diag["inner_faces"]) >= len(diag["components"])
-    assert set(diag["final_boundary"]).issubset(
-        {frozenset(e) for e in diag["nx_graph"].edges()}
-    )
+    assert set(diag["final_boundary"]).issubset(set(graph.edges))
 
     fig, axes = plt.subplots(1, 3, figsize=(21, 7.5))
     _draw_original(axes[0], diag["nx_graph"], pos)

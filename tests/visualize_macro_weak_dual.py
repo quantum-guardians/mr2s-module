@@ -61,12 +61,12 @@ def delaunay_graph(n: int, seed: int) -> tuple[Graph, dict[int, np.ndarray]]:
 # ── macro dual construction ──────────────────────────────────────
 
 def build_macro_dual(sub_graphs: list[Graph]) -> nx.Graph:
-    outline_keys: list[set[frozenset[int]]] = []
+    outline_keys: list[set[int]] = []
     for sg in sub_graphs:
-        keys: set[frozenset[int]] = set()
+        keys: set[int] = set()
         for e in sg.edges.values():
             if e.directed:
-                keys.add(e.pair_key())
+                keys.add(e.id)
         outline_keys.append(keys)
 
     dual = nx.Graph()
@@ -84,18 +84,20 @@ def assign_faces_to_macros(
     inner_faces: list[list[int]],
     sub_graphs: list[Graph],
 ) -> dict[int, int]:
-    macro_internal: list[set[frozenset[int]]] = []
+    macro_internal: list[set[tuple[int, int]]] = []
     for sg in sub_graphs:
-        keys: set[frozenset[int]] = set()
+        keys: set[tuple[int, int]] = set()
         for e in sg.edges.values():
             if not e.directed:
-                keys.add(e.pair_key())
+                keys.add(e.endpoints())
         macro_internal.append(keys)
 
     assignment: dict[int, int] = {}
     for f_idx, face in enumerate(inner_faces):
-        fe = {frozenset({face[i], face[(i + 1) % len(face)]})
-              for i in range(len(face))}
+        fe = {
+            (min(face[i], face[(i + 1) % len(face)]), max(face[i], face[(i + 1) % len(face)]))
+            for i in range(len(face))
+        }
         best_m, best_n = -1, -1
         for m_idx, ikeys in enumerate(macro_internal):
             n = len(fe & ikeys)
@@ -240,7 +242,7 @@ def draw_dual_panel(ax, sub_graphs, assignment, inner_faces, pos,
         keys = set()
         for e in sg.edges.values():
             if e.directed:
-                keys.add(e.pair_key())
+                keys.add(e.id)
         outline_keys.append(keys)
 
     edge_labels = {}

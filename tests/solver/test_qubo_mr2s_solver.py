@@ -73,7 +73,7 @@ def test_run_solves_and_evaluates() -> None:
     assert set(result.edges.values()) == {(1, 2)}
     assert poly_generator.seen_graphs == [graph]
     assert qubo_solver.received_graph is graph
-    assert graph.edge_by_pair(1, 2).directed is False
+    assert next(iter(graph.edges.values())).directed is False
     assert evaluator.received_solution.score == 1.0
 
 
