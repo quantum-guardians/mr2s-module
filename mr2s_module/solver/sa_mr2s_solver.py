@@ -8,6 +8,7 @@ from dimod import SampleSet
 
 from mr2s_module.domain import Edge, Graph, Solution
 from mr2s_module.evaluator import Evaluator
+from mr2s_module.evaluator.distance_util import build_undirected_distance_graph
 from mr2s_module.protocols import EvaluatorProtocol
 from mr2s_module.util import flow_imbalance
 
@@ -82,19 +83,6 @@ class SAMR2SSolver:
       return (edge.vertices[1], edge.vertices[0])
     return (edge.vertices[0], edge.vertices[1])
 
-  def _state_to_edges(
-      self,
-      variable_edges: list[Edge],
-      state_bits: list[int],
-      fixed_edges: set[tuple[int, int]],
-  ) -> set[tuple[int, int]]:
-    directed_edges = set(fixed_edges)
-    directed_edges.update(
-      self._build_direction(edge, bit)
-      for edge, bit in zip(variable_edges, state_bits)
-    )
-    return directed_edges
-
   @classmethod
   def _directed_weighted_edges(
       cls,
@@ -125,46 +113,57 @@ class SAMR2SSolver:
     return float(max(1, len(vertices) * max(0, len(vertices) - 1)))
 
   @staticmethod
-  def _build_apsp_and_disconnected_pair_count(
-      directed_edges: set[tuple[int, int]],
+  def _build_stretch_and_disconnected_pair_count(
+      directed_weighted_edges: list[tuple[int, int, float]],
       vertices: list[int],
+      undirected_lengths: dict[int, dict[int, float]],
   ) -> tuple[float, int]:
+    # ranker 와 동일한 거리 원시량(1/weight)·stretch(방향화/무방향) 로 통합.
+    # 도달 불가 쌍은 stretch 대신 unreachable 로 세어 SA 가 inf 없이 최적화.
     directed_graph = nx.DiGraph()
     directed_graph.add_nodes_from(vertices)
-    directed_graph.add_edges_from(directed_edges)
+    for u, v, weight in directed_weighted_edges:
+      distance = 1.0 / weight
+      # 같은 방향 평행 간선은 가장 빠른(무거운) 것만 최단거리에 유효.
+      if directed_graph.has_edge(u, v):
+        distance = min(distance, directed_graph[u][v]["distance"])
+      directed_graph.add_edge(u, v, distance=distance)
 
-    total_distance = 0.0
+    total_stretch = 0.0
     unreachable_pairs = 0
     for source in vertices:
-      distances = nx.single_source_shortest_path_length(directed_graph, source)
+      lengths = nx.single_source_dijkstra_path_length(
+        directed_graph, source, weight="distance"
+      )
       for target in vertices:
         if source == target:
           continue
-        distance = distances.get(target)
-        if distance is None:
+        directed_distance = lengths.get(target)
+        if directed_distance is None:
           unreachable_pairs += 1
         else:
-          total_distance += float(distance)
+          total_stretch += directed_distance / undirected_lengths[source][target]
 
-    return total_distance, unreachable_pairs
+    return total_stretch, unreachable_pairs
 
   def _objective(
       self,
       graph: Graph,
       variable_edges: list[Edge],
       state_bits: list[int],
-      fixed_edges: set[tuple[int, int]],
       vertices: list[int],
       treewidth: float,
+      undirected_lengths: dict[int, dict[int, float]],
   ) -> float:
-    directed_edges = self._state_to_edges(variable_edges, state_bits, fixed_edges)
-    apsp_sum, unreachable_pairs = self._build_apsp_and_disconnected_pair_count(
-      directed_edges,
+    directed_weighted_edges = self._directed_weighted_edges(
+      graph, variable_edges, state_bits
+    )
+    apsp_sum, unreachable_pairs = self._build_stretch_and_disconnected_pair_count(
+      directed_weighted_edges,
       vertices,
+      undirected_lengths,
     )
-    flow_score = flow_imbalance(
-      self._directed_weighted_edges(graph, variable_edges, state_bits)
-    )
+    flow_score = flow_imbalance(directed_weighted_edges)
     pair_scale = self._build_pair_scale(vertices)
     weight_scale = self._build_graph_weight_scale(graph, treewidth)
     return (
@@ -217,11 +216,13 @@ class SAMR2SSolver:
       self,
       graph: Graph,
       variable_edges: list[Edge],
-      fixed_edges: set[tuple[int, int]],
       treewidth: float,
+      undirected_lengths: dict[int, dict[int, float]],
   ) -> tuple[list[int], float]:
     if not variable_edges:
-      return [], self._objective(graph, [], [], fixed_edges, sorted(graph.get_vertices()), treewidth)
+      return [], self._objective(
+        graph, [], [], sorted(graph.get_vertices()), treewidth, undirected_lengths
+      )
 
     rng = random.Random(self.random_seed)
     vertices = sorted(graph.get_vertices())
@@ -240,9 +241,9 @@ class SAMR2SSolver:
         graph,
         variable_edges,
         current_bits,
-        fixed_edges,
         vertices,
         treewidth,
+        undirected_lengths,
       )
       if current_objective < best_objective:
         best_objective = current_objective
@@ -262,9 +263,9 @@ class SAMR2SSolver:
             graph,
             variable_edges,
             current_bits,
-            fixed_edges,
             vertices,
             treewidth,
+            undirected_lengths,
           )
           delta = next_objective - current_objective
           accept = delta <= 0.0 or rng.random() < math.exp(-delta / temperature)
@@ -315,18 +316,22 @@ class SAMR2SSolver:
     tw, _ = treewidth_min_degree(nx_graph)
     treewidth = max(1.0, float(tw))
 
-    fixed_edges = {
-      edge.vertices
-      for edge in graph.edges.values()
-      if edge.directed
-    }
     variable_edges = [
       edge
       for edge in graph.edges.values()
       if not edge.directed
     ]
 
-    best_bits, best_objective = self._anneal_bits(graph, variable_edges, fixed_edges, treewidth)
+    # ranker stretch 분모(무방향 1/weight APSP)를 run 당 한 번만 계산.
+    undirected_lengths = dict(
+      nx.all_pairs_dijkstra_path_length(
+        build_undirected_distance_graph(graph), weight="distance"
+      )
+    )
+
+    best_bits, best_objective = self._anneal_bits(
+      graph, variable_edges, treewidth, undirected_lengths
+    )
     sample = {
       edge.to_key(): bit
       for edge, bit in zip(variable_edges, best_bits)
