@@ -7,6 +7,7 @@ from mr2s_module.domain import Solution
 from mr2s_module.evaluator.distance_util import (
   UndirectedApspCache,
   build_directed_distance_graph,
+  stretch_totals,
 )
 
 ApspMethod = Literal["stretch", "efficiency", "sum"]
@@ -65,17 +66,10 @@ class ApspSumRanker:
   ) -> float:
     undirected_lengths = self._undirected_cache.get_lengths(solution.graph)
 
-    total_stretch = 0.0
-    pair_count = 0
-    for source in vertices:
-      for target in vertices:
-        if source == target:
-          continue
-        total_stretch += (
-          directed_lengths[source][target] / undirected_lengths[source][target]
-        )
-        pair_count += 1
-
+    # 강연결일 때만 호출되므로 unreachable=0, reachable=pair_count.
+    total_stretch, pair_count, _ = stretch_totals(
+      directed_lengths, undirected_lengths, vertices
+    )
     if pair_count == 0:
       return 1.0
     return total_stretch / pair_count

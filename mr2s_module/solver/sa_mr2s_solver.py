@@ -8,7 +8,11 @@ from dimod import SampleSet
 
 from mr2s_module.domain import Edge, Graph, Solution
 from mr2s_module.evaluator import Evaluator
-from mr2s_module.evaluator.distance_util import build_undirected_distance_graph
+from mr2s_module.evaluator.distance_util import (
+  build_directed_distance_graph_from_weighted_edges,
+  build_undirected_distance_graph,
+  stretch_totals,
+)
 from mr2s_module.protocols import EvaluatorProtocol
 from mr2s_module.util import flow_imbalance
 
@@ -118,32 +122,17 @@ class SAMR2SSolver:
       vertices: list[int],
       undirected_lengths: dict[int, dict[int, float]],
   ) -> tuple[float, int]:
-    # ranker 와 동일한 거리 원시량(1/weight)·stretch(방향화/무방향) 로 통합.
+    # ranker 와 같은 거리/stretch primitive(distance_util)로 통합.
     # 도달 불가 쌍은 stretch 대신 unreachable 로 세어 SA 가 inf 없이 최적화.
-    directed_graph = nx.DiGraph()
-    directed_graph.add_nodes_from(vertices)
-    for u, v, weight in directed_weighted_edges:
-      distance = 1.0 / weight
-      # 같은 방향 평행 간선은 가장 빠른(무거운) 것만 최단거리에 유효.
-      if directed_graph.has_edge(u, v):
-        distance = min(distance, directed_graph[u][v]["distance"])
-      directed_graph.add_edge(u, v, distance=distance)
-
-    total_stretch = 0.0
-    unreachable_pairs = 0
-    for source in vertices:
-      lengths = nx.single_source_dijkstra_path_length(
-        directed_graph, source, weight="distance"
-      )
-      for target in vertices:
-        if source == target:
-          continue
-        directed_distance = lengths.get(target)
-        if directed_distance is None:
-          unreachable_pairs += 1
-        else:
-          total_stretch += directed_distance / undirected_lengths[source][target]
-
+    directed_graph = build_directed_distance_graph_from_weighted_edges(
+      directed_weighted_edges, vertices
+    )
+    directed_lengths = dict(
+      nx.all_pairs_dijkstra_path_length(directed_graph, weight="distance")
+    )
+    total_stretch, _, unreachable_pairs = stretch_totals(
+      directed_lengths, undirected_lengths, vertices
+    )
     return total_stretch, unreachable_pairs
 
   def _objective(
