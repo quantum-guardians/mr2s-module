@@ -1,4 +1,5 @@
 from mr2s_module.domain import Edge, Graph
+from mr2s_module.reduction import ReductionMr2sSolver
 from mr2s_module.solver.ils_mr2s_solver import IlsMR2SSolver
 from mr2s_module.solver.predefined import create_ils_solver
 
@@ -30,4 +31,8 @@ def test_ils_solver_triangle_graph() -> None:
 
 def test_create_ils_solver_factory() -> None:
   solver = create_ils_solver()
-  assert isinstance(solver, IlsMR2SSolver)
+  assert isinstance(solver, ReductionMr2sSolver)
+  assert isinstance(solver.mr2s_solver, IlsMR2SSolver)
+
+  bare = create_ils_solver(use_reduction=False)
+  assert isinstance(bare, IlsMR2SSolver)

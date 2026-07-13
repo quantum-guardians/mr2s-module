@@ -18,6 +18,7 @@ from mr2s_module.domain import (
 )
 from mr2s_module.protocols import (
   DnCGraphPartitionStrategyProtocol,
+  EvaluatorProtocol,
   Mr2sSolverProtocol,
 )
 from mr2s_module.qubo import InvalidEmbeddingError
@@ -217,6 +218,16 @@ class DnCMr2sSolver:
         target_graph=self.target_graph,
       )
       self._owned_graph_partition_strategy = self.graph_partition_strategy
+
+  @property
+  def evaluator(self) -> EvaluatorProtocol:
+    """inner solver 의 evaluator 를 위임 노출한다.
+
+    DnC 는 자체 평가기를 두지 않고 서브그래프 해를 inner solver 의 평가기로
+    채점한다(_merge/_solve 경로). 이 property 로 Mr2sSolverProtocol 을 충족해
+    DnC 를 다른 solver 의 inner 로(예: ReductionMr2sSolver) 넘길 수 있다.
+    """
+    return self.mr2s_solver.evaluator
 
   def _sync_default_partition_strategy(self) -> None:
     if not self._owns_graph_partition_strategy:
