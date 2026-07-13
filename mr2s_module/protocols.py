@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING, Any, Protocol, TypeAlias
 
-from dimod import BinaryQuadraticModel, BinaryPolynomial
+from dimod import BinaryQuadraticModel
+from dimod.higherorder.polynomial import BinaryPolynomial
 
 if TYPE_CHECKING:
     from mr2s_module.domain.edge import Edge as EdgeModel
@@ -65,7 +66,9 @@ class EvaluatorProtocol(Protocol):
 
 
 class Mr2sSolverProtocol(Protocol):
-    evaluator: EvaluatorProtocol
+    # read-only property 로 선언해야 일반 속성·property 구현을 모두 허용한다.
+    @property
+    def evaluator(self) -> EvaluatorProtocol: ...
     def run(self, graph: Graph) -> Solution: ...
 
 
