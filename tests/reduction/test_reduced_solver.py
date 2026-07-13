@@ -3,6 +3,7 @@
 import networkx as nx
 
 from mr2s_module.domain import Edge, Graph, Score, Solution
+from mr2s_module.evaluator import Evaluator
 from mr2s_module.reduction import ReductionMr2sSolver
 from mr2s_module.util.sample_set import empty_binary_sample_set
 
@@ -49,6 +50,15 @@ def test_run_solves_contracted_graph_and_lifts_to_original() -> None:
   assert set(solution.edges) == set(graph.edges)
   # inner score 는 축약 그래프 기준이므로 폐기
   assert solution.score is None
+
+
+def test_run_fills_score_when_evaluator_given() -> None:
+  graph = _k4_with_chain()
+  solver = ReductionMr2sSolver(mr2s_solver=_StubSolver(), evaluator=Evaluator())
+  solution = solver.run(graph)
+
+  # score 는 lift 후 원본 그래프 기준으로 재계산된다 (inner score 아님)
+  assert isinstance(solution.score, Score)
 
 
 def test_run_keeps_original_graph_unmodified() -> None:

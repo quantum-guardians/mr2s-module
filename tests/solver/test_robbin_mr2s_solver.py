@@ -1,4 +1,5 @@
 from mr2s_module.domain import Edge, Graph
+from mr2s_module.reduction import ReductionMr2sSolver
 from mr2s_module.solver.robbin_mr2s_solver import RobbinMR2SSolver
 from mr2s_module.solver.predefined import create_robbin_solver
 
@@ -48,4 +49,8 @@ def test_robbin_solver_orients_parallel_pair_anti_parallel() -> None:
 
 def test_create_robbin_solver_factory() -> None:
   solver = create_robbin_solver()
-  assert isinstance(solver, RobbinMR2SSolver)
+  assert isinstance(solver, ReductionMr2sSolver)
+  assert isinstance(solver.mr2s_solver, RobbinMR2SSolver)
+
+  bare = create_robbin_solver(use_reduction=False)
+  assert isinstance(bare, RobbinMR2SSolver)
