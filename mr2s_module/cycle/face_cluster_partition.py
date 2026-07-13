@@ -13,10 +13,13 @@ from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.graph_partition_result import GraphPartitionResult
 from mr2s_module.protocols import FaceCycleProtocol
 from mr2s_module.util.planar_graph import (
+    EdgeStep,
     build_dual_base,
-    build_face_edges_map,
-    domain_graph_to_networkx,
+    build_edge_id_face_edges_map,
+    domain_graph_to_edge_subdivision,
     enumerate_faces,
+    face_edge_steps,
+    is_edge_node,
     polygon_area,
 )
 
@@ -28,9 +31,9 @@ _INNER_WEIGHT = 1
 @dataclass
 class _ComponentPartition:
     """단일 biconnected component 의 거대 군집 분할 결과."""
-    macro_internal_edges: list[set[frozenset[int]]] = field(default_factory=list)
-    macro_outline_keys: list[set[frozenset[int]]] = field(default_factory=list)
-    directed_pairs: set[tuple[int, int]] = field(default_factory=set)
+    macro_internal_edges: list[set[int]] = field(default_factory=list)
+    macro_outline_keys: list[set[int]] = field(default_factory=list)
+    directed_steps: set[EdgeStep] = field(default_factory=set)
 
 
 class FaceClusterPartition:
@@ -50,7 +53,10 @@ class FaceClusterPartition:
         if any(edge.directed for edge in graph.edges.values()):
             raise ValueError("FaceClusterPartition requires an undirected input graph")
 
-        nx_graph = domain_graph_to_networkx(graph)
+        if graph.is_empty():
+            return GraphPartitionResult(sub_graphs=[], remaining_edges=[])
+
+        nx_graph = domain_graph_to_edge_subdivision(graph)
         is_planar, _ = nx.check_planarity(nx_graph)
         if not is_planar:
             return GraphPartitionResult(
@@ -59,10 +65,10 @@ class FaceClusterPartition:
             )
 
         # Step 1. 각 컴포넌트의 분할 결과를 글로벌 macro_id 로 통합
-        edge_to_inner_macro: dict[frozenset[int], int] = {}
+        edge_to_inner_macro: dict[int, int] = {}
         # 공유 boundary 는 인접한 두 macro 양쪽에 들어가므로 owning macro 를 list 로.
-        edge_to_outline_macros: dict[frozenset[int], list[int]] = {}
-        directed_orientations: dict[frozenset[int], tuple[int, int]] = {}
+        edge_to_outline_macros: dict[int, list[int]] = {}
+        directed_orientations: dict[int, tuple[int, int]] = {}
         macro_count = 0
 
         for component in self._extract_biconnected_components(nx_graph):
@@ -71,13 +77,13 @@ class FaceClusterPartition:
                 for ekey in internal_edges:
                     edge_to_inner_macro[ekey] = macro_count + local_id
             for local_id, outline_keys in enumerate(partition.macro_outline_keys):
-                for ekey in outline_keys:
-                    edge_to_outline_macros.setdefault(ekey, []).append(
+                for edge_id in outline_keys:
+                    edge_to_outline_macros.setdefault(edge_id, []).append(
                         macro_count + local_id
                     )
             macro_count += len(partition.macro_internal_edges)
-            for u, v in partition.directed_pairs:
-                directed_orientations[frozenset({u, v})] = (u, v)
+            for edge_id, tail, head in partition.directed_steps:
+                directed_orientations[edge_id] = (tail, head)
 
         # Step 2. 간선 분류용 컨테이너 준비
         sub_graph_edges: list[list[Edge]] = [[] for _ in range(macro_count)]
@@ -92,15 +98,17 @@ class FaceClusterPartition:
                 continue
             macro_id = edge_to_inner_macro.get(edge.id)
             if macro_id is not None:
-                sub_graph_edges[macro_id].append(Edge(u, v, edge.weight, False))
+                # 입력은 전부 무방향 → 원본 인스턴스 재사용(id 보존, 새 객체 0).
+                sub_graph_edges[macro_id].append(edge)
                 continue
+            owning_macros = edge_to_outline_macros.get(edge.id, ())
             orientation = directed_orientations.get(edge.id)
             if orientation is not None:
                 a, b = orientation
-                emitted = Edge(a, b, edge.weight, True)
+                # 같은 논리 간선의 방향 버전. id 보존 → DnC merge 가 부모 id 로 왕복.
+                emitted = edge.oriented(a, b)
             else:
                 emitted = edge
-            owning_macros = edge_to_outline_macros.get(edge.id, ())
             if owning_macros:
                 for owning in owning_macros:
                     sub_graph_edges[owning].append(emitted)
@@ -117,8 +125,8 @@ class FaceClusterPartition:
 
     @staticmethod
     def _validate_no_undirected_edge_overlap(sub_graphs: list[Graph]) -> None:
-        owner_by_edge: dict[frozenset[int], int] = {}
-        overlaps: dict[frozenset[int], tuple[int, int]] = {}
+        owner_by_edge: dict[int, int] = {}
+        overlaps: dict[int, tuple[int, int]] = {}
         for subgraph_idx, subgraph in enumerate(sub_graphs):
             for edge in subgraph.edges.values():
                 if edge.directed:
@@ -131,9 +139,9 @@ class FaceClusterPartition:
                     overlaps[edge.id] = (prev_owner, subgraph_idx)
         if overlaps:
             details = ", ".join(
-                f"{tuple(sorted(edge_id))}@({owner0},{owner1})"
+                f"{edge_id}@({owner0},{owner1})"
                 for edge_id, (owner0, owner1) in sorted(
-                    overlaps.items(), key=lambda item: tuple(sorted(item[0]))
+                    overlaps.items()
                 )
             )
             raise ValueError(
@@ -141,23 +149,25 @@ class FaceClusterPartition:
             )
 
     def _extract_biconnected_components(self, graph: nx.Graph) -> list[nx.Graph]:
+        if graph.number_of_nodes() == 0:
+            return []
         if nx.is_biconnected(graph):
             return [graph]
 
         components: list[nx.Graph] = []
         for bcc_edges in nx.biconnected_component_edges(graph):
-            if len(bcc_edges) < 3:
-                continue
             sub = nx.Graph()
             for u, v in bcc_edges:
                 sub.add_edge(u, v, **graph[u][v])
-            if nx.check_planarity(sub)[0]:
+            for node in sub.nodes:
+                sub.nodes[node].update(graph.nodes[node])
+            if self._domain_edge_count(sub) >= 2 and nx.check_planarity(sub)[0]:
                 components.append(sub)
         return components
 
     def _partition_component(self, component: nx.Graph) -> _ComponentPartition:
         """컴포넌트 단위로 거대 군집의 내부 간선과 boundary 방향을 산출."""
-        if component.number_of_edges() < 3:
+        if self._domain_edge_count(component) < 2:
             return _ComponentPartition()
 
         # 1. 면 추출 — 외곽 면은 가장 큰 면적으로 식별
@@ -175,8 +185,11 @@ class FaceClusterPartition:
         ]
         if not inner_raw_faces:
             return _ComponentPartition()
+        inner_face_steps = [
+            face_edge_steps(face) for face in inner_raw_faces
+        ]
 
-        face_edges_map = build_face_edges_map(inner_raw_faces)
+        face_edges_map = build_edge_id_face_edges_map(inner_face_steps)
         face_centroids = [
             np.mean([pos[v] for v in f], axis=0) for f in inner_raw_faces
         ]
@@ -199,18 +212,18 @@ class FaceClusterPartition:
         # 4. Flood fill — 같은 군집의 면들 병합
         face_graph = nx.Graph()
         face_graph.add_nodes_from(range(len(inner_raw_faces)))
-        for e, f_indices in face_edges_map.items():
-            if len(f_indices) == 2 and e not in final_boundary:
+        for edge_id, f_indices in face_edges_map.items():
+            if len(f_indices) == 2 and edge_id not in final_boundary:
                 face_graph.add_edge(f_indices[0], f_indices[1])
 
         # 5. 유령 영토 필터링 — 외곽으로 누출된 컴포넌트 제거
         true_components = self._filter_ghost_components(
-            face_graph, inner_raw_faces, outer_edges, final_boundary
+            face_graph, inner_face_steps, outer_edges, final_boundary
         )
 
         # 6. 병합 쌍대 그래프 — 이분(bipartite) 성질 검증
         merged_dual = self._build_merged_dual(
-            true_components, inner_raw_faces, face_edges_map, final_boundary
+            true_components, inner_face_steps, face_edges_map, final_boundary
         )
         if merged_dual.number_of_nodes() > 0 and not nx.is_bipartite(merged_dual):
             return _ComponentPartition()
@@ -227,8 +240,8 @@ class FaceClusterPartition:
             for f_idx in comp:
                 face_to_color[f_idx] = c
 
-        directed_pairs = self._orient_boundary(
-            final_boundary, face_edges_map, inner_raw_faces, face_to_color
+        directed_steps = self._orient_boundary(
+            final_boundary, face_edges_map, inner_face_steps, face_to_color
         )
 
         # 8. face_edges_map 단일 패스로 inner / outline 동시 분류.
@@ -239,15 +252,15 @@ class FaceClusterPartition:
             for f_idx in comp
         }
         n_macros = len(true_components)
-        macro_internal_edges: list[set[frozenset[int]]] = [set() for _ in range(n_macros)]
-        macro_outline_keys: list[set[frozenset[int]]] = [set() for _ in range(n_macros)]
-        for ekey, f_indices in face_edges_map.items():
-            if ekey in final_boundary:
+        macro_internal_edges: list[set[int]] = [set() for _ in range(n_macros)]
+        macro_outline_keys: list[set[int]] = [set() for _ in range(n_macros)]
+        for edge_id, f_indices in face_edges_map.items():
+            if edge_id in final_boundary:
                 seen: set[int] = set()
                 for f in f_indices:
                     m = face_to_macro.get(f)
                     if m is not None and m not in seen:
-                        macro_outline_keys[m].add(ekey)
+                        macro_outline_keys[m].add(edge_id)
                         seen.add(m)
                 continue
             if len(f_indices) != 2:
@@ -255,36 +268,36 @@ class FaceClusterPartition:
             m0 = face_to_macro.get(f_indices[0])
             m1 = face_to_macro.get(f_indices[1])
             if m0 is not None and m0 == m1:
-                macro_internal_edges[m0].add(ekey)
+                macro_internal_edges[m0].add(edge_id)
 
         return _ComponentPartition(
             macro_internal_edges=macro_internal_edges,
             macro_outline_keys=macro_outline_keys,
-            directed_pairs=directed_pairs,
+            directed_steps=directed_steps,
         )
 
     def _apply_boundary_repair(
         self,
-        boundary_edges: set[frozenset[int]],
-        repair_edges: set[frozenset[int]],
-    ) -> set[frozenset[int]]:
+        boundary_edges: set[int],
+        repair_edges: set[int],
+    ) -> set[int]:
         if self.repair_mode == "remove":
             return boundary_edges.difference(repair_edges)
         return boundary_edges.symmetric_difference(repair_edges)
 
     @staticmethod
     def _orient_boundary(
-        final_boundary: set[frozenset[int]],
-        face_edges_map: dict[frozenset[int], list[int]],
-        inner_raw_faces: list[list[int]],
+        final_boundary: set[int],
+        face_edges_map: dict[int, list[int]],
+        inner_face_steps: list[list[EdgeStep]],
         face_to_color: dict[int, int],
-    ) -> set[tuple[int, int]]:
+    ) -> set[EdgeStep]:
         # 각 boundary 간선에 대해, 인접 면 중 true-component 에 속한 면을 우선 선택해
         # 그 면의 traversal 순서를 기준으로 방향을 결정 (color 1 이면 reverse).
         # 두 면이 서로 다른 컴포넌트에 속할 경우, 둘 모두 같은 방향을 만들어 낸다.
-        directed_pairs: set[tuple[int, int]] = set()
-        for e in final_boundary:
-            f_indices = face_edges_map.get(e, [])
+        directed_steps: set[EdgeStep] = set()
+        for edge_id in final_boundary:
+            f_indices = face_edges_map.get(edge_id, [])
             if not f_indices:
                 continue
 
@@ -293,40 +306,46 @@ class FaceClusterPartition:
                 f_indices[0],
             )
             color = face_to_color.get(chosen_face, 0)
-            face = inner_raw_faces[chosen_face]
-            traversal = face if color == 0 else list(reversed(face))
-            for i in range(len(traversal)):
-                a, b = traversal[i], traversal[(i + 1) % len(traversal)]
-                if frozenset({a, b}) == e:
-                    directed_pairs.add((a, b))
+            face = inner_face_steps[chosen_face]
+            traversal = (
+                face
+                if color == 0
+                else [(eid, head, tail) for eid, tail, head in reversed(face)]
+            )
+            for step in traversal:
+                if step[0] == edge_id:
+                    directed_steps.add(step)
                     break
-        return directed_pairs
+        return directed_steps
 
     @staticmethod
     def _collect_boundary_edges(
-        face_edges_map: dict[frozenset[int], list[int]],
+        face_edges_map: dict[int, list[int]],
         face_to_cluster: dict[int, int],
-    ) -> tuple[set[frozenset[int]], set[frozenset[int]]]:
-        boundary_edges: set[frozenset[int]] = set()
-        outer_edges: set[frozenset[int]] = set()
-        for e, f_indices in face_edges_map.items():
+    ) -> tuple[set[int], set[int]]:
+        boundary_edges: set[int] = set()
+        outer_edges: set[int] = set()
+        for edge_id, f_indices in face_edges_map.items():
             if len(f_indices) == 2:
                 if face_to_cluster.get(f_indices[0]) != face_to_cluster.get(f_indices[1]):
-                    boundary_edges.add(e)
+                    boundary_edges.add(edge_id)
             else:
                 # 외곽: 한쪽에만 면이 붙어있는 간선
-                boundary_edges.add(e)
-                outer_edges.add(e)
+                boundary_edges.add(edge_id)
+                outer_edges.add(edge_id)
         return boundary_edges, outer_edges
 
     @staticmethod
     def _wall_protected_repair(
         g_euler: nx.Graph,
-        boundary_edges: set[frozenset[int]],
-        outer_edges: set[frozenset[int]],
-    ) -> set[frozenset[int]]:
-        b_sub = nx.Graph()
-        b_sub.add_edges_from(tuple(sorted(e)) for e in boundary_edges)
+        boundary_edges: set[int],
+        outer_edges: set[int],
+    ) -> set[int]:
+        edge_endpoints = FaceClusterPartition._edge_endpoints(g_euler)
+        b_sub = nx.MultiGraph()
+        for edge_id in boundary_edges:
+            u, v = edge_endpoints[edge_id]
+            b_sub.add_edge(u, v, key=edge_id)
         odd_nodes = [v for v, d in b_sub.degree() if d % 2 != 0]
         if not odd_nodes:
             return set()
@@ -335,9 +354,9 @@ class FaceClusterPartition:
         # 내륙 간선만 우선 이용하여 수리 경로를 잡는다.
         g_repair = g_euler.copy()
         for u, v in g_repair.edges():
-            e = frozenset({u, v})
+            edge_id = FaceClusterPartition._subdivision_edge_id(u, v)
             g_repair[u][v]["weight"] = (
-                _OUTER_WALL_WEIGHT if e in outer_edges else _INNER_WEIGHT
+                _OUTER_WALL_WEIGHT if edge_id in outer_edges else _INNER_WEIGHT
             )
 
         dist_map = dict(nx.all_pairs_dijkstra_path_length(g_repair, weight="weight"))
@@ -346,28 +365,27 @@ class FaceClusterPartition:
             if v in dist_map.get(u, {}):
                 complete.add_edge(u, v, weight=dist_map[u][v])
 
-        repair_edges: set[frozenset[int]] = set()
+        repair_edges: set[int] = set()
         for u, v in nx.min_weight_matching(complete):
             path = nx.shortest_path(g_repair, u, v, weight="weight")
-            for a, b in zip(path[:-1], path[1:]):
-                repair_edges.add(frozenset({a, b}))
+            for node in path:
+                if is_edge_node(node):
+                    repair_edges.add(node[1])
         return repair_edges
 
     @staticmethod
     def _filter_ghost_components(
         face_graph: nx.Graph,
-        inner_raw_faces: list[list[int]],
-        outer_edges: set[frozenset[int]],
-        final_boundary: set[frozenset[int]],
+        inner_face_steps: list[list[EdgeStep]],
+        outer_edges: set[int],
+        final_boundary: set[int],
     ) -> list[list[int]]:
         true_components: list[list[int]] = []
         for comp in nx.connected_components(face_graph):
             leaked = False
             for f_idx in comp:
-                face = inner_raw_faces[f_idx]
-                for i in range(len(face)):
-                    fe = frozenset({face[i], face[(i + 1) % len(face)]})
-                    if fe in outer_edges and fe not in final_boundary:
+                for edge_id, _, _ in inner_face_steps[f_idx]:
+                    if edge_id in outer_edges and edge_id not in final_boundary:
                         leaked = True
                         break
                 if leaked:
@@ -379,9 +397,9 @@ class FaceClusterPartition:
     @staticmethod
     def _build_merged_dual(
         components: list[list[int]],
-        inner_raw_faces: list[list[int]],
-        face_edges_map: dict[frozenset[int], list[int]],
-        final_boundary: set[frozenset[int]],
+        inner_face_steps: list[list[EdgeStep]],
+        face_edges_map: dict[int, list[int]],
+        final_boundary: set[int],
     ) -> nx.Graph:
         merged = nx.Graph()
         merged.add_nodes_from(range(len(components)))
@@ -389,12 +407,10 @@ class FaceClusterPartition:
             comp_j = set(components[j])
             adjacent = False
             for f_idx in components[i]:
-                face = inner_raw_faces[f_idx]
-                for k in range(len(face)):
-                    fe = frozenset({face[k], face[(k + 1) % len(face)]})
-                    if fe not in final_boundary:
+                for edge_id, _, _ in inner_face_steps[f_idx]:
+                    if edge_id not in final_boundary:
                         continue
-                    adj_faces = face_edges_map.get(fe, [])
+                    adj_faces = face_edges_map.get(edge_id, [])
                     if len(adj_faces) != 2:
                         continue
                     other = adj_faces[0] if adj_faces[1] == f_idx else adj_faces[1]
@@ -406,3 +422,23 @@ class FaceClusterPartition:
             if adjacent:
                 merged.add_edge(i, j)
         return merged
+
+    @staticmethod
+    def _domain_edge_count(graph: nx.Graph) -> int:
+        return sum(1 for node in graph.nodes if is_edge_node(node))
+
+    @staticmethod
+    def _edge_endpoints(graph: nx.Graph) -> dict[int, tuple[int, int]]:
+        endpoints: dict[int, tuple[int, int]] = {}
+        for node, data in graph.nodes(data=True):
+            if is_edge_node(node):
+                endpoints[node[1]] = data["endpoints"]
+        return endpoints
+
+    @staticmethod
+    def _subdivision_edge_id(u, v) -> int | None:
+        if is_edge_node(u):
+            return u[1]
+        if is_edge_node(v):
+            return v[1]
+        return None

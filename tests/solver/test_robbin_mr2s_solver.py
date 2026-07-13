@@ -15,12 +15,12 @@ def test_robbin_solver_triangle_graph() -> None:
 
   assert len(solution.edges) == 3
   # 모든 간선에 대해 방향이 결정되어 있어야 함
-  assert {frozenset({u, v}) for u, v in solution.edges} == set(graph.edges.keys())
+  assert set(solution.edges) == set(graph.edges)
   
   # score 검증
   assert solution.score is not None
   assert solution.score.strong_connect_rate == 1.0
-  assert solution.score.apsp_sum == 9.0  # 1->2->3->1 (3 + 3 + 3 = 9) 혹은 반대방향 동일
+  assert solution.score.apsp_sum == 1.5  # 사이클 방향화: 정방향 stretch 1, 역방향 2 → 평균 1.5
 
   # sample_set 검증
   assert solution.sample_set is not None
@@ -28,6 +28,22 @@ def test_robbin_solver_triangle_graph() -> None:
   assert len(samples) == 1
   for edge in graph.edges.values():
     assert edge.to_key() in samples[0]
+
+
+def test_robbin_solver_orients_parallel_pair_anti_parallel() -> None:
+  # 평행쌍만으로 이뤄진 멀티그래프: 다중도 2 라 브릿지가 아니고,
+  # robbins 교대 배정으로 반평행 강연결 방향이 나와야 함
+  edge_a = Edge(0, 1, 3, False)
+  edge_b = Edge(0, 1, 3, False)
+  graph = Graph(edges=[edge_a, edge_b])
+
+  solution = RobbinMR2SSolver().run(graph)
+
+  assert len(solution.edges) == 2
+  assert solution.edges[edge_a.id] == tuple(reversed(solution.edges[edge_b.id]))
+  assert solution.score is not None
+  assert solution.score.flow_score == 0.0
+  assert solution.score.strong_connect_rate == 1.0
 
 
 def test_create_robbin_solver_factory() -> None:

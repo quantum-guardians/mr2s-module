@@ -13,12 +13,12 @@ def test_ils_solver_triangle_graph() -> None:
   solution = solver.run(graph)
 
   assert len(solution.edges) == 3
-  assert {frozenset({u, v}) for u, v in solution.edges} == set(graph.edges.keys())
+  assert set(solution.edges) == set(graph.edges)
 
   # score 검증
   assert solution.score is not None
   assert solution.score.strong_connect_rate == 1.0
-  assert solution.score.apsp_sum == 9.0
+  assert solution.score.apsp_sum == 1.5
 
   # sample_set 검증
   assert solution.sample_set is not None

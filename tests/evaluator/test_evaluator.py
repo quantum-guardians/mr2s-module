@@ -12,9 +12,28 @@ def _build_solution(
     energies=None,
     num_occurrences=None,
 ) -> Solution:
+  graph = Graph(edges=edges)
+  # directed_edges(set[tuple]) → edge id 키 dict 로 매핑(끝점 매칭).
+  edges_by_id: dict[int, tuple[int, int]] = {}
+  # 구식 변수명(e_{u}_{v}) → 신식 id 기반 to_key(e_{id}) 변환 맵.
+  key_map: dict[str, str] = {}
+  for edge in graph.edges.values():
+    u, v = edge.endpoints()
+    key_map[f"e_{u}_{v}"] = edge.to_key()
+    if edge.directed and edge.vertices in directed_edges:
+      edges_by_id[edge.id] = edge.vertices
+    elif (u, v) in directed_edges:
+      edges_by_id[edge.id] = (u, v)
+    elif (v, u) in directed_edges:
+      edges_by_id[edge.id] = (v, u)
+  if samples is not None:
+    samples = [
+      {key_map.get(k, k): val for k, val in sample.items()}
+      for sample in samples
+    ]
   return Solution(
-    edges=directed_edges,
-    graph=Graph(edges=edges),
+    edges=edges_by_id,
+    graph=graph,
     sample_set=SampleSet.from_samples(
       [] if samples is None else samples,
       vartype="BINARY",
@@ -54,7 +73,7 @@ def test_run_returns_score_for_solution_object() -> None:
     energies=[0.0],
   ))
 
-  assert score.apsp_sum == 9.0
+  assert score.apsp_sum == 1.5
   assert score.strong_connect_rate == 1.0
   assert score.flow_score == 0.0
   assert score.sample_score == 0.0
@@ -99,6 +118,20 @@ def test_eval_strong_connect_rate_counts_sample_occurrences() -> None:
   )
 
   assert evaluator.eval_strong_connect_rate(solution) == pytest.approx(2 / 3)
+
+
+def test_eval_strong_connect_rate_uses_solution_edges_when_samples_empty() -> None:
+  evaluator = Evaluator()
+
+  solution = _build_solution(
+    edges=[
+      Edge(1, 2, 1, True),
+      Edge(2, 1, 1, True),
+    ],
+    directed_edges={(1, 2), (2, 1)},
+  )
+
+  assert evaluator.eval_strong_connect_rate(solution) == 1.0
 
 
 def test_eval_sample_score_returns_minimum_energy() -> None:

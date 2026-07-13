@@ -24,19 +24,20 @@ def safe_lookup(sample, var_name: str) -> int:
 
 def process_solution(
     best_sample: dict[str, int], canonical_edges: list[Edge]
-) -> set[tuple[int, int]]:
+) -> dict[int, tuple[int, int]]:
   """
-  Processes the best sample from the solver into a list of directed edge tuples.
+  Processes the best sample from the solver into directed edges keyed by edge id.
 
   Returns:
-      list[tuple[int, int]]: Directed edges represented as (u, v) integer node ID pairs.
+      dict[int, tuple[int, int]]: edge id → directed (u, v) integer node ID pair.
+      평행 간선은 독립 id 라 뭉개지지 않는다.
   """
-  final_edges = set()
+  final_edges: dict[int, tuple[int, int]] = {}
   for edge in canonical_edges:
 
     # handle predefined edges
     if edge.directed:
-      final_edges.add(edge.vertices)
+      final_edges[edge.id] = edge.vertices
       continue
 
     # handle optimized edges
@@ -44,9 +45,9 @@ def process_solution(
     bit = safe_lookup(best_sample, var_name)
 
     if bit == 1:
-      final_edges.add((edge.vertices[1], edge.vertices[0]))
+      final_edges[edge.id] = (edge.vertices[1], edge.vertices[0])
     else:
-      final_edges.add((edge.vertices[0], edge.vertices[1]))
+      final_edges[edge.id] = (edge.vertices[0], edge.vertices[1])
 
   return final_edges
 
@@ -55,13 +56,13 @@ def select_best_sample(
     sample_set: SampleSet,
     canonical_edges: list[Edge],
     ranker: SolutionRankerProtocol,
-) -> set[tuple[int, int]]:
+) -> dict[int, tuple[int, int]]:
   if len(sample_set) == 0:
     return process_solution({}, canonical_edges)
 
-  def get_effective_score(tuples: set[tuple[int, int]]):
+  def get_effective_score(edges: dict[int, tuple[int, int]]):
     solution = Solution(
-      edges=tuples,
+      edges=edges,
       graph=Graph(edges=canonical_edges),
       sample_set=sample_set,
       score=None,

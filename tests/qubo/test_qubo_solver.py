@@ -76,7 +76,7 @@ def test_run_returns_directed_solution_without_sampling_when_no_undirected_edges
 
   solution = solver.run(qubo, graph)
 
-  assert solution.edges == {(2, 1), (2, 3)}
+  assert set(solution.edges.values()) == {(2, 1), (2, 3)}
   assert solution.graph is graph
   assert len(solution.sample_set) == 0
 
@@ -88,7 +88,7 @@ def test_run_returns_default_solution_without_sampling_when_qubo_has_no_variable
 
   solution = solver.run(qubo, graph)
 
-  assert solution.edges == {(1, 2)}
+  assert set(solution.edges.values()) == {(1, 2)}
   assert solution.graph is graph
   assert len(solution.sample_set) == 1
   assert list(solution.sample_set.samples()) == [{}]
@@ -103,7 +103,7 @@ def test_run_returns_default_solution_when_sampler_returns_empty_sample_set() ->
 
   solution = solver.run(qubo, graph)
 
-  assert solution.edges == {(1, 2)}
+  assert set(solution.edges.values()) == {(1, 2)}
   assert solution.graph is graph
   assert len(solution.sample_set) == 1
   assert list(solution.sample_set.samples()) == [{}]
@@ -117,7 +117,7 @@ def test_select_best_sample_returns_default_solution_for_empty_sample_set() -> N
 
   solution_edges = select_best_sample(sample_set, edges, ApspSumRanker())
 
-  assert solution_edges == {(1, 2), (2, 3)}
+  assert set(solution_edges.values()) == {(1, 2), (2, 3)}
 
 
 def test_run_with_embedding_returns_directed_solution_without_sampling_when_no_undirected_edges() -> None:
@@ -127,7 +127,7 @@ def test_run_with_embedding_returns_directed_solution_without_sampling_when_no_u
 
   solution = solver.run_with_embedding(qubo, graph, embedding={})
 
-  assert solution.edges == {(1, 2)}
+  assert set(solution.edges.values()) == {(1, 2)}
   assert solution.graph is graph
   assert len(solution.sample_set) == 0
 
@@ -139,7 +139,7 @@ def test_run_with_embedding_returns_default_solution_when_qubo_has_no_variables(
 
   solution = solver.run_with_embedding(qubo, graph, embedding={})
 
-  assert solution.edges == {(1, 2)}
+  assert set(solution.edges.values()) == {(1, 2)}
   assert solution.graph is graph
   assert len(solution.sample_set) == 1
   assert list(solution.sample_set.samples()) == [{}]
@@ -173,7 +173,7 @@ def test_run_with_embedding_returns_default_solution_when_sampler_returns_empty_
 
   solution = solver.run_with_embedding(qubo, graph, embedding={"e_1_2": ["q1"]})
 
-  assert solution.edges == {(1, 2)}
+  assert set(solution.edges.values()) == {(1, 2)}
   assert solution.graph is graph
   assert len(solution.sample_set) == 1
   assert list(solution.sample_set.samples()) == [{}]
@@ -200,7 +200,7 @@ def test_run_with_embedding_stores_fixed_embedding_composite(monkeypatch) -> Non
   monkeypatch.setattr(
     qubo_solver_module,
     "select_best_sample",
-    lambda sample_set, edges, ranker: {(1, 2)},
+    lambda sample_set, edges, ranker: {0: (1, 2)},
   )
   solver = QuboSolver(
     ranker=ApspSumRanker(),
@@ -216,7 +216,7 @@ def test_run_with_embedding_stores_fixed_embedding_composite(monkeypatch) -> Non
   assert solver.fixed_sampler.child is child_sampler
   assert solver.fixed_sampler.embedding == embedding
   assert child_sampler.calls == 1
-  assert solution.edges == {(1, 2)}
+  assert set(solution.edges.values()) == {(1, 2)}
 
 
 def test_fixed_embedding_target_graph_uses_child_sampler_topology() -> None:

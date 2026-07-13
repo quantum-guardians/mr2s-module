@@ -2,20 +2,8 @@ from dimod import BinaryPolynomial, Vartype
 import networkx as nx
 
 from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, Solution
-from mr2s_module.domain.orientation_result import OrientedEdges
 from mr2s_module.solver import QuboMR2SSolver
 from mr2s_module.util import empty_binary_sample_set
-
-
-class StubEdgeOrienter:
-    def __init__(self, predefined_edges: set[Edge]) -> None:
-        self.predefined_edges = predefined_edges
-        self.calls = 0
-
-    def run(self, graph: Graph) -> OrientedEdges:
-        self.calls += 1
-        return OrientedEdges(edges=list(self.predefined_edges))
-
 
 
 class StubPolyGenerator:
@@ -38,7 +26,7 @@ class StubQuboSolver:
         self.received_qubo = qubo
         self.received_graph = graph
         return Solution(
-            edges={(edge.vertices[0], edge.vertices[1]) for edge in graph.edges.values()},
+            edges={edge.id: edge.vertices for edge in graph.edges.values()},
             graph=graph,
             sample_set=empty_binary_sample_set(),
             score=None,
@@ -49,7 +37,7 @@ class StubQuboSolver:
         self.received_graph = graph
         self.received_embedding = embedding
         return Solution(
-            edges={(edge.vertices[0], edge.vertices[1]) for edge in graph.edges.values()},
+            edges={edge.id: edge.vertices for edge in graph.edges.values()},
             graph=graph,
             sample_set=empty_binary_sample_set(),
             score=None,
@@ -68,13 +56,12 @@ class StubEvaluator:
         return float(len(solution.edges))
 
 
-def test_run_skips_preprocessing_when_edge_orienter_is_none() -> None:
+def test_run_solves_and_evaluates() -> None:
     graph = Graph(edges=[Edge(1, 2, 1, False)])
     poly_generator = StubPolyGenerator()
     qubo_solver = StubQuboSolver()
     evaluator = StubEvaluator()
     solver = QuboMR2SSolver(
-        edge_orienter=None,
         qubo_solver=qubo_solver,
         evaluator=evaluator,
         poly_generators={poly_generator},
@@ -83,34 +70,10 @@ def test_run_skips_preprocessing_when_edge_orienter_is_none() -> None:
     result = solver.run(graph)
 
     assert result.score == 1.0
-    assert result.edges == {(1, 2)}
+    assert set(result.edges.values()) == {(1, 2)}
     assert poly_generator.seen_graphs == [graph]
     assert qubo_solver.received_graph is graph
-    assert graph.edges[frozenset({1, 2})].directed is False
-    assert evaluator.received_solution.score == 1.0
-
-
-def test_run_applies_preprocessing_when_edge_orienter_is_provided() -> None:
-    graph = Graph(edges=[Edge(1, 2, 1, False)])
-    predefined_edge = Edge(1, 2, 1, True)
-    edge_orienter = StubEdgeOrienter(predefined_edges={predefined_edge})
-    poly_generator = StubPolyGenerator()
-    qubo_solver = StubQuboSolver()
-    evaluator = StubEvaluator()
-    solver = QuboMR2SSolver(
-        edge_orienter=edge_orienter,
-        qubo_solver=qubo_solver,
-        evaluator=evaluator,
-        poly_generators={poly_generator},
-    )
-
-    result = solver.run(graph)
-
-    assert result.score == 1.0
-    assert result.edges == {(1, 2)}
-    assert edge_orienter.calls == 1
-    assert graph.edges == {frozenset({1, 2}): predefined_edge}
-    assert qubo_solver.received_graph is graph
+    assert next(iter(graph.edges.values())).directed is False
     assert evaluator.received_solution.score == 1.0
 
 
@@ -120,7 +83,6 @@ def test_run_with_embedding_passes_embedding_to_qubo_solver() -> None:
     qubo_solver = StubQuboSolver()
     evaluator = StubEvaluator()
     solver = QuboMR2SSolver(
-        edge_orienter=None,
         qubo_solver=qubo_solver,
         evaluator=evaluator,
         poly_generators={poly_generator},
@@ -136,7 +98,7 @@ def test_run_with_embedding_passes_embedding_to_qubo_solver() -> None:
     result = solver.run_with_embedding(graph, embedding_estimate)
 
     assert result.score == 1.0
-    assert result.edges == {(1, 2)}
+    assert set(result.edges.values()) == {(1, 2)}
     assert qubo_solver.received_graph is graph
     assert qubo_solver.received_embedding == {1: ["q1"], 2: ["q2"]}
 
@@ -146,7 +108,6 @@ def test_build_solve_context_uses_qubo_solver_target_graph() -> None:
     poly_generator = StubPolyGenerator()
     qubo_solver = StubQuboSolver()
     solver = QuboMR2SSolver(
-        edge_orienter=None,
         qubo_solver=qubo_solver,
         poly_generators={poly_generator},
     )
@@ -165,7 +126,6 @@ def test_run_with_context_uses_context_bqm_and_embedding() -> None:
     qubo_solver = StubQuboSolver()
     evaluator = StubEvaluator()
     solver = QuboMR2SSolver(
-        edge_orienter=None,
         qubo_solver=qubo_solver,
         evaluator=evaluator,
         poly_generators={poly_generator},

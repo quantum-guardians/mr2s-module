@@ -44,7 +44,7 @@ def test_create_sa_solver() -> None:
 
 def test_create_qubo_solver() -> None:
   solver = create_qubo_solver()
-  assert solver.edge_orienter is None
+  assert solver.qubo_solver is not None
 
 
 def test_create_qubo_sa_solver() -> None:

@@ -3,14 +3,16 @@ from dwave.samplers import SimulatedAnnealingSampler
 
 sampler = SimulatedAnnealingSampler()
 
-def get_indicator_function(i: int, j: int, weight: int) -> BinaryPolynomial:
+def get_indicator_function(i: int, j: int, edge_id: int, weight: int) -> BinaryPolynomial:
   if i == j:
     raise ValueError(f"i and j must be different, but both are {i}")
 
+  # 변수명은 edge id 기반(평행 간선마다 독립 변수). i<j 는 부호(방향) 결정용으로만 사용.
+  var = f'e_{edge_id}'
   if i < j:
-    return BinaryPolynomial({(): weight, (f'e_{i}_{j}', ): -weight}, Vartype.BINARY)
+    return BinaryPolynomial({(): weight, (var, ): -weight}, Vartype.BINARY)
   else:
-    return BinaryPolynomial({(f'e_{j}_{i}',): weight}, Vartype.BINARY)
+    return BinaryPolynomial({(var,): weight}, Vartype.BINARY)
 
 def map_binary_poly_to_bqm(polynomial: BinaryPolynomial):
   coeffs = [abs(v) for k, v in polynomial.items() if k != ()]

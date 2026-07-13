@@ -30,6 +30,13 @@ def test_t_join_basic_cases():
     assert directed_edges == []
 
 
+def test_t_join_raises_on_multigraph_input():
+    graph = graph_from_pairs([(0, 1), (0, 1), (1, 2)])
+
+    with pytest.raises(ValueError, match="multigraph"):
+        Tjoin().run(graph)
+
+
 def test_t_join_integration_with_real_solver():
     # 사각형 + 꼬리: 사각형 4개는 oriented, 꼬리 1개는 T-join 으로 빠짐.
     graph = graph_from_pairs([(0, 1), (1, 2), (2, 3), (3, 0), (3, 4)])
@@ -45,7 +52,7 @@ def test_t_join_integration_with_real_solver():
     assert isinstance(solution, DnCSolution)
     assert len(solution.edges) == 5
     # Cycle 이 결정한 방향은 solver 가 뒤집지 않음.
-    assert expected_directions.issubset(solution.edges)
+    assert expected_directions.issubset(set(solution.edges.values()))
 
 
 @pytest.mark.slow
@@ -72,7 +79,7 @@ def test_t_join_performance_and_apsp(num_points, remove_percent):
 
     evaluator = Evaluator()
     partial_sol = Solution(
-        edges={(e.vertices[0], e.vertices[1]) for e in directed_edges},
+        edges={e.id: e.vertices for e in directed_edges},
         graph=Graph(edges=directed_edges + remaining_edges),
         sample_set=empty_binary_sample_set(),
     )
@@ -91,4 +98,4 @@ def test_t_join_performance_and_apsp(num_points, remove_percent):
 
     assert final_apsp < float("inf")
     expected_directions = {e.vertices for e in graph.edges.values() if e.directed}
-    assert expected_directions.issubset(solution.edges)
+    assert expected_directions.issubset(set(solution.edges.values()))

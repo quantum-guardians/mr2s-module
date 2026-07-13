@@ -63,6 +63,7 @@ class SnowballFaceClusterer:
 
 @dataclass
 class KMeansFaceClusterer:
+    """표준 lloyd k-means"""
     max_iter: int = 100
     tolerance: float = 1e-6
 

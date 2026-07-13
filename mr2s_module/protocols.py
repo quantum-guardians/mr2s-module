@@ -40,6 +40,8 @@ class FaceCycleProtocol(Protocol):
 
 
 class EdgeOrientationProtocol(Protocol):
+    """결과의 각 Edge 는 입력 graph 의 edge id 를 유지해야 한다 (Edge.oriented 참고)."""
+
     def run(self, graph: Graph) -> OrientationResult: ...
 
 

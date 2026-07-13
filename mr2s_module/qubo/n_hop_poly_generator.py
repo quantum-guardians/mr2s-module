@@ -38,7 +38,7 @@ class NHopPolyGenerator:
 
       used_vertices.add(entry.vertex)
       step_poly = BinaryPolynomial({(): entry.weight}, Vartype.BINARY) \
-        if entry.directed else get_indicator_function(last_vertex, entry.vertex, entry.weight)
+        if entry.directed else get_indicator_function(last_vertex, entry.vertex, entry.edge_id, entry.weight)
       temp = self._get_n_hop_polynomial(n-1, entry.vertex, adj, used_vertices, step_poly)
       term_n = add_polys(term_n, temp)
       used_vertices.remove(entry.vertex)

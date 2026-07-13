@@ -1,0 +1,3 @@
+# Normalize all text files to LF in the repository.
+# Prevents CRLF drift from Windows/OneDrive editors.
+* text=auto eol=lf

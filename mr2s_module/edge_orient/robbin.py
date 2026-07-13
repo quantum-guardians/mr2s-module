@@ -1,6 +1,6 @@
 from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.orientation_result import OrientedEdges
-from mr2s_module.util import domain_graph_to_networkx, robbins_orient
+from mr2s_module.util import domain_graph_to_networkx_multi, robbins_orient
 
 import networkx as nx
 
@@ -12,10 +12,15 @@ class Robbin:
         if graph.is_empty():
             return OrientedEdges()
 
-        nx_graph = domain_graph_to_networkx(graph)
+        nx_graph = domain_graph_to_networkx_multi(graph)
 
         # 브릿지 존재 시 강한 방향성 불가능 → 방향 결정 포기.
-        if nx.has_bridges(nx_graph):
+        # 평행 copy 가 있는 쌍은 브릿지가 아니므로 simple 뷰 브릿지 중 다중도 1 만 진짜다.
+        simple_view = nx.Graph(nx_graph)
+        if any(
+            nx_graph.number_of_edges(u, v) == 1
+            for u, v in nx.bridges(simple_view)
+        ):
             return OrientedEdges()
 
         start_node = next(iter(graph.get_vertices()))

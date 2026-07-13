@@ -242,7 +242,7 @@ class QuboSolver:
 
   def _solution_from_directed_graph(self, graph: Graph) -> Solution:
     return Solution(
-      edges={edge.vertices for edge in graph.edges.values()},
+      edges={edge.id: edge.vertices for edge in graph.edges.values()},
       sample_set=empty_binary_sample_set(),
       graph=graph,
       score=None,
