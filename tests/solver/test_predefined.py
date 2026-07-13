@@ -63,7 +63,6 @@ def test_create_qubo_solver() -> None:
   assert isinstance(solver, ReductionMr2sSolver)
   assert solver.mr2s_solver.qubo_solver is not None
 
-
 def test_create_qubo_sa_solver() -> None:
   solver = create_qubo_sa_solver()
   assert isinstance(solver, ReductionMr2sSolver)
