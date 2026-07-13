@@ -6,6 +6,7 @@ from mr2s_module.solver.predefined import (
 )
 
 import pytest
+import networkx as nx
 import numpy as np
 import random
 
@@ -23,33 +24,53 @@ from mr2s_module.solver.predefined import (
   create_dnc_qubo_sa_solver,
   create_dnc_qubo_qa_solver,
 )
+from mr2s_module.reduction import ReductionMr2sSolver, SuperEdgeWeight
+from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver
 from tests.util.graph_fixtures import delaunay_graph
 
 
 def test_create_robbin_solver() -> None:
   solver = create_robbin_solver()
-  assert isinstance(solver, RobbinMR2SSolver)
+  assert isinstance(solver, ReductionMr2sSolver)
+  assert isinstance(solver.mr2s_solver, RobbinMR2SSolver)
+  assert solver.evaluator is not None
+
+  bare = create_robbin_solver(use_reduction=False)
+  assert isinstance(bare, RobbinMR2SSolver)
 
 
 def test_create_ils_solver() -> None:
   solver = create_ils_solver(max_iter=5)
-  assert isinstance(solver, IlsMR2SSolver)
+  assert isinstance(solver, ReductionMr2sSolver)
+  assert isinstance(solver.mr2s_solver, IlsMR2SSolver)
+
+  bare = create_ils_solver(max_iter=5, use_reduction=False)
+  assert isinstance(bare, IlsMR2SSolver)
 
 
 def test_create_sa_solver() -> None:
   solver = create_sa_solver(random_seed=42)
-  assert solver.random_seed == 42
-  assert solver.apsp_weight == 1.0
+  assert isinstance(solver, ReductionMr2sSolver)
+  assert solver.mr2s_solver.random_seed == 42
+  assert solver.mr2s_solver.apsp_weight == 1.0
+
+  bare = create_sa_solver(random_seed=42, use_reduction=False)
+  assert bare.random_seed == 42
 
 
 def test_create_qubo_solver() -> None:
   solver = create_qubo_solver()
-  assert solver.qubo_solver is not None
+  assert isinstance(solver, ReductionMr2sSolver)
+  assert solver.mr2s_solver.qubo_solver is not None
 
 
 def test_create_qubo_sa_solver() -> None:
   solver = create_qubo_sa_solver()
-  assert solver.qubo_solver is not None
+  assert isinstance(solver, ReductionMr2sSolver)
+  assert solver.mr2s_solver.qubo_solver is not None
+
+  bare = create_qubo_sa_solver(use_reduction=False)
+  assert bare.qubo_solver is not None
 
 
 def test_create_qubo_qa_solver(monkeypatch) -> None:
@@ -65,23 +86,46 @@ def test_create_qubo_qa_solver(monkeypatch) -> None:
   monkeypatch.setattr(qubo_solver_module, "EmbeddingComposite", FakeEmbeddingComposite)
 
   solver = create_qubo_qa_solver()
-  assert solver.qubo_solver is not None
+  assert isinstance(solver, ReductionMr2sSolver)
+  assert solver.mr2s_solver.qubo_solver is not None
 
 
 def test_create_dnc_sa_solver() -> None:
   solver = create_dnc_sa_solver(max_vertices=50, random_seed=42)
-  assert solver.graph_partition_strategy is not None
-  assert solver.graph_partition_strategy.max_vertices == 50
+  assert isinstance(solver, ReductionMr2sSolver)
+  assert solver.mr2s_solver.graph_partition_strategy is not None
+  assert solver.mr2s_solver.graph_partition_strategy.max_vertices == 50
 
 
 def test_create_dnc_qubo_solver() -> None:
   solver = create_dnc_qubo_solver()
-  assert solver.graph_partition_strategy is not None
+  assert isinstance(solver, ReductionMr2sSolver)
+  assert solver.mr2s_solver.graph_partition_strategy is not None
 
 
 def test_create_dnc_qubo_sa_solver() -> None:
   solver = create_dnc_qubo_sa_solver()
-  assert solver.graph_partition_strategy is not None
+  assert isinstance(solver, ReductionMr2sSolver)
+  assert isinstance(solver.mr2s_solver, DnCMr2sSolver)
+  assert solver.mr2s_solver.graph_partition_strategy is not None
+  assert solver.super_edge_weight == SuperEdgeWeight.HARMONIC
+
+  bare = create_dnc_qubo_sa_solver(use_reduction=False)
+  assert isinstance(bare, DnCMr2sSolver)
+
+
+def test_create_dnc_qubo_sa_solver_passes_target_graph_with_reduction() -> None:
+  # target_graph 는 QPU 하드웨어 토폴로지 — 문제 그래프 축약과 무관하므로
+  # use_reduction=True 에서도 그대로 배선된다.
+  hardware = nx.complete_graph(8)
+  solver = create_dnc_qubo_sa_solver(target_graph=hardware)
+  assert isinstance(solver, ReductionMr2sSolver)
+  assert solver.mr2s_solver.target_graph is hardware
+  assert solver.mr2s_solver.graph_partition_strategy.target_graph is hardware
+
+  bare = create_dnc_qubo_sa_solver(target_graph=hardware, use_reduction=False)
+  assert isinstance(bare, DnCMr2sSolver)
+  assert bare.target_graph is hardware
 
 
 def test_create_dnc_qubo_qa_solver(monkeypatch) -> None:
@@ -97,7 +141,8 @@ def test_create_dnc_qubo_qa_solver(monkeypatch) -> None:
   monkeypatch.setattr(qubo_solver_module, "EmbeddingComposite", FakeEmbeddingComposite)
 
   solver = create_dnc_qubo_qa_solver()
-  assert solver.graph_partition_strategy is not None
+  assert isinstance(solver, ReductionMr2sSolver)
+  assert solver.mr2s_solver.graph_partition_strategy is not None
 
 
 def test_vertex_count_partition_strategy_small_graph() -> None:
