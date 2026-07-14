@@ -48,7 +48,14 @@ class ReductionMr2sSolver:
     else:
       inner_solution = self.mr2s_solver.run(result.contracted_graph)
       lifted = lift_solution_edges(inner_solution.edges, result)
-      sample_set = inner_solution.sample_set
+      # 축약이 실제로 일어났으면 inner sample 의 변수(super edge)는 원본 체인 간선을
+      # 못 덮는다. 그 sample 을 물려주면 Evaluator 가 lifted 배향 대신 기본 정방향을
+      # 채점하므로, 축약이 있었으면 sample 을 버리고 edges 기준으로 채점하게 둔다.
+      sample_set = (
+        empty_binary_sample_set()
+        if result.has_chains
+        else inner_solution.sample_set
+      )
 
     solution = Solution(
       edges=lifted,

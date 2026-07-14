@@ -15,6 +15,7 @@ from mr2s_module.domain import (
 )
 import mr2s_module.solver.dnc_mr2s_solver as dnc_mr2s_solver
 import mr2s_module.solver.partition.embedding_aware as embedding_aware
+from mr2s_module.evaluator import Evaluator
 from mr2s_module.protocols import EvaluatorProtocol, QuboMatrix
 from mr2s_module.qubo import InvalidEmbeddingError
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver, DnCSolution
@@ -303,7 +304,10 @@ def test_merge_solutions_combines_solution_edges() -> None:
 
   assert set(merged.edges.values()) == {(1, 2), (2, 3), (4, 3)}
   assert merged.graph is graph
-  assert merged.sample_set is sample_set
+  # 병합 해는 자식 sample 을 물려받지 않는다. 자식 sample 의 변수는 부모 간선을
+  # 부분적으로만 덮어서 Evaluator 가 merged edges 대신 기본 정방향을 채점하게 된다.
+  assert merged.sample_set is not sample_set
+  assert len(merged.sample_set) == 0
   assert merged.score is None
 
 
@@ -372,42 +376,105 @@ def test_merge_solutions_selects_direction_that_reduces_flow_imbalance() -> None
   assert (3, 2) in merged.edges.values()
 
 
-def test_score_merged_solution_multiplies_child_strong_connect_rates() -> None:
-  graph = Graph(edges=[
+class RealEvaluatorMr2sSolver:
+  """Evaluator 실측값을 그대로 쓰는 stub — DnC 채점 경로 검증용."""
+
+  evaluator = Evaluator()
+
+  def run(self, graph: Graph) -> Solution:
+    raise NotImplementedError("RealEvaluatorMr2sSolver.run must not be called")
+
+  def build_bqm(self, graph: Graph) -> QuboMatrix:
+    raise NotImplementedError("RealEvaluatorMr2sSolver.build_bqm must not be called")
+
+
+def _child_solution(u: int, v: int, strong_connect_rate: float) -> Solution:
+  child_graph = Graph(edges=[Edge(u, v, 1, False)])
+  return Solution(
+    edges={_edge_id_for_endpoints(child_graph, u, v): (u, v)},
+    graph=child_graph,
+    sample_set=empty_binary_sample_set(),
+    score=Score(
+      apsp_sum=1.0,
+      strong_connect_rate=strong_connect_rate,
+      flow_score=0.0,
+    ),
+  )
+
+
+def test_score_merged_solution_measures_strong_connectivity_on_merged_orientation() -> None:
+  """병합 해의 strong_connect_rate 는 실측 전역 강연결이다 (자식 rate 의 곱이 아니다).
+
+  자식 rate 의 곱은 전역 강연결과 다른 값이다: 자식이 각자 강연결이어도 병합
+  결과가 강연결이 아닐 수 있고, 그 반대(아래 삼각형)도 가능하다.
+  """
+  # 경로 1→2→3: 자식은 각자 (단일 간선 그래프라) 강연결이지만 병합 결과는 아니다.
+  path_graph = Graph(edges=[Edge(1, 2, 1, False), Edge(2, 3, 1, False)])
+  path_merged = Solution(
+    edges={
+      _edge_id_for_endpoints(path_graph, 1, 2): (1, 2),
+      _edge_id_for_endpoints(path_graph, 2, 3): (2, 3),
+    },
+    graph=path_graph,
+    sample_set=empty_binary_sample_set(),
+  )
+  solver = DnCMr2sSolver(mr2s_solver=RealEvaluatorMr2sSolver())
+
+  path_score = solver.score_merged_solution(
+    path_merged,
+    [_child_solution(1, 2, 1.0), _child_solution(2, 3, 1.0)],
+  )
+
+  assert path_score.strong_connect_rate == 0.0
+
+  # 삼각형 1→2→3→1: 병합 결과는 강연결. 자식 rate 곱(0.5*0.5*0.5=0.125)과 무관하다.
+  cycle_graph = Graph(edges=[
     Edge(1, 2, 1, False),
     Edge(2, 3, 1, False),
+    Edge(3, 1, 1, False),
   ])
-  merged = Solution(
+  cycle_merged = Solution(
     edges={
-      _edge_id_for_endpoints(graph, 1, 2): (1, 2),
-      _edge_id_for_endpoints(graph, 2, 3): (2, 3),
+      _edge_id_for_endpoints(cycle_graph, 1, 2): (1, 2),
+      _edge_id_for_endpoints(cycle_graph, 2, 3): (2, 3),
+      _edge_id_for_endpoints(cycle_graph, 3, 1): (3, 1),
     },
+    graph=cycle_graph,
+    sample_set=empty_binary_sample_set(),
+  )
+
+  cycle_score = solver.score_merged_solution(
+    cycle_merged,
+    [
+      _child_solution(1, 2, 0.5),
+      _child_solution(2, 3, 0.5),
+      _child_solution(3, 1, 0.5),
+    ],
+  )
+
+  assert cycle_score.strong_connect_rate == 1.0
+
+
+def test_score_merged_solution_fills_missing_child_scores() -> None:
+  graph = Graph(edges=[Edge(1, 2, 1, False)])
+  merged = Solution(
+    edges={_edge_id_for_endpoints(graph, 1, 2): (1, 2)},
     graph=graph,
     sample_set=empty_binary_sample_set(),
   )
-  child_graph_a = Graph(edges=[Edge(1, 2, 1, False)])
-  child_graph_b = Graph(edges=[Edge(2, 3, 1, False)])
-  child_solutions = [
-    Solution(
-      edges={_edge_id_for_endpoints(child_graph_a, 1, 2): (1, 2)},
-      graph=child_graph_a,
-      sample_set=empty_binary_sample_set(),
-      score=Score(apsp_sum=1.0, strong_connect_rate=0.8, flow_score=0.0),
-    ),
-    Solution(
-      edges={_edge_id_for_endpoints(child_graph_b, 2, 3): (2, 3)},
-      graph=child_graph_b,
-      sample_set=empty_binary_sample_set(),
-      score=Score(apsp_sum=1.0, strong_connect_rate=0.5, flow_score=0.0),
-    ),
-  ]
+  child_graph = Graph(edges=[Edge(1, 2, 1, False)])
+  child = Solution(
+    edges={_edge_id_for_endpoints(child_graph, 1, 2): (1, 2)},
+    graph=child_graph,
+    sample_set=empty_binary_sample_set(),
+  )
   solver = DnCMr2sSolver(mr2s_solver=StubScoringMr2sSolver())
 
-  score = solver.score_merged_solution(merged, child_solutions)
+  score = solver.score_merged_solution(merged, [child])
 
   assert score.apsp_sum == 10.0
   assert score.flow_score == 2.0
-  assert score.strong_connect_rate == pytest.approx(0.4)
+  assert child.score is not None
 
 
 def test_subgraph_processes_must_be_positive() -> None:

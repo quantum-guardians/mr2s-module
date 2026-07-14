@@ -316,16 +316,13 @@ class DnCMr2sSolver:
       merged_edges[edge.id] = direction
       self._apply_flow_balance(direction, edge.weight, balance)
 
-    sample_set = (
-      solution_list[0].sample_set
-      if solution_list
-      else empty_binary_sample_set()
-    )
-
+    # 병합 해에는 대응하는 sample 이 없다. 자식 sample 을 물려주면 그 sample 의
+    # 변수는 부모 간선의 일부만 덮어서(나머지는 기본 정방향으로 읽힘) Evaluator 가
+    # merged_edges 가 아닌 엉뚱한 배향을 채점한다. reduction lift 와 같은 결정.
     merged_solution = Solution(
       edges=merged_edges,
       graph=graph,
-      sample_set=sample_set,
+      sample_set=empty_binary_sample_set(),
       score=None,
     )
     logger.info(
@@ -447,15 +444,15 @@ class DnCMr2sSolver:
       "DnC score merged solution started child_solutions=%d",
       len(child_solution_list),
     )
+    # strong_connect_rate 는 병합된 배향 위에서 Evaluator 가 실측한 값을 그대로 쓴다.
+    # (예전에는 자식 rate 의 곱으로 덮어썼다 — 전역 강연결과 다른 값이라 지표 의미가
+    # 오염됐다. 자식이 각자 강연결이어도 병합 결과는 강연결이 아닐 수 있고 그 반대도 된다.)
     score = self.mr2s_solver.evaluator.run(merged_solution)
-    strong_connect_rate = 1.0
 
     for child_solution in child_solution_list:
       if child_solution.score is None:
         child_solution.score = self.mr2s_solver.evaluator.run(child_solution)
-      strong_connect_rate *= child_solution.score.strong_connect_rate
 
-    score.strong_connect_rate = strong_connect_rate
     logger.info(
       "DnC score merged solution finished elapsed_ms=%.3f "
       "strong_connect_rate=%.6f",
