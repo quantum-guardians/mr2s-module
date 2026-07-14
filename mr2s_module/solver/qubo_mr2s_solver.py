@@ -1,4 +1,5 @@
-from dimod import BinaryPolynomial, Vartype, BinaryQuadraticModel
+from dimod import Vartype, BinaryQuadraticModel
+from dimod.higherorder.polynomial import BinaryPolynomial
 
 from mr2s_module.evaluator import ApspSumRanker, Evaluator
 from mr2s_module.domain import EmbeddingEstimate

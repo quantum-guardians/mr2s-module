@@ -11,6 +11,8 @@ from mr2s_module.util.sample_set import empty_binary_sample_set
 class _StubSolver:
   """받은 그래프의 모든 간선을 endpoints 순방향으로 배향하는 결정적 스텁."""
 
+  evaluator = Evaluator()
+
   def __init__(self) -> None:
     self.seen_graph: Graph | None = None
     self.call_count = 0

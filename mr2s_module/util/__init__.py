@@ -25,6 +25,7 @@ from mr2s_module.util.planar_graph import (
   inner_faces,
   is_edge_node,
   normalize_planar_input,
+  planar_position_map,
   polygon_area,
   select_outer_face,
 )
@@ -60,6 +61,7 @@ __all__ = [
   "inner_faces",
   "is_edge_node",
   "normalize_planar_input",
+  "planar_position_map",
   "polygon_area",
   "robbins_orient",
   "select_outer_face",

@@ -1,6 +1,9 @@
+from typing import cast
+
 import pytest
 import networkx as nx
 
+from mr2s_module.cycle import FaceClusterPartition
 from mr2s_module.domain import (
   Edge,
   EmbeddableGraphPartition,
@@ -12,8 +15,10 @@ from mr2s_module.domain import (
 )
 import mr2s_module.solver.dnc_mr2s_solver as dnc_mr2s_solver
 import mr2s_module.solver.partition.embedding_aware as embedding_aware
+from mr2s_module.protocols import EvaluatorProtocol, QuboMatrix
 from mr2s_module.qubo import InvalidEmbeddingError
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver, DnCSolution
+from mr2s_module.solver.process_runner import ProcessStartMethod
 from mr2s_module.solver.solve_context import QuboSolveContext
 from mr2s_module.solver.partition import (
   DegeneracyPruningFaceCyclePartitionStrategy,
@@ -37,12 +42,39 @@ def _edge_for_endpoints(graph: Graph, u: int, v: int) -> Edge:
   return graph.edges[_edge_id_for_endpoints(graph, u, v)]
 
 
+class StubEvaluator:
+  def run(self, solution: Solution) -> Score:
+    if solution.score is not None:
+      return solution.score
+    return Score(apsp_sum=10.0, strong_connect_rate=0.0, flow_score=2.0)
+
+
 class StubMr2sSolver:
-  def build_bqm(self, graph: Graph):
-    return StubBqm(
+  evaluator = StubEvaluator()
+
+  def build_bqm(self, graph: Graph) -> QuboMatrix:
+    # StubBqm 은 dimod BQM 의 variables/edges 표면만 흉내내는 테스트 대역이다.
+    return cast(QuboMatrix, StubBqm(
       variables=sorted(graph.get_vertices()),
       edges=list(graph.edges.values()),
-    )
+    ))
+
+  def run(self, graph: Graph) -> Solution:
+    raise NotImplementedError("StubMr2sSolver.run must not be called")
+
+
+class UnusedMr2sSolver:
+  """mr2s_solver 가 사용되지 않는 경로를 증명하는 stub — 모든 접근이 실패한다."""
+
+  @property
+  def evaluator(self) -> EvaluatorProtocol:
+    raise NotImplementedError("mr2s_solver must not be used")
+
+  def run(self, graph: Graph) -> Solution:
+    raise NotImplementedError("mr2s_solver must not be used")
+
+  def build_bqm(self, graph: Graph) -> QuboMatrix:
+    raise NotImplementedError("mr2s_solver must not be used")
 
 
 class StubBqm:
@@ -52,11 +84,16 @@ class StubBqm:
 
 
 class StubBqmMr2sSolver:
+  evaluator = StubEvaluator()
+
   def __init__(self, bqm: StubBqm) -> None:
     self._bqm = bqm
 
-  def build_bqm(self, graph: Graph):
-    return self._bqm
+  def build_bqm(self, graph: Graph) -> QuboMatrix:
+    return cast(QuboMatrix, self._bqm)
+
+  def run(self, graph: Graph) -> Solution:
+    raise NotImplementedError("StubBqmMr2sSolver.run must not be called")
 
 
 class StubFaceCycle:
@@ -69,15 +106,11 @@ class StubFaceCycle:
     self.remaining_edges = remaining_edges or []
     self.target_k = 2
 
-  def run(self, graph: Graph):
-    return type(
-      "Partition",
-      (),
-      {
-        "sub_graphs": self.sub_graphs,
-        "remaining_edges": self.remaining_edges,
-      },
-    )()
+  def run(self, graph: Graph) -> GraphPartitionResult:
+    return GraphPartitionResult(
+      sub_graphs=self.sub_graphs,
+      remaining_edges=self.remaining_edges,
+    )
 
 
 class StubPartitionStrategy:
@@ -114,15 +147,14 @@ class TargetKFaceCycle:
     )
 
 
-class StubEvaluator:
-  def run(self, solution: Solution) -> Score:
-    if solution.score is not None:
-      return solution.score
-    return Score(apsp_sum=10.0, strong_connect_rate=0.0, flow_score=2.0)
-
-
 class StubScoringMr2sSolver:
   evaluator = StubEvaluator()
+
+  def run(self, graph: Graph) -> Solution:
+    raise NotImplementedError("StubScoringMr2sSolver.run must not be called")
+
+  def build_bqm(self, graph: Graph) -> QuboMatrix:
+    raise NotImplementedError("StubScoringMr2sSolver.build_bqm must not be called")
 
 
 class StubRunningMr2sSolver:
@@ -131,11 +163,11 @@ class StubRunningMr2sSolver:
   def __init__(self) -> None:
     self.run_graphs: list[Graph] = []
 
-  def build_bqm(self, graph: Graph):
-    return StubBqm(
+  def build_bqm(self, graph: Graph) -> QuboMatrix:
+    return cast(QuboMatrix, StubBqm(
       variables=sorted(graph.get_vertices()),
       edges=list(graph.edges.values()),
-    )
+    ))
 
   def run(self, graph: Graph) -> Solution:
     self.run_graphs.append(graph)
@@ -226,7 +258,7 @@ def _embedding_aware_dnc_solver(
   target_graph = target_graph or nx.path_graph(100)
   return DnCMr2sSolver(
     mr2s_solver=mr2s_solver,
-    face_cycle=face_cycle,
+    face_cycle=cast(FaceClusterPartition, face_cycle),
     target_graph=target_graph,
     graph_partition_strategy=EmbeddingAwareFaceCyclePartitionStrategy(
       mr2s_solver=mr2s_solver,
@@ -245,7 +277,7 @@ def test_merge_solutions_combines_solution_edges() -> None:
     Edge(4, 1, 1, False),
   ])
   sample_set = empty_binary_sample_set()
-  solver = DnCMr2sSolver(mr2s_solver=object())
+  solver = DnCMr2sSolver(mr2s_solver=UnusedMr2sSolver())
 
   merged = solver.merge_solutions(
     solutions=[
@@ -280,7 +312,7 @@ def test_merge_solutions_keeps_one_direction_per_input_edge() -> None:
     Edge(1, 2, 1, False),
     Edge(2, 3, 1, False),
   ])
-  solver = DnCMr2sSolver(mr2s_solver=object())
+  solver = DnCMr2sSolver(mr2s_solver=UnusedMr2sSolver())
 
   merged = solver.merge_solutions(
     solutions=[
@@ -315,7 +347,7 @@ def test_merge_solutions_selects_direction_that_reduces_flow_imbalance() -> None
     Edge(1, 3, 2, False),
     Edge(2, 3, 1, False),
   ])
-  solver = DnCMr2sSolver(mr2s_solver=object())
+  solver = DnCMr2sSolver(mr2s_solver=UnusedMr2sSolver())
 
   merged = solver.merge_solutions(
     solutions=[
@@ -346,20 +378,25 @@ def test_score_merged_solution_multiplies_child_strong_connect_rates() -> None:
     Edge(2, 3, 1, False),
   ])
   merged = Solution(
-    edges={(1, 2), (2, 3)},
+    edges={
+      _edge_id_for_endpoints(graph, 1, 2): (1, 2),
+      _edge_id_for_endpoints(graph, 2, 3): (2, 3),
+    },
     graph=graph,
     sample_set=empty_binary_sample_set(),
   )
+  child_graph_a = Graph(edges=[Edge(1, 2, 1, False)])
+  child_graph_b = Graph(edges=[Edge(2, 3, 1, False)])
   child_solutions = [
     Solution(
-      edges={(1, 2)},
-      graph=Graph(edges=[Edge(1, 2, 1, False)]),
+      edges={_edge_id_for_endpoints(child_graph_a, 1, 2): (1, 2)},
+      graph=child_graph_a,
       sample_set=empty_binary_sample_set(),
       score=Score(apsp_sum=1.0, strong_connect_rate=0.8, flow_score=0.0),
     ),
     Solution(
-      edges={(2, 3)},
-      graph=Graph(edges=[Edge(2, 3, 1, False)]),
+      edges={_edge_id_for_endpoints(child_graph_b, 2, 3): (2, 3)},
+      graph=child_graph_b,
       sample_set=empty_binary_sample_set(),
       score=Score(apsp_sum=1.0, strong_connect_rate=0.5, flow_score=0.0),
     ),
@@ -382,7 +419,7 @@ def test_subgraph_start_method_must_be_spawn_or_fork() -> None:
   with pytest.raises(ValueError, match="subgraph_start_method"):
     DnCMr2sSolver(
       mr2s_solver=StubMr2sSolver(),
-      subgraph_start_method="forkserver",
+      subgraph_start_method=cast(ProcessStartMethod, "forkserver"),
     )
 
 
@@ -439,10 +476,10 @@ def test_solve_subgraphs_passes_configured_start_method_to_process_runner(
 ) -> None:
   graph_a = Graph(edges=[Edge(1, 2, 1, False)])
   graph_b = Graph(edges=[Edge(3, 4, 1, False)])
-  start_methods: list[str] = []
+  start_methods: list[str | None] = []
 
   class FakeProcessRunner:
-    def __init__(self, max_workers: int, start_method=None) -> None:
+    def __init__(self, max_workers: int, start_method: str | None = None) -> None:
       start_methods.append(start_method)
 
     def map(self, func, iterable):
@@ -991,10 +1028,10 @@ def test_divide_graph_uses_mutated_face_cycle() -> None:
 
   solver = DnCMr2sSolver(
     mr2s_solver=StubMr2sSolver(),
-    face_cycle=StubFaceCycle(sub_graphs=[old_child]),
+    face_cycle=cast(FaceClusterPartition, StubFaceCycle(sub_graphs=[old_child])),
     target_graph=nx.path_graph(2),
   )
-  solver.face_cycle = StubFaceCycle(sub_graphs=[new_child])
+  solver.face_cycle = cast(FaceClusterPartition, StubFaceCycle(sub_graphs=[new_child]))
 
   assert solver.divide_graph(graph) == [new_child]
 

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import networkx as nx
-from collections.abc import Hashable
+from collections.abc import Hashable, Iterable, Mapping, Sequence
+from typing import TypeVar, cast
+
+from typing_extensions import TypeIs
 
 from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
@@ -11,10 +14,13 @@ EdgeKey = frozenset[int]
 EdgeNode = tuple[str, int]
 SubdivisionNode = int | EdgeNode
 EdgeStep = tuple[int, int, int]
+Point = Sequence[float]
+PositionMap = Mapping[Hashable, Point]
 _EDGE_NODE_KIND = "edge"
+_FaceKeyT = TypeVar("_FaceKeyT", bound=Hashable)
 
 
-def is_edge_node(node: Hashable) -> bool:
+def is_edge_node(node: Hashable) -> TypeIs[EdgeNode]:
   """Return True when node is a synthetic domain-edge node."""
   return (
     isinstance(node, tuple)
@@ -113,13 +119,15 @@ def normalize_planar_input(
   is_planar, embedding = nx.check_planarity(nx_graph)
   if not is_planar:
     raise ValueError("graph must be planar")
-  return nx_graph, embedding
+  return nx_graph, cast(nx.PlanarEmbedding, embedding)
 
 
 def check_planar_embedding(graph: nx.Graph) -> tuple[bool, nx.PlanarEmbedding | None]:
   """Check planarity and return None for the embedding on failure."""
   is_planar, embedding = nx.check_planarity(graph)
-  return is_planar, embedding if is_planar else None
+  if not is_planar:
+    return is_planar, None
+  return is_planar, cast(nx.PlanarEmbedding, embedding)
 
 
 def enumerate_faces(
@@ -133,9 +141,10 @@ def enumerate_faces(
   if isinstance(graph_or_embedding, nx.PlanarEmbedding):
     embedding = graph_or_embedding
   else:
-    is_planar, embedding = nx.check_planarity(graph_or_embedding)
+    is_planar, checked_embedding = nx.check_planarity(graph_or_embedding)
     if not is_planar:
       return []
+    embedding = cast(nx.PlanarEmbedding, checked_embedding)
 
   faces: list[list[SubdivisionNode]] = []
   visited: set[tuple[SubdivisionNode, SubdivisionNode]] = set()
@@ -171,7 +180,15 @@ def face_edges(face: list[int] | tuple[int, ...]) -> set[EdgeKey]:
   }
 
 
-def polygon_area(face: list[Hashable], pos: dict[Hashable, object]) -> float:
+def planar_position_map(graph: nx.Graph) -> PositionMap:
+  """planar_layout 좌표. 스텁은 값을 ndarray 로 주지만 소비자는 (x, y) 언패킹만 한다."""
+  return cast(PositionMap, nx.planar_layout(graph))
+
+
+def polygon_area(
+    face: Sequence[Hashable],
+    pos: PositionMap,
+) -> float:
   """Return signed polygon area for a face under the supplied 2D positions."""
   area = 0.0
   for index, vertex in enumerate(face):
@@ -182,14 +199,14 @@ def polygon_area(face: list[Hashable], pos: dict[Hashable, object]) -> float:
   return area / 2.0
 
 
-def select_outer_face(faces: list[list[int]], graph: nx.Graph) -> int:
+def select_outer_face(faces: list[list[SubdivisionNode]], graph: nx.Graph) -> int:
   """Select the outer face index using planar_layout area as a stable fallback.
 
   The largest absolute polygon area is treated as the unbounded face. If layout
   generation fails, the face with the most unique vertices is used instead.
   """
   try:
-    pos = nx.planar_layout(graph)
+    pos = planar_position_map(graph)
   except nx.NetworkXException:
     return max(range(len(faces)), key=lambda index: len(set(faces[index])))
   return max(
@@ -200,8 +217,8 @@ def select_outer_face(faces: list[list[int]], graph: nx.Graph) -> int:
 
 def inner_faces(
     graph: nx.Graph | Graph,
-    pos: dict[int, object] | None = None,
-) -> list[list[int]]:
+    pos: PositionMap | None = None,
+) -> list[list[SubdivisionNode]]:
   """Enumerate all bounded faces for a NetworkX graph or project Graph.
 
   Pass original drawing positions when visualization needs the outer face to be
@@ -249,7 +266,7 @@ def build_edge_id_face_edges_map(
 
 
 def build_dual_base(
-    face_edges_map: dict[Hashable, list[int]],
+    face_edges_map: Mapping[_FaceKeyT, list[int]],
 ) -> nx.Graph:
   """Build the face adjacency graph from a face-edge incidence map."""
   dual = nx.Graph()
@@ -266,7 +283,11 @@ def clone_edge(edge: Edge) -> Edge:
 
 def networkx_to_domain_graph(graph: nx.Graph, *, weight: int = 1) -> Graph:
   """Convert a NetworkX graph to the project Graph model."""
+  edge_data = cast(
+    Iterable[tuple[int, int, Mapping[str, float]]],
+    graph.edges(data=True),
+  )
   return Graph(edges=[
     Edge(u, v, int(data.get("weight", weight)), False)
-    for u, v, data in graph.edges(data=True)
+    for u, v, data in edge_data
   ])

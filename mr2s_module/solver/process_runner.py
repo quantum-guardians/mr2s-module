@@ -1,10 +1,14 @@
 from dataclasses import dataclass
 import multiprocessing
+from multiprocessing.process import BaseProcess
 import os
 import queue
 import signal
 import sys
-from typing import Callable, Iterable, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Callable, Iterable, Literal, TypeVar, cast
+
+if TYPE_CHECKING:
+  from multiprocessing.context import ForkContext, SpawnContext
 
 
 ProcessStartMethod = Literal["spawn", "fork"]
@@ -41,13 +45,16 @@ def _prepare_child_process_group() -> None:
       pass
 
 
-def _terminate_process_tree(process: multiprocessing.Process) -> None:
+def _terminate_process_tree(process: BaseProcess) -> None:
   if not process.is_alive():
     return
 
   if os.name == "posix":
+    pid = process.pid
+    # start() 이후에만 호출되므로 pid 는 항상 설정되어 있다.
+    assert pid is not None
     try:
-      os.killpg(process.pid, signal.SIGTERM)
+      os.killpg(pid, signal.SIGTERM)
       return
     except (AttributeError, ProcessLookupError, PermissionError):
       pass
@@ -91,11 +98,16 @@ class ProcessRunner:
     if not item_list:
       return []
 
-    context = multiprocessing.get_context(self._resolved_start_method())
+    # 스텁의 get_context 는 Literal 유니언 인자에서 BaseContext 로 넓혀지지만
+    # 실제 반환형은 start method 별 구체 컨텍스트다 (stub limitation).
+    context = cast(
+      "SpawnContext | ForkContext",
+      multiprocessing.get_context(self._resolved_start_method()),
+    )
     result_queue = context.Queue()
     results: list[_R | None] = [None] * len(item_list)
     pending = iter(enumerate(item_list))
-    active: dict[int, multiprocessing.Process] = {}
+    active: dict[int, BaseProcess] = {}
     completed = 0
 
     def start_available_processes() -> None:

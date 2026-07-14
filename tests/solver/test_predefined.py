@@ -26,6 +26,11 @@ from mr2s_module.solver.predefined import (
 )
 from mr2s_module.reduction import ReductionMr2sSolver, SuperEdgeWeight
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver
+from mr2s_module.solver.partition.degeneracy_pruning import (
+  DegeneracyPruningFaceCyclePartitionStrategy,
+)
+from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
+from mr2s_module.solver.sa_mr2s_solver import SAMR2SSolver
 from tests.util.graph_fixtures import delaunay_graph
 
 
@@ -51,24 +56,29 @@ def test_create_ils_solver() -> None:
 def test_create_sa_solver() -> None:
   solver = create_sa_solver(random_seed=42)
   assert isinstance(solver, ReductionMr2sSolver)
+  assert isinstance(solver.mr2s_solver, SAMR2SSolver)
   assert solver.mr2s_solver.random_seed == 42
   assert solver.mr2s_solver.apsp_weight == 1.0
 
   bare = create_sa_solver(random_seed=42, use_reduction=False)
+  assert isinstance(bare, SAMR2SSolver)
   assert bare.random_seed == 42
 
 
 def test_create_qubo_solver() -> None:
   solver = create_qubo_solver()
   assert isinstance(solver, ReductionMr2sSolver)
+  assert isinstance(solver.mr2s_solver, QuboMR2SSolver)
   assert solver.mr2s_solver.qubo_solver is not None
 
 def test_create_qubo_sa_solver() -> None:
   solver = create_qubo_sa_solver()
   assert isinstance(solver, ReductionMr2sSolver)
+  assert isinstance(solver.mr2s_solver, QuboMR2SSolver)
   assert solver.mr2s_solver.qubo_solver is not None
 
   bare = create_qubo_sa_solver(use_reduction=False)
+  assert isinstance(bare, QuboMR2SSolver)
   assert bare.qubo_solver is not None
 
 
@@ -86,6 +96,7 @@ def test_create_qubo_qa_solver(monkeypatch) -> None:
 
   solver = create_qubo_qa_solver()
   assert isinstance(solver, ReductionMr2sSolver)
+  assert isinstance(solver.mr2s_solver, QuboMR2SSolver)
   assert solver.mr2s_solver.qubo_solver is not None
 
 

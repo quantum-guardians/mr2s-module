@@ -1,24 +1,27 @@
 from collections import defaultdict
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import cast
 
 from mr2s_module.domain.adj_entry import AdjEntry
 from mr2s_module.domain.edge import Edge
 
 
-@dataclass
+@dataclass(init=False)
 class Graph:
-  edges: dict[int, Edge] = field(default_factory=dict)
+  edges: dict[int, Edge]
 
-  def __post_init__(self):
-    if isinstance(self.edges, dict):
-      return
-    if isinstance(self.edges, Iterable) and not isinstance(self.edges, str):
-      self.edges = {edge.id: edge for edge in self.edges}
-      return
-    raise TypeError(
-      f"Graph.edges must be a dict or an iterable of Edge, got {type(self.edges)!r}"
-    )
+  def __init__(self, edges: dict[int, Edge] | Iterable[Edge] | None = None):
+    if edges is None:
+      self.edges = {}
+    elif isinstance(edges, dict):
+      self.edges = cast(dict[int, Edge], edges)
+    elif isinstance(edges, Iterable) and not isinstance(edges, str):
+      self.edges = {edge.id: edge for edge in edges}
+    else:
+      raise TypeError(
+        f"Graph.edges must be a dict or an iterable of Edge, got {type(edges)!r}"
+      )
 
   def define_edge_direction(self, predefined_edges: Iterable[Edge]):
     """외부 orienter 결과를 id 로 찾아 방향을 in-place 로 박는다."""

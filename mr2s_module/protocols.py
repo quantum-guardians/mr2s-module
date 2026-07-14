@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, runtime_checkable
 
 from dimod import BinaryQuadraticModel
 from dimod.higherorder.polynomial import BinaryPolynomial
@@ -70,6 +70,17 @@ class Mr2sSolverProtocol(Protocol):
     @property
     def evaluator(self) -> EvaluatorProtocol: ...
     def run(self, graph: Graph) -> Solution: ...
+
+
+@runtime_checkable
+class QuboBackedMr2sSolverProtocol(Mr2sSolverProtocol, Protocol):
+    """QUBO 생성이 가능한 solver — 임베딩 기반 partition 전략이 요구하는 최소 표면.
+
+    DnC 본체는 `run`/`evaluator` 만 쓰므로 이 프로토콜을 요구하지 않는다 (SA inner
+    solver 도 허용). `build_bqm` 을 실제로 호출하는 전략에 넘기는 지점에서만 검사한다.
+    """
+
+    def build_bqm(self, graph: Graph) -> QuboMatrix: ...
 
 
 

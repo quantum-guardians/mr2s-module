@@ -1,37 +1,38 @@
-from dataclasses import dataclass, field
 import logging
+from collections.abc import Iterable
+from dataclasses import dataclass, field
 from time import perf_counter
-from typing import Any, Iterable
+from typing import Any
 
-import networkx as nx
 from dimod import SampleSet
+import networkx as nx
 
 from mr2s_module.cycle import FaceClusterPartition
 from mr2s_module.cycle.face_clusterer import KMeansFaceClusterer
 from mr2s_module.domain import (
-  EmbeddableGraphPartition,
-  EmbeddingEstimate,
-  Graph,
-  GraphPartitionResult,
-  Score,
-  Solution,
+    EmbeddableGraphPartition,
+    EmbeddingEstimate,
+    Graph,
+    GraphPartitionResult,
+    Score,
+    Solution,
 )
 from mr2s_module.protocols import (
-  DnCGraphPartitionStrategyProtocol,
-  EvaluatorProtocol,
-  Mr2sSolverProtocol,
+    DnCGraphPartitionStrategyProtocol,
+    EvaluatorProtocol,
+    Mr2sSolverProtocol,
+    QuboBackedMr2sSolverProtocol,
 )
 from mr2s_module.qubo import InvalidEmbeddingError
 from mr2s_module.solver.partition import (
-  DegeneracyPruningFaceCyclePartitionStrategy,
-  EmbeddingAwareFaceCyclePartitionStrategy,
+    DegeneracyPruningFaceCyclePartitionStrategy,
+    EmbeddingAwareFaceCyclePartitionStrategy,
 )
 from mr2s_module.solver.process_runner import (
-  ProcessRunner,
-  ProcessStartMethod,
-  validate_process_start_method,
+    ProcessRunner,
+    ProcessStartMethod,
+    validate_process_start_method,
 )
-from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
 from mr2s_module.solver.solve_context import QuboSolveContext
 from mr2s_module.util import empty_binary_sample_set
 
@@ -53,7 +54,7 @@ def _graph_log_context(graph: Graph) -> dict[str, int]:
 
 def _run_subgraph_solution(
     args: tuple[
-      QuboMR2SSolver,
+      Mr2sSolverProtocol,
       Graph,
       EmbeddingEstimate | None,
       QuboSolveContext | None,
@@ -71,7 +72,7 @@ def _run_subgraph_solution(
 
 
 def _solve_with_reused_embedding(
-    mr2s_solver: QuboMR2SSolver,
+    mr2s_solver: Mr2sSolverProtocol,
     graph: Graph,
     embedding_estimate: EmbeddingEstimate | None,
 ) -> tuple[Solution, bool] | None:
@@ -89,7 +90,7 @@ def _solve_with_reused_embedding(
 
 
 def _solve_with_reused_context(
-    mr2s_solver: QuboMR2SSolver,
+    mr2s_solver: Mr2sSolverProtocol,
     solve_context: QuboSolveContext | None,
 ) -> tuple[Solution, bool] | None:
   if solve_context is None:
@@ -113,7 +114,7 @@ def _solve_with_reused_context(
 
 
 def _solve_subgraph(
-    mr2s_solver: QuboMR2SSolver,
+    mr2s_solver: Mr2sSolverProtocol,
     sub_graph: Graph,
     empty_sample_set: SampleSet,
     embedding_estimate: EmbeddingEstimate | None = None,
@@ -178,9 +179,23 @@ _EmbeddablePartition = EmbeddableGraphPartition
 @dataclass
 class DnCSolution(Solution):
   sub_graphs: list[Graph] = field(default_factory=list)
-  embedding_estimates: list[EmbeddingEstimate] = field(default_factory=list)
+  embedding_estimates: list[EmbeddingEstimate | None] = field(default_factory=list)
   solve_contexts: list[Any] = field(default_factory=list)
   partition_target_k: int | None = None
+
+
+def _require_qubo_backed(
+    mr2s_solver: Mr2sSolverProtocol,
+) -> QuboBackedMr2sSolverProtocol:
+  """임베딩 추정 전략에 넘기기 전 build_bqm 보유를 확인한다."""
+  if not isinstance(mr2s_solver, QuboBackedMr2sSolverProtocol):
+    raise TypeError(
+      "EmbeddingAware/DegeneracyPruning partition strategy requires a QUBO-backed "
+      f"inner solver exposing build_bqm(); got {type(mr2s_solver).__name__}. "
+      "Pass an explicit graph_partition_strategy (e.g. VertexCountPartitionStrategy) "
+      "for non-QUBO inner solvers."
+    )
+  return mr2s_solver
 
 
 @dataclass
@@ -213,7 +228,7 @@ class DnCMr2sSolver:
     if self.graph_partition_strategy is None:
       self._owns_graph_partition_strategy = True
       self.graph_partition_strategy = DegeneracyPruningFaceCyclePartitionStrategy(
-        mr2s_solver=self.mr2s_solver,
+        mr2s_solver=_require_qubo_backed(self.mr2s_solver),
         face_cycle=self.face_cycle,
         target_graph=self.target_graph,
       )
@@ -244,10 +259,10 @@ class DnCMr2sSolver:
       self._owned_graph_partition_strategy = None
       return
     strategy = self.graph_partition_strategy
-    strategy.mr2s_solver = self.mr2s_solver
+    strategy.mr2s_solver = _require_qubo_backed(self.mr2s_solver)
     strategy.face_cycle = self.face_cycle
     strategy.target_graph = self.target_graph
-    if hasattr(strategy, "_resolved_target_degeneracy"):
+    if isinstance(strategy, DegeneracyPruningFaceCyclePartitionStrategy):
       strategy._resolved_target_degeneracy = None
 
   def _default_partition_strategy(
@@ -459,8 +474,8 @@ class DnCMr2sSolver:
   def _solve_subgraphs(
       self,
       sub_graphs: list[Graph],
-      embedding_estimates: list[EmbeddingEstimate] | None = None,
-      solve_contexts: list[QuboSolveContext] | None = None,
+      embedding_estimates: list[EmbeddingEstimate | None] | None = None,
+      solve_contexts: list[QuboSolveContext | None] | None = None,
   ) -> list[Solution]:
     started_at = perf_counter()
     if embedding_estimates is not None and len(embedding_estimates) != len(sub_graphs):

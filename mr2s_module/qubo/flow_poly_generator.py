@@ -1,4 +1,5 @@
-from dimod import BinaryPolynomial, Vartype
+from dimod import Vartype
+from dimod.higherorder.polynomial import BinaryPolynomial
 
 from mr2s_module.domain import Edge
 from mr2s_module.protocols import Graph

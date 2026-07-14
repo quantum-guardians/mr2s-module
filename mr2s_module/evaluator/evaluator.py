@@ -1,9 +1,19 @@
+from collections.abc import Iterable, Mapping
+from typing import Any, Protocol, cast
+
 import networkx as nx
 
 from mr2s_module.domain import Score, Solution
 from mr2s_module.evaluator.apsp_sum_ranker import ApspSumRanker
 from mr2s_module.util import flow_imbalance
 
+
+class _SampleDatum(Protocol):
+  """dimod SampleSet.data(fields=...) 의 행 — 스텁이 필드 namedtuple 을 표현하지
+  못해 cast 대상으로만 쓰인다 (stub limitation)."""
+
+  sample: Mapping[Any, int]
+  num_occurrences: int
 
 
 class Evaluator:
@@ -80,7 +90,11 @@ class Evaluator:
     total_samples = 0
     strongly_connected_samples = 0
 
-    for datum in solution.sample_set.data(["sample", "num_occurrences"]):
+    data_rows = cast(
+      "Iterable[_SampleDatum]",
+      solution.sample_set.data(["sample", "num_occurrences"]),
+    )
+    for datum in data_rows:
       directed_edges = self._sample_to_directed_edges(datum.sample, solution)
       occurrences = int(datum.num_occurrences)
 

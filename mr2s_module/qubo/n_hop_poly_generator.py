@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from dimod import BinaryPolynomial, Vartype
+from dimod import Vartype
+from dimod.higherorder.polynomial import BinaryPolynomial
 
 from mr2s_module.domain import AdjEntry
 from mr2s_module.protocols import Graph
@@ -19,7 +20,7 @@ class SmallWorldSpec:
 @dataclass
 class NHopPolyGenerator:
 
-  small_world_spec: SmallWorldSpec = None
+  small_world_spec: SmallWorldSpec | None = None
 
   def _get_n_hop_polynomial(
       self,
@@ -66,6 +67,8 @@ class NHopPolyGenerator:
       self, vertices: set[int], adj: dict[int, list[AdjEntry]]
   ) -> BinaryPolynomial:
     terms = BinaryPolynomial({}, Vartype.BINARY)
+    if self.small_world_spec is None:
+      raise ValueError("NHopPolyGenerator requires small_world_spec to build a polynomial")
     for n_hop in self.small_world_spec.n_hops:
       temp = self._get_total_n_hop_polynomial(n_hop, vertices, adj)
       terms = add_polys(terms, temp)

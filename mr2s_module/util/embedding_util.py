@@ -1,3 +1,5 @@
+from typing import cast
+
 import networkx as nx
 import minorminer
 import dwave_networkx as dnx
@@ -11,7 +13,7 @@ _pegasus_graph: nx.Graph | None = None
 def _get_pegasus_p16() -> nx.Graph:
     global _pegasus_graph
     if _pegasus_graph is None:
-        _pegasus_graph = dnx.pegasus_graph(16)
+        _pegasus_graph = cast(nx.Graph, dnx.pegasus_graph(16))
     return _pegasus_graph
 
 

@@ -54,13 +54,13 @@ class VertexCountPartitionStrategy:
 
       previous_target_k = getattr(self.face_cycle, "target_k", 2)
       if hasattr(self.face_cycle, "target_k"):
-        self.face_cycle.target_k = target_k
+        setattr(self.face_cycle, "target_k", target_k)
 
       try:
         result = self.face_cycle.run(graph)
       finally:
         if hasattr(self.face_cycle, "target_k"):
-          self.face_cycle.target_k = previous_target_k
+          setattr(self.face_cycle, "target_k", previous_target_k)
 
       sub_graphs = result.sub_graphs
       parent_edge_count = len(graph.edges)
