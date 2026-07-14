@@ -40,6 +40,17 @@ class FaceCycleProtocol(Protocol):
     def run(self, graph: Graph) -> GraphPartitionResult: ...
 
 
+@runtime_checkable
+class TunableFaceCycleProtocol(FaceCycleProtocol, Protocol):
+    """target_k 를 조절할 수 있는 면 분할.
+
+    target_k 로 이진 탐색을 도는 partition 전략(EmbeddingAware/VertexCount)이 요구하는
+    표면. target_k 가 없으면 탐색이 같은 run(graph) 를 반복할 뿐이라 의미가 없다.
+    """
+
+    target_k: int
+
+
 class EdgeOrientationProtocol(Protocol):
     """결과의 각 Edge 는 입력 graph 의 edge id 를 유지해야 한다 (Edge.oriented 참고)."""
 

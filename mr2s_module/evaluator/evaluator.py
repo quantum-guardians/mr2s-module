@@ -5,6 +5,7 @@ import networkx as nx
 
 from mr2s_module.domain import Score, Solution
 from mr2s_module.evaluator.apsp_sum_ranker import ApspSumRanker
+from mr2s_module.qubo.solution_processing import process_solution
 from mr2s_module.util import flow_imbalance
 
 
@@ -33,31 +34,14 @@ class Evaluator:
     return graph
 
   @staticmethod
-  def _safe_lookup(sample, var_name: str) -> int:
-    try:
-      return int(sample[var_name])
-    except (KeyError, ValueError):
-      return 0
-
   def _sample_to_directed_edges(
-      self,
       sample,
       solution: Solution,
   ) -> set[tuple[int, int]]:
-    directed_edges = set()
-
-    for edge in solution.graph.edges.values():
-      if edge.directed:
-        directed_edges.add(edge.vertices)
-        continue
-
-      bit = self._safe_lookup(sample, edge.to_key())
-      if bit == 1:
-        directed_edges.add((edge.vertices[1], edge.vertices[0]))
-      else:
-        directed_edges.add((edge.vertices[0], edge.vertices[1]))
-
-    return directed_edges
+    # sample → 방향 변환은 QUBO 솔버와 같은 코어를 쓴다. 두 벌로 두면 분기한다.
+    return set(
+      process_solution(sample, list(solution.graph.edges.values())).values()
+    )
 
   @staticmethod
   def _solution_to_directed_edges(solution: Solution) -> set[tuple[int, int]]:

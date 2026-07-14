@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from time import perf_counter
 
 from mr2s_module.domain import EmbeddableGraphPartition, Graph
-from mr2s_module.protocols import FaceCycleProtocol
+from mr2s_module.protocols import TunableFaceCycleProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ def _elapsed_ms(started_at: float) -> float:
 
 @dataclass
 class VertexCountPartitionStrategy:
-  face_cycle: FaceCycleProtocol
+  face_cycle: TunableFaceCycleProtocol
   max_vertices: int = 100
 
   def run(self, graph: Graph) -> EmbeddableGraphPartition:
@@ -52,15 +52,13 @@ class VertexCountPartitionStrategy:
         right,
       )
 
-      previous_target_k = getattr(self.face_cycle, "target_k", 2)
-      if hasattr(self.face_cycle, "target_k"):
-        setattr(self.face_cycle, "target_k", target_k)
+      previous_target_k = self.face_cycle.target_k
+      self.face_cycle.target_k = target_k
 
       try:
         result = self.face_cycle.run(graph)
       finally:
-        if hasattr(self.face_cycle, "target_k"):
-          setattr(self.face_cycle, "target_k", previous_target_k)
+        self.face_cycle.target_k = previous_target_k
 
       sub_graphs = result.sub_graphs
       parent_edge_count = len(graph.edges)

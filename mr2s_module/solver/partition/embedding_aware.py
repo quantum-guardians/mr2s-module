@@ -13,7 +13,10 @@ from mr2s_module.domain import (
   Graph,
   GraphPartitionResult,
 )
-from mr2s_module.protocols import FaceCycleProtocol, QuboBackedMr2sSolverProtocol
+from mr2s_module.protocols import (
+  QuboBackedMr2sSolverProtocol,
+  TunableFaceCycleProtocol,
+)
 from mr2s_module.solver.solve_context import QuboSolveContext
 from mr2s_module.util import estimate_required_qubits
 
@@ -38,7 +41,7 @@ def _graph_log_context(graph: Graph) -> dict[str, int]:
 @dataclass
 class EmbeddingAwareFaceCyclePartitionStrategy:
   mr2s_solver: QuboBackedMr2sSolverProtocol
-  face_cycle: FaceCycleProtocol
+  face_cycle: TunableFaceCycleProtocol
   target_graph: nx.Graph | None
   embedding_estimator: EmbeddingEstimator = estimate_required_qubits
   _fallback_target_graph_cache: nx.Graph | None = field(default=None, init=False)
@@ -251,14 +254,12 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
       graph: Graph,
       target_k: int,
   ) -> GraphPartitionResult:
-    # FaceCycleProtocol 은 target_k 를 노출하지 않는다 — 동적 접근으로 유지하며
-    # 속성이 없으면 기존과 동일하게 AttributeError 가 난다.
-    previous_target_k = getattr(self.face_cycle, "target_k")
-    setattr(self.face_cycle, "target_k", target_k)
+    previous_target_k = self.face_cycle.target_k
+    self.face_cycle.target_k = target_k
     try:
       return self.face_cycle.run(graph)
     finally:
-      setattr(self.face_cycle, "target_k", previous_target_k)
+      self.face_cycle.target_k = previous_target_k
 
   def _find_partition_by_target_k(
       self,

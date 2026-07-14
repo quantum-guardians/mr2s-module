@@ -428,10 +428,15 @@ class DnCMr2sSolver:
   @staticmethod
   def _apply_merged_directions(graph: Graph, solution: Solution) -> None:
     # solution 은 edge id → 방향. 원본 Edge 를 id 로 찾아 방향만 in-place 로 박는다.
+    # 모르는 id 는 조용히 넘기지 않는다 — solution 과 graph 가 어긋났다는 뜻이고,
+    # 넘기면 일부 간선만 배향된 해가 정상인 척 흘러간다 (lift 쪽도 동일하게 raise).
     for edge_id, (source, target) in solution.edges.items():
       edge = graph.edges.get(edge_id)
-      if edge is not None:
-        edge.set_direction(source, target)
+      if edge is None:
+        raise KeyError(
+          f"solution edge id {edge_id} is not present in the target graph"
+        )
+      edge.set_direction(source, target)
 
   def score_merged_solution(
       self,
