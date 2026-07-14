@@ -10,7 +10,6 @@ from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
 
 
-EdgeKey = frozenset[int]
 EdgeNode = tuple[str, int]
 SubdivisionNode = int | EdgeNode
 EdgeStep = tuple[int, int, int]
@@ -172,12 +171,9 @@ def face_edge_steps(face: list[SubdivisionNode] | tuple[SubdivisionNode, ...]) -
   return steps
 
 
-def face_edges(face: list[int] | tuple[int, ...]) -> set[EdgeKey]:
-  """Return canonical undirected edge keys for one cyclic face boundary."""
-  return {
-    frozenset({face[index], face[(index + 1) % len(face)]})
-    for index in range(len(face))
-  }
+def face_vertex_ring(face: Sequence[EdgeStep]) -> list[int]:
+  """Return the cyclic vertex ring of a subdivision face (each step's tail)."""
+  return [tail for _, tail, _ in face]
 
 
 def planar_position_map(graph: nx.Graph) -> PositionMap:
@@ -243,15 +239,28 @@ def inner_faces(
   ]
 
 
-def build_face_edges_map(
-    faces: list[list[int]],
-) -> dict[EdgeKey, list[int]]:
-  """Map each canonical edge key to the face indices that contain it."""
-  face_edges_map: dict[EdgeKey, list[int]] = {}
-  for face_index, face in enumerate(faces):
-    for edge in face_edges(face):
-      face_edges_map.setdefault(edge, []).append(face_index)
-  return face_edges_map
+def inner_faces_by_edge_id(
+    graph: Graph,
+    pos: PositionMap | None = None,
+) -> list[list[EdgeStep]]:
+  """Enumerate bounded faces of a project Graph as domain-edge-id steps.
+
+  Faces are counted on the edge subdivision, so parallel edges stay distinct —
+  unlike a vertex-pair keyed view, which collapses them. Pass the drawing
+  positions when the outer face must be picked in the rendered coordinate system.
+  """
+  subdivision = domain_graph_to_edge_subdivision(graph)
+  raw_faces = enumerate_faces(subdivision)
+  if len(raw_faces) <= 1:
+    return []
+
+  faces = [face_edge_steps(face) for face in raw_faces]
+  layout = pos if pos is not None else planar_position_map(subdivision)
+  outer_index = max(
+    range(len(faces)),
+    key=lambda index: abs(polygon_area(face_vertex_ring(faces[index]), layout)),
+  )
+  return [face for index, face in enumerate(faces) if index != outer_index]
 
 
 def build_edge_id_face_edges_map(
@@ -274,11 +283,6 @@ def build_dual_base(
     if len(face_indices) == 2:
       dual.add_edge(face_indices[0], face_indices[1])
   return dual
-
-
-def clone_edge(edge: Edge) -> Edge:
-  """Create a detached Edge with the same orientation and weight."""
-  return Edge(edge.vertices[0], edge.vertices[1], edge.weight, edge.directed)
 
 
 def networkx_to_domain_graph(graph: nx.Graph, *, weight: int = 1) -> Graph:

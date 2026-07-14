@@ -7,7 +7,7 @@ import numpy as np
 
 from mr2s_module.domain import Edge, Graph, GraphPartitionResult
 from mr2s_module.protocols import FaceCycleProtocol
-from mr2s_module.util import face_edges, inner_faces
+from mr2s_module.util import face_vertex_ring, inner_faces_by_edge_id
 from tests.util.graph_fixtures import delaunay_graph_with_pos
 
 
@@ -124,12 +124,12 @@ def _fill_partition_faces(
         for sub_graph in partition.sub_graphs
     ]
 
-    for face in inner_faces(graph, pos):
-        owner = _best_face_owner(face_edges(face), macro_edge_ids)
+    for face in inner_faces_by_edge_id(graph, pos):
+        owner = _best_face_owner({step[0] for step in face}, macro_edge_ids)
         if owner is None:
             continue
         polygon = plt.Polygon(
-            [pos[vertex] for vertex in face],
+            [pos[vertex] for vertex in face_vertex_ring(face)],
             facecolor=palette[owner],
             edgecolor="none",
             alpha=0.24,
@@ -139,11 +139,11 @@ def _fill_partition_faces(
 
 
 def _best_face_owner(
-    face_edges: set[frozenset[int]],
-    macro_edge_ids: list[set[frozenset[int]]],
+    face_edge_ids: set[int],
+    macro_edge_ids: list[set[int]],
 ) -> int | None:
     scored = [
-        (len(face_edges.intersection(edge_ids)), -macro_id, macro_id)
+        (len(face_edge_ids.intersection(edge_ids)), -macro_id, macro_id)
         for macro_id, edge_ids in enumerate(macro_edge_ids)
     ]
     if not scored:
