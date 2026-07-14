@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
 import numpy as np
 
 from mr2s_module.domain import Edge, Graph, GraphPartitionResult
@@ -128,7 +129,7 @@ def _fill_partition_faces(
         owner = _best_face_owner({step[0] for step in face}, macro_edge_ids)
         if owner is None:
             continue
-        polygon = plt.Polygon(
+        polygon = Polygon(
             [pos[vertex] for vertex in face_vertex_ring(face)],
             facecolor=palette[owner],
             edgecolor="none",

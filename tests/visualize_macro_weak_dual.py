@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from collections.abc import Sequence
+from typing import cast
 
 import matplotlib
 matplotlib.use("Agg")
@@ -28,7 +30,13 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from mr2s_module import FaceClusterPartition, Edge, Graph
-from mr2s_module.util.planar_graph import domain_graph_to_networkx, enumerate_faces
+from matplotlib.colors import ListedColormap
+
+from mr2s_module.util.planar_graph import (
+    domain_graph_to_networkx,
+    enumerate_faces,
+    polygon_area,
+)
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "visualizations"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -142,7 +150,11 @@ def fill_unassigned(
 
 # ── drawing ──────────────────────────────────────────────────────
 
-COLORS = plt.cm.Set2.colors
+# .colors 는 스텁상 ArrayLike — 실제로는 RGB 튜플 시퀀스다.
+COLORS = cast(
+    "Sequence[tuple[float, float, float]]",
+    cast(ListedColormap, matplotlib.colormaps["Set2"]).colors,
+)
 
 def _face_centroid(face: list[int],
                    pos: dict[int, np.ndarray]) -> np.ndarray:
@@ -213,8 +225,9 @@ def draw_dual_panel(ax, sub_graphs, assignment, inner_faces, pos,
         for n in color_b:
             node_color_map[n] = 1
     except nx.AmbiguousSolution:
-        coloring = nx.greedy_color(dual, strategy="largest_first")
-        node_color_map = coloring
+        node_color_map = nx.greedy_color(dual, strategy="largest_first")
+        color_a = {n for n, c in node_color_map.items() if c == 0}
+        color_b = {n for n, c in node_color_map.items() if c != 0}
 
     # bipartite layout (horizontal, left=color0, right=color1)
     left_nodes = [n for n, c in node_color_map.items() if c == 0]
@@ -258,10 +271,7 @@ def draw_dual_panel(ax, sub_graphs, assignment, inner_faces, pos,
                                  edge_labels=edge_labels, font_size=8,
                                  label_pos=0.5)
 
-    try:
-        lc, rc = len(color_a), len(color_b)
-    except Exception:
-        lc = rc = 0
+    lc, rc = len(color_a), len(color_b)
 
     ax.set_aspect("equal")
     ax.axis("off")
@@ -275,17 +285,16 @@ def run_visualization(seed: int) -> None:
     graph, pos = delaunay_graph(n=N_VERTICES, seed=int(rng.integers(0, 2**31)))
 
     nx_g = domain_graph_to_networkx(graph)
-    raw_faces = enumerate_faces(nx_g)
+    # 단순 투영 그래프(edge subdivision 이 아님)라 면은 원본 정점 링이다.
+    raw_faces = cast("list[list[int]]", enumerate_faces(nx_g))
     if len(raw_faces) < 2:
         print(f"[{seed:02d}] < 2 faces, skip")
         return
 
-    outer_idx = max(range(len(raw_faces)),
-                    key=lambda i: abs(sum(
-                        pos[raw_faces[i][k]][0]*pos[raw_faces[i][(k+1)%len(raw_faces[i])]][1] -
-                        pos[raw_faces[i][(k+1)%len(raw_faces[i])]][0]*pos[raw_faces[i][k]][1]
-                        for k in range(len(raw_faces[i]))
-                    )/2))
+    outer_idx = max(
+        range(len(raw_faces)),
+        key=lambda i: abs(polygon_area(raw_faces[i], pos)),
+    )
     inner_faces = [f for i, f in enumerate(raw_faces) if i != outer_idx]
     if not inner_faces:
         print(f"[{seed:02d}] no inner faces, skip")

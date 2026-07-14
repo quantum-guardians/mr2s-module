@@ -37,8 +37,9 @@ def test_face_cycle_uses_injected_clusterer() -> None:
 
 
 def test_face_cycle_boundary_repair_mode_can_remove_only() -> None:
-    boundary_edges = {(1, 2), (2, 3)}
-    repair_edges = {(2, 3), (3, 4)}
+    # boundary/repair 는 도메인 edge id 집합이다 (정점쌍이 아니다).
+    boundary_edges = {12, 23}
+    repair_edges = {23, 34}
 
     toggle = FaceClusterPartition(repair_mode="toggle")._apply_boundary_repair(
         boundary_edges,
@@ -49,8 +50,8 @@ def test_face_cycle_boundary_repair_mode_can_remove_only() -> None:
         repair_edges,
     )
 
-    assert toggle == {(1, 2), (3, 4)}
-    assert remove == {(1, 2)}
+    assert toggle == {12, 34}
+    assert remove == {12}
 
 
 def test_kmeans_face_clusterer_assigns_each_face_to_cluster() -> None:

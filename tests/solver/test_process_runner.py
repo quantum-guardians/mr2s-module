@@ -1,5 +1,8 @@
 import multiprocessing
 
+from multiprocessing.process import BaseProcess
+from typing import cast
+
 import pytest
 
 import mr2s_module.solver.process_runner as process_runner
@@ -189,7 +192,8 @@ def test_terminate_process_tree_kills_process_group_on_posix(
     lambda pid, sig: killed_groups.append((pid, sig)),
   )
 
-  process_runner._terminate_process_tree(fake_process)
+  # _FakeProcess 는 is_alive/pid/terminate 표면만 흉내내는 테스트 대역이다.
+  process_runner._terminate_process_tree(cast(BaseProcess, fake_process))
 
   assert killed_groups == [(fake_process.pid, process_runner.signal.SIGTERM)]
   assert not fake_process.terminated
@@ -206,6 +210,7 @@ def test_terminate_process_tree_falls_back_to_process_terminate(
     lambda pid, sig: (_ for _ in ()).throw(ProcessLookupError()),
   )
 
-  process_runner._terminate_process_tree(fake_process)
+  # _FakeProcess 는 is_alive/pid/terminate 표면만 흉내내는 테스트 대역이다.
+  process_runner._terminate_process_tree(cast(BaseProcess, fake_process))
 
   assert fake_process.terminated

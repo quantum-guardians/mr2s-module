@@ -28,16 +28,20 @@ from __future__ import annotations
 import itertools
 import sys
 from pathlib import Path
+from collections.abc import Sequence
+from typing import cast
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib import font_manager
+from matplotlib.colors import ListedColormap
 from matplotlib.lines import Line2D
 
 # 한글 깨짐 방지: 한글 지원 폰트가 있으면 사용
 for _font in ("Malgun Gothic", "AppleGothic", "NanumGothic", "Noto Sans CJK KR"):
     try:
-        matplotlib.font_manager.findfont(_font, fallback_to_default=False)
+        font_manager.findfont(_font, fallback_to_default=False)
         plt.rcParams["font.family"] = _font
         break
     except Exception:
@@ -174,7 +178,11 @@ def compute_state(component: nx.Graph, pos: dict[int, np.ndarray], seed: int) ->
 
 # ── drawing ──────────────────────────────────────────────────────
 
-COLORS = plt.cm.Set3.colors
+# .colors 는 스텁상 ArrayLike — 실제로는 RGB 튜플 시퀀스다.
+COLORS = cast(
+    "Sequence[tuple[float, float, float]]",
+    cast(ListedColormap, matplotlib.colormaps["Set3"]).colors,
+)
 
 
 def _seg(ax, st, edge_id: int, **kw):

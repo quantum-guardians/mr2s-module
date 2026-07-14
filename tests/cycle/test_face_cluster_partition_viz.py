@@ -19,6 +19,7 @@ matplotlib = pytest.importorskip("matplotlib")
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
 import networkx as nx
 import numpy as np
 
@@ -37,6 +38,7 @@ from mr2s_module.util import (
     is_edge_node,
     polygon_area,
 )
+from mr2s_module.util.planar_graph import Point, SubdivisionNode
 from tests.util.graph_fixtures import delaunay_graph_with_pos
 
 _OUTPUT_DIR = Path(__file__).parent / "output"
@@ -51,7 +53,10 @@ def _run_diagnostic(
     nx_graph = domain_graph_to_networkx(graph)
     subdivision = domain_graph_to_edge_subdivision(graph)
     edge_endpoints = {edge.id: edge.endpoints() for edge in graph.edges.values()}
-    sub_pos = dict(pos)
+    # subdivision 은 edge node 도 좌표가 필요하다 — 키가 int 가 아니다.
+    sub_pos: dict[SubdivisionNode, Point] = {
+        vertex: point for vertex, point in pos.items()
+    }
     for node in subdivision.nodes:
         if is_edge_node(node):
             u, v = edge_endpoints[node[1]]
@@ -67,7 +72,10 @@ def _run_diagnostic(
     inner_face_steps = [face_edge_steps(face) for face in inner_faces]
 
     face_edges_map = build_edge_id_face_edges_map(inner_face_steps)
-    centroids = [np.mean([sub_pos[v] for v in f], axis=0) for f in inner_faces]
+    centroids = [
+        np.mean(np.asarray([sub_pos[v] for v in f], dtype=float), axis=0)
+        for f in inner_faces
+    ]
     dual_base = build_dual_base(face_edges_map)
 
     k = max(1, min(target_k, len(inner_faces)))
@@ -128,7 +136,7 @@ def _draw_faces(ax, diag: dict, pos: dict[int, np.ndarray]) -> None:
         color = _PALETTE[diag["coloring"].get(c_idx, 0) % 2]
         for f_idx in comp:
             face = diag["inner_faces"][f_idx]
-            poly = plt.Polygon(
+            poly = Polygon(
                 [diag["sub_pos"][v] for v in face],
                 facecolor=color,
                 alpha=0.65,

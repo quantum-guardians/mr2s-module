@@ -974,9 +974,11 @@ def test_degeneracy_pruning_partition_strategy_does_not_call_embedding_estimator
 
   assert partition.sub_graphs == [child]
   assert len(partition.embedding_estimates) == 1
-  assert partition.embedding_estimates[0].num_logical_variables == 2
-  assert partition.embedding_estimates[0].max_chain_length == 1
-  assert len(partition.embedding_estimates[0].embedding) == 2
+  estimate = partition.embedding_estimates[0]
+  assert estimate is not None
+  assert estimate.num_logical_variables == 2
+  assert estimate.max_chain_length == 1
+  assert len(estimate.embedding) == 2
 
 
 def test_replacing_default_partition_strategy_after_init_does_not_sync_or_raise() -> None:

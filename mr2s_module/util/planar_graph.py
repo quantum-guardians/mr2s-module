@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import networkx as nx
+import numpy as np
 from collections.abc import Hashable, Iterable, Mapping, Sequence
-from typing import TypeVar, cast
+from typing import Any, TypeVar, cast
 
 from typing_extensions import TypeIs
 
@@ -13,8 +14,11 @@ from mr2s_module.domain.graph import Graph
 EdgeNode = tuple[str, int]
 SubdivisionNode = int | EdgeNode
 EdgeStep = tuple[int, int, int]
-Point = Sequence[float]
-PositionMap = Mapping[Hashable, Point]
+# 좌표는 파이썬 시퀀스일 수도 numpy 배열일 수도 있다 (nx layout·Delaunay fixture).
+# 소비자는 (x, y) 언패킹만 하므로 둘 다 허용한다. 키는 Mapping 이 불변(invariant)이라
+# Hashable 로 못 묶는다 (dict[int, ...] 이 안 들어온다) — 노드 타입은 Any 로 둔다.
+Point = Sequence[float] | np.ndarray
+PositionMap = Mapping[Any, Point]
 _EDGE_NODE_KIND = "edge"
 _FaceKeyT = TypeVar("_FaceKeyT", bound=Hashable)
 

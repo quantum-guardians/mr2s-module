@@ -1,7 +1,8 @@
-from dimod import BinaryPolynomial, Vartype
+from dimod import Vartype
+from dimod.higherorder.polynomial import BinaryPolynomial
 import networkx as nx
 
-from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, Solution
+from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, Score, Solution
 from mr2s_module.solver import QuboMR2SSolver
 from mr2s_module.util import empty_binary_sample_set
 
@@ -49,11 +50,16 @@ class StubQuboSolver:
 
 class StubEvaluator:
     def __init__(self) -> None:
-        self.received_solution = None
+        self.received_solution: Solution | None = None
 
-    def run(self, solution):
+    def run(self, solution: Solution) -> Score:
         self.received_solution = solution
-        return float(len(solution.edges))
+        # 간선 수를 apsp_sum 에 실어 호출 대상 solution 을 확인한다.
+        return Score(
+            apsp_sum=float(len(solution.edges)),
+            strong_connect_rate=1.0,
+            flow_score=0.0,
+        )
 
 
 def test_run_solves_and_evaluates() -> None:
@@ -69,12 +75,15 @@ def test_run_solves_and_evaluates() -> None:
 
     result = solver.run(graph)
 
-    assert result.score == 1.0
+    assert result.score is not None
+    assert result.score.apsp_sum == 1.0
     assert set(result.edges.values()) == {(1, 2)}
     assert poly_generator.seen_graphs == [graph]
     assert qubo_solver.received_graph is graph
     assert next(iter(graph.edges.values())).directed is False
-    assert evaluator.received_solution.score == 1.0
+    assert evaluator.received_solution is not None
+    assert evaluator.received_solution.score is not None
+    assert evaluator.received_solution.score.apsp_sum == 1.0
 
 
 def test_run_with_embedding_passes_embedding_to_qubo_solver() -> None:
@@ -97,7 +106,8 @@ def test_run_with_embedding_passes_embedding_to_qubo_solver() -> None:
 
     result = solver.run_with_embedding(graph, embedding_estimate)
 
-    assert result.score == 1.0
+    assert result.score is not None
+    assert result.score.apsp_sum == 1.0
     assert set(result.edges.values()) == {(1, 2)}
     assert qubo_solver.received_graph is graph
     assert qubo_solver.received_embedding == {1: ["q1"], 2: ["q2"]}
@@ -141,7 +151,8 @@ def test_run_with_context_uses_context_bqm_and_embedding() -> None:
 
     result = solver.run_with_context(context)
 
-    assert result.score == 1.0
+    assert result.score is not None
+    assert result.score.apsp_sum == 1.0
     assert qubo_solver.received_qubo is context.bqm
     assert qubo_solver.received_graph is graph
     assert qubo_solver.received_embedding == {1: ["q1"], 2: ["q2"]}

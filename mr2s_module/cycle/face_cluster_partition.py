@@ -195,7 +195,8 @@ class FaceClusterPartition:
 
         face_edges_map = build_edge_id_face_edges_map(inner_face_steps)
         face_centroids = [
-            np.mean([pos[v] for v in f], axis=0) for f in inner_raw_faces
+            np.mean(np.asarray([pos[v] for v in f], dtype=float), axis=0)
+            for f in inner_raw_faces
         ]
         dual_base = build_dual_base(face_edges_map)
 
