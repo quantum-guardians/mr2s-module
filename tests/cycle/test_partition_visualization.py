@@ -25,11 +25,11 @@ from mr2s_module.cycle import (
 )
 from mr2s_module.util import inner_faces_by_edge_id
 from tests.cycle.partition_visualization import (
-    delaunay_graph_with_pos,
     draw_partition,
     partition_balance_report,
     render_face_cycle_partition_png,
 )
+from tests.util.graph_fixtures import delaunay_graph_with_pos
 
 _OUTPUT_DIR = Path(__file__).parent / "output"
 

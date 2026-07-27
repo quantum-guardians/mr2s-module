@@ -34,10 +34,12 @@ def _assert_poly_matches_numeric_core(graph: Graph) -> None:
     ]
 
     for bits in itertools.product((0, 1), repeat=len(variable_edges)):
-        sample = {edge.to_key(): bit for edge, bit in zip(variable_edges, bits)}
+        sample = {
+            edge.to_key(): bit for edge, bit in zip(variable_edges, bits, strict=True)
+        }
         triples = fixed_triples + [
             (*_bit_to_direction(edge, bit), float(edge.weight))
-            for edge, bit in zip(variable_edges, bits)
+            for edge, bit in zip(variable_edges, bits, strict=True)
         ]
         assert poly.energy(sample) == pytest.approx(flow_imbalance(triples))
 

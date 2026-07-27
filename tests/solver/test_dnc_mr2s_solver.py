@@ -242,10 +242,7 @@ def _fake_embedding_estimate(bqm_or_graph) -> EmbeddingEstimate:
         variables = sorted(bqm_or_graph.variables)
     else:
         variables = sorted(bqm_or_graph.get_vertices())
-    if hasattr(bqm_or_graph, "edges"):
-        edge_count = len(bqm_or_graph.edges)
-    else:
-        edge_count = 0
+    edge_count = len(bqm_or_graph.edges) if hasattr(bqm_or_graph, "edges") else 0
     return EmbeddingEstimate(
         num_logical_variables=len(variables),
         num_quadratic_couplings=edge_count,

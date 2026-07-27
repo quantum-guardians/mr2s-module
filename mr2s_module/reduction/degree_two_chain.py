@@ -118,7 +118,7 @@ def _walk_chain(
 
     # fwd 는 start→a 방향이므로 뒤집어 a→start→b 순서로 잇는다.
     edges = list(reversed(fwd_edges)) + bwd_edges
-    interior_vertices = tuple(reversed(fwd_passed)) + (start,) + tuple(bwd_passed)
+    interior_vertices = (*tuple(reversed(fwd_passed)), start, *tuple(bwd_passed))
     return _make_chain((fwd_terminal, bwd_terminal), interior_vertices, edges)
 
 

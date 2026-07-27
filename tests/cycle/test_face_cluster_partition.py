@@ -391,7 +391,7 @@ def test_parallel_boundary_copy_placement_is_deterministic() -> None:
     u, v = _first_boundary_pair_in_macro(FaceClusterPartition(target_k=4).run(base))
 
     def copy_macro_indices() -> list[int]:
-        edges = list(base.edges.values()) + [Edge(u, v, 1, False)]
+        edges = [*list(base.edges.values()), Edge(u, v, 1, False)]
         parallel_id = edges[-1].id
         graph = Graph(edges=edges)
         np.random.seed(31)
@@ -423,7 +423,7 @@ def test_parallel_copy_on_inner_edge_preserves_both_ids() -> None:
     assert inner_pair is not None
     u, v = inner_pair
 
-    edges = list(base.edges.values()) + [Edge(u, v, 1, False)]
+    edges = [*list(base.edges.values()), Edge(u, v, 1, False)]
     parallel_id = edges[-1].id
     multigraph = Graph(edges=edges)
 

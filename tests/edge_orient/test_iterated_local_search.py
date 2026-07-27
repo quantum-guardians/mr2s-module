@@ -117,7 +117,7 @@ class TestN3Search:
         base, edges = _fixture((0, 1), (1, 2), (2, 3), (3, 0))
         score = evaluate_score(edges, [0, 1, 2, 3])
         assert score < float("inf")
-        new_edges, new_score = n3_search(edges, score, base, [0, 1, 2, 3], rng)
+        _new_edges, new_score = n3_search(edges, score, base, [0, 1, 2, 3], rng)
         assert new_score < float("inf")
 
     def test_with_dag_orientation_returns_original(self):
