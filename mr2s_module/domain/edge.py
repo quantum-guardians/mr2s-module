@@ -4,13 +4,13 @@ import itertools
 class Edge:
   id: int
   vertices: tuple[int, int]  # directed=True 면 (tail, head), 아니면 sorted endpoints.
-  weight: int
+  weight: float  # 정수 입력 일반적, 축약 super edge 는 harmonic 합성으로 실수.
   directed: bool
 
   # 자동 유니크 id 카운터. 생성 순서 결정적(재현성). 평행 간선마다 독립 id.
   _id_counter = itertools.count()
 
-  def __init__(self, vertex1: int, vertex2: int, weight: int, directed: bool):
+  def __init__(self, vertex1: int, vertex2: int, weight: float, directed: bool):
     self.id = next(Edge._id_counter)
     self._endpoints = (vertex1, vertex2) if vertex1 <= vertex2 else (vertex2, vertex1)
     if directed:

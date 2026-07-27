@@ -1,9 +1,11 @@
-from dimod import BinaryPolynomial, make_quadratic, BINARY, Vartype
+from dimod import BINARY, Vartype
+from dimod.higherorder.polynomial import BinaryPolynomial
+from dimod.higherorder.utils import make_quadratic
 from dwave.samplers import SimulatedAnnealingSampler
 
 sampler = SimulatedAnnealingSampler()
 
-def get_indicator_function(i: int, j: int, edge_id: int, weight: int) -> BinaryPolynomial:
+def get_indicator_function(i: int, j: int, edge_id: int, weight: float) -> BinaryPolynomial:
   if i == j:
     raise ValueError(f"i and j must be different, but both are {i}")
 

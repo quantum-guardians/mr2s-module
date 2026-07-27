@@ -146,9 +146,7 @@ class QuboSolver:
         fallback_reason="zero_variable_qubo",
       )
 
-    child_sampler = self.fixed_embedding_child_sampler
-    if child_sampler is None:
-      child_sampler = getattr(self.sampler, "child", None)
+    child_sampler = self._fixed_embedding_child_sampler()
     if child_sampler is None:
       raise NotImplementedError(
         "The configured QUBO sampler does not support fixed embeddings"

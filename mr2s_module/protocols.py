@@ -1,6 +1,7 @@
-from typing import TYPE_CHECKING, Any, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, runtime_checkable
 
-from dimod import BinaryQuadraticModel, BinaryPolynomial
+from dimod import BinaryQuadraticModel
+from dimod.higherorder.polynomial import BinaryPolynomial
 
 if TYPE_CHECKING:
     from mr2s_module.domain.edge import Edge as EdgeModel
@@ -39,6 +40,17 @@ class FaceCycleProtocol(Protocol):
     def run(self, graph: Graph) -> GraphPartitionResult: ...
 
 
+@runtime_checkable
+class TunableFaceCycleProtocol(FaceCycleProtocol, Protocol):
+    """target_k 를 조절할 수 있는 면 분할.
+
+    target_k 로 이진 탐색을 도는 partition 전략(EmbeddingAware/VertexCount)이 요구하는
+    표면. target_k 가 없으면 탐색이 같은 run(graph) 를 반복할 뿐이라 의미가 없다.
+    """
+
+    target_k: int
+
+
 class EdgeOrientationProtocol(Protocol):
     """결과의 각 Edge 는 입력 graph 의 edge id 를 유지해야 한다 (Edge.oriented 참고)."""
 
@@ -65,8 +77,21 @@ class EvaluatorProtocol(Protocol):
 
 
 class Mr2sSolverProtocol(Protocol):
-    evaluator: EvaluatorProtocol
+    # read-only property 로 선언해야 일반 속성·property 구현을 모두 허용한다.
+    @property
+    def evaluator(self) -> EvaluatorProtocol: ...
     def run(self, graph: Graph) -> Solution: ...
+
+
+@runtime_checkable
+class QuboBackedMr2sSolverProtocol(Mr2sSolverProtocol, Protocol):
+    """QUBO 생성이 가능한 solver — 임베딩 기반 partition 전략이 요구하는 최소 표면.
+
+    DnC 본체는 `run`/`evaluator` 만 쓰므로 이 프로토콜을 요구하지 않는다 (SA inner
+    solver 도 허용). `build_bqm` 을 실제로 호출하는 전략에 넘기는 지점에서만 검사한다.
+    """
+
+    def build_bqm(self, graph: Graph) -> QuboMatrix: ...
 
 
 

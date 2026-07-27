@@ -1,5 +1,6 @@
 from mr2s_module.domain import Edge, Graph
 from mr2s_module.util import domain_graph_to_networkx, domain_graph_to_networkx_multi
+from mr2s_module.util.nx_multigraph import multi_edge_copies
 
 
 def test_multi_conversion_preserves_parallel_edges_keyed_by_edge_id() -> None:
@@ -11,10 +12,11 @@ def test_multi_conversion_preserves_parallel_edges_keyed_by_edge_id() -> None:
   nx_graph = domain_graph_to_networkx_multi(graph)
 
   assert nx_graph.number_of_edges() == 3
-  assert set(nx_graph[0][1].keys()) == {edge_a.id, edge_b.id}
-  assert nx_graph[0][1][edge_a.id]["weight"] == 3
-  assert nx_graph[0][1][edge_b.id]["weight"] == 5
-  assert nx_graph[1][2][edge_c.id]["weight"] == 2
+  copies_0_1 = multi_edge_copies(nx_graph, 0, 1)
+  assert set(copies_0_1.keys()) == {edge_a.id, edge_b.id}
+  assert copies_0_1[edge_a.id]["weight"] == 3
+  assert copies_0_1[edge_b.id]["weight"] == 5
+  assert multi_edge_copies(nx_graph, 1, 2)[edge_c.id]["weight"] == 2
 
 
 def test_multi_conversion_skips_self_loops_but_keeps_their_vertices() -> None:

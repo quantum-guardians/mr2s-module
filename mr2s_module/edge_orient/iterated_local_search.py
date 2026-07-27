@@ -7,6 +7,7 @@ from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.orientation_result import OrientedEdges
 from mr2s_module.util import domain_graph_to_networkx_multi, flow_imbalance, robbins_orient
+from mr2s_module.util.nx_multigraph import multi_edge_copies
 
 
 EdgeMap = dict[int, Edge]
@@ -54,7 +55,7 @@ class IteratedLocalSearch:
 
         return OrientedEdges(edges=list(best_edges.values()) if best_edges else [])
 
-    def _search_generator(self, base_graph: nx.Graph, nodes: list):
+    def _search_generator(self, base_graph: nx.MultiGraph, nodes: list):
         """generator yield를 사용하여 외부(run)에서 Early Stopping 하도록 설정."""
         cur_edges = self._generate_initial_edges(base_graph)
         cur_edges, cur_score = self._vnd_local_search(cur_edges, base_graph, nodes)
@@ -73,7 +74,7 @@ class IteratedLocalSearch:
     def _vnd_local_search(
         self,
         start_edges: EdgeMap,
-        base_graph: nx.Graph,
+        base_graph: nx.MultiGraph,
         nodes: list,
     ) -> tuple[EdgeMap, float]:
         cur_edges = start_edges
@@ -122,7 +123,7 @@ class IteratedLocalSearch:
 
         return new_edges
 
-    def _generate_initial_edges(self, base_graph: nx.Graph) -> EdgeMap:
+    def _generate_initial_edges(self, base_graph: nx.MultiGraph) -> EdgeMap:
         """초기 강연결 그래프를 생성합니다."""
         nodes = list(base_graph.nodes())
         start_node = nodes[int(self.rng.integers(0, len(nodes)))]
@@ -159,7 +160,7 @@ def evaluate_score(
 def n1_search(
     current_edges: EdgeMap,
     current_score: float,
-    base_graph: nx.Graph,
+    base_graph: nx.MultiGraph,
     nodes: list,
     rng: np.random.Generator,
 ) -> tuple[EdgeMap, float]:
@@ -181,7 +182,7 @@ def n1_search(
 def n2_search(
     current_edges: EdgeMap,
     current_score: float,
-    base_graph: nx.Graph,
+    base_graph: nx.MultiGraph,
     nodes: list,
     rng: np.random.Generator,
 ) -> tuple[EdgeMap, float]:
@@ -193,7 +194,7 @@ def n2_search(
         incident = [
             edge_id
             for nb in base_graph.neighbors(node)
-            for edge_id in base_graph[node][nb]
+            for edge_id in multi_edge_copies(base_graph, node, nb)
         ]
         if not incident:
             continue
@@ -213,7 +214,7 @@ def n2_search(
 def n3_search(
     current_edges: EdgeMap,
     current_score: float,
-    base_graph: nx.Graph,
+    base_graph: nx.MultiGraph,
     nodes: list,
     rng: np.random.Generator,
 ) -> tuple[EdgeMap, float]:

@@ -137,13 +137,18 @@ class DegeneracyPruningFaceCyclePartitionStrategy(
       return interaction_graph
 
     bqm_edges = getattr(bqm, "edges", None)
-    edges = bqm_edges if bqm_edges is not None else list(graph.edges.values())
-    for edge in edges:
-      if hasattr(edge, "endpoints"):
-        interaction_graph.add_edge(*edge.endpoints())
-      else:
-        source, target = edge
-        interaction_graph.add_edge(source, target)
+    if bqm_edges is not None:
+      for edge in bqm_edges:
+        if hasattr(edge, "endpoints"):
+          interaction_graph.add_edge(*edge.endpoints())
+        else:
+          source, target = edge
+          interaction_graph.add_edge(source, target)
+      return interaction_graph
+
+    # 도메인 Edge 는 항상 endpoints() 를 가진다 — 기존 hasattr 분기와 동일 경로.
+    for domain_edge in graph.edges.values():
+      interaction_graph.add_edge(*domain_edge.endpoints())
     return interaction_graph
 
   @staticmethod

@@ -2,6 +2,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from time import perf_counter
+from typing import NoReturn, cast
 
 import networkx as nx
 import dwave_networkx as dnx
@@ -12,8 +13,10 @@ from mr2s_module.domain import (
   Graph,
   GraphPartitionResult,
 )
-from mr2s_module.protocols import FaceCycleProtocol
-from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
+from mr2s_module.protocols import (
+  QuboBackedMr2sSolverProtocol,
+  TunableFaceCycleProtocol,
+)
 from mr2s_module.solver.solve_context import QuboSolveContext
 from mr2s_module.util import estimate_required_qubits
 
@@ -37,8 +40,8 @@ def _graph_log_context(graph: Graph) -> dict[str, int]:
 
 @dataclass
 class EmbeddingAwareFaceCyclePartitionStrategy:
-  mr2s_solver: QuboMR2SSolver
-  face_cycle: FaceCycleProtocol
+  mr2s_solver: QuboBackedMr2sSolverProtocol
+  face_cycle: TunableFaceCycleProtocol
   target_graph: nx.Graph | None
   embedding_estimator: EmbeddingEstimator = estimate_required_qubits
   _fallback_target_graph_cache: nx.Graph | None = field(default=None, init=False)
@@ -55,9 +58,12 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
     )
 
   def _fallback_target_graph(self) -> nx.Graph:
-    if self._fallback_target_graph_cache is None:
-      self._fallback_target_graph_cache = dnx.pegasus_graph(16)
-    return self._fallback_target_graph_cache
+    cache = self._fallback_target_graph_cache
+    if cache is None:
+      # dwave_networkx 는 타입 스텁이 없어 반환형이 Unknown — 실제로는 nx.Graph.
+      cache = cast(nx.Graph, dnx.pegasus_graph(16))
+      self._fallback_target_graph_cache = cache
+    return cache
 
   def _build_solve_context(self, graph: Graph) -> QuboSolveContext:
     build_solve_context = getattr(self.mr2s_solver, "build_solve_context", None)
@@ -164,7 +170,12 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
     contexts = self._estimate_partition_contexts(sub_graphs)
     if contexts is None:
       return None
-    return [context.embedding_estimate for context in contexts]
+    # _estimate_partition_contexts 가 embedding_estimate 비-None 을 보장한다.
+    return [
+      context.embedding_estimate
+      for context in contexts
+      if context.embedding_estimate is not None
+    ]
 
   def _estimate_partition_contexts(
       self,
@@ -199,7 +210,7 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
     )
 
   @staticmethod
-  def _raise_partition_failed(graph: Graph) -> None:
+  def _raise_partition_failed(graph: Graph) -> NoReturn:
     raise RuntimeError(
       "DnC partition failed: input graph is not embeddable and no "
       "embeddable subgraph partition was found "
@@ -288,7 +299,9 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
       if solve_contexts is not None:
         best_partition = EmbeddableGraphPartition(
           sub_graphs=sub_graphs,
-          embedding_estimates=[context.embedding_estimate for context in solve_contexts],
+          embedding_estimates=[
+            context.embedding_estimate for context in solve_contexts
+          ],
           target_k=target_k,
           solve_contexts=solve_contexts,
         )

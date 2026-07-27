@@ -1,7 +1,11 @@
+from typing import cast
+
 import pytest
 
 from mr2s_module.domain import Edge, Graph, Solution
 from mr2s_module.evaluator import ApspSumRanker
+from mr2s_module.evaluator.apsp_sum_ranker import ApspMethod
+from mr2s_module.util import empty_binary_sample_set
 
 
 def _build_solution(
@@ -18,7 +22,11 @@ def _build_solution(
       edges_by_id[edge.id] = (u, v)
     elif (v, u) in directed_edges:
       edges_by_id[edge.id] = (v, u)
-  return Solution(edges=edges_by_id, graph=graph, sample_set=None)
+  return Solution(
+    edges=edges_by_id,
+    graph=graph,
+    sample_set=empty_binary_sample_set(),
+  )
 
 
 def _triangle_cycle(weight: int = 1) -> Solution:
@@ -42,7 +50,8 @@ def _digon() -> Solution:
 
 def test_unknown_method_raises() -> None:
   with pytest.raises(ValueError):
-    ApspSumRanker(method="hop")
+    # 존재하지 않는 method 를 일부러 넣는다 — cast 로 타입 게이트를 통과시켜 런타임 검증.
+    ApspSumRanker(method=cast(ApspMethod, "hop"))
 
 
 # --- method="stretch" (기본) ---

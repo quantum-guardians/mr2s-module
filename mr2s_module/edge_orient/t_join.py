@@ -1,5 +1,7 @@
 import itertools
 import warnings
+from collections.abc import Iterable
+from typing import cast
 
 import networkx as nx
 
@@ -54,7 +56,8 @@ class Tjoin:
         endpoint_to_edge = {e.endpoints(): e for e in graph.edges.values()}
 
         # 1. Identify odd-degree nodes
-        odd_nodes = [v for v, d in nx_graph.degree() if d % 2 != 0]
+        degrees = cast(Iterable[tuple[int, int]], nx_graph.degree())
+        odd_nodes = [v for v, d in degrees if d % 2 != 0]
 
         # 2. Minimum Weight T-join
         j_edges_keys: set[tuple[int, int]] = set()
@@ -74,7 +77,9 @@ class Tjoin:
             # Edges in the paths
             path_edges_count: dict[tuple[int, int], int] = {}
             for u, v in matching:
-                path = nx.shortest_path(nx_graph, u, v, weight="weight")
+                path = cast(
+                    "list[int]", nx.shortest_path(nx_graph, u, v, weight="weight")
+                )
                 for a, b in zip(path[:-1], path[1:]):
                     e = _endpoint_key(a, b)
                     path_edges_count[e] = path_edges_count.get(e, 0) + 1
@@ -97,7 +102,9 @@ class Tjoin:
             if sub.number_of_edges() == 0:
                 continue
 
-            circuit = list(nx.eulerian_circuit(sub))
+            circuit = cast(
+                "list[tuple[int, int]]", list(nx.eulerian_circuit(sub))
+            )
             for u, v in circuit:
                 orig_edge = endpoint_to_edge[_endpoint_key(u, v)]
                 oriented_edges.append(orig_edge.oriented(u, v))

@@ -1,5 +1,7 @@
 import itertools
+from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import cast
 
 import networkx as nx
 import numpy as np
@@ -14,9 +16,11 @@ from mr2s_module.domain.graph_partition_result import GraphPartitionResult
 from mr2s_module.protocols import FaceCycleProtocol
 from mr2s_module.util.planar_graph import (
     EdgeStep,
+    SubdivisionNode,
     build_dual_base,
     build_edge_id_face_edges_map,
     domain_graph_to_edge_subdivision,
+    planar_position_map,
     enumerate_faces,
     face_edge_steps,
     is_edge_node,
@@ -171,7 +175,7 @@ class FaceClusterPartition:
             return _ComponentPartition()
 
         # 1. 면 추출 — 외곽 면은 가장 큰 면적으로 식별
-        pos = nx.planar_layout(component)
+        pos = planar_position_map(component)
         all_raw_faces = enumerate_faces(component)
         if len(all_raw_faces) < 2:
             return _ComponentPartition()
@@ -191,7 +195,8 @@ class FaceClusterPartition:
 
         face_edges_map = build_edge_id_face_edges_map(inner_face_steps)
         face_centroids = [
-            np.mean([pos[v] for v in f], axis=0) for f in inner_raw_faces
+            np.mean(np.asarray([pos[v] for v in f], dtype=float), axis=0)
+            for f in inner_raw_faces
         ]
         dual_base = build_dual_base(face_edges_map)
 
@@ -346,14 +351,20 @@ class FaceClusterPartition:
         for edge_id in boundary_edges:
             u, v = edge_endpoints[edge_id]
             b_sub.add_edge(u, v, key=edge_id)
-        odd_nodes = [v for v, d in b_sub.degree() if d % 2 != 0]
+        degrees = cast(
+            "Iterable[tuple[SubdivisionNode, int]]", b_sub.degree()
+        )
+        odd_nodes = [v for v, d in degrees if d % 2 != 0]
         if not odd_nodes:
             return set()
 
         # 외벽 파괴 절대 금지: 외곽 간선은 매우 큰 가중치를 부여해 우회시키고
         # 내륙 간선만 우선 이용하여 수리 경로를 잡는다.
         g_repair = g_euler.copy()
-        for u, v in g_repair.edges():
+        repair_pairs = cast(
+            "Iterable[tuple[SubdivisionNode, SubdivisionNode]]", g_repair.edges()
+        )
+        for u, v in repair_pairs:
             edge_id = FaceClusterPartition._subdivision_edge_id(u, v)
             g_repair[u][v]["weight"] = (
                 _OUTER_WALL_WEIGHT if edge_id in outer_edges else _INNER_WEIGHT
@@ -367,7 +378,10 @@ class FaceClusterPartition:
 
         repair_edges: set[int] = set()
         for u, v in nx.min_weight_matching(complete):
-            path = nx.shortest_path(g_repair, u, v, weight="weight")
+            path = cast(
+                "list[SubdivisionNode]",
+                nx.shortest_path(g_repair, u, v, weight="weight"),
+            )
             for node in path:
                 if is_edge_node(node):
                     repair_edges.add(node[1])
@@ -430,9 +444,13 @@ class FaceClusterPartition:
     @staticmethod
     def _edge_endpoints(graph: nx.Graph) -> dict[int, tuple[int, int]]:
         endpoints: dict[int, tuple[int, int]] = {}
-        for node, data in graph.nodes(data=True):
+        node_data = cast(
+            "Iterable[tuple[SubdivisionNode, dict[str, object]]]",
+            graph.nodes(data=True),
+        )
+        for node, data in node_data:
             if is_edge_node(node):
-                endpoints[node[1]] = data["endpoints"]
+                endpoints[node[1]] = cast("tuple[int, int]", data["endpoints"])
         return endpoints
 
     @staticmethod

@@ -3,6 +3,7 @@ from collections.abc import Iterator
 import networkx as nx
 
 from mr2s_module.domain.edge import Edge
+from mr2s_module.util.nx_multigraph import multi_edge_copies
 
 
 def robbins_orient(
@@ -65,7 +66,7 @@ def _orient_parallel_copies(
     동일 weight 쌍은 net=0 으로 완전 상쇄된다. weight 가 갈리면 완전 상쇄가
     불가능해 최소 |net| 로 근사한다(2-copy 정확, 다중 copy greedy 근사).
     """
-    copies = sorted(base_graph[tail][head].items())
+    copies = sorted(multi_edge_copies(base_graph, tail, head).items())
     if not copies:
         return
 

@@ -112,7 +112,7 @@ def contract_chains(
       new_edges.append(super_edge)
     cycle_chains.extend(cycles)
 
-    current = Graph(edges=new_edges)
+    current = Graph(edges={edge.id: edge for edge in new_edges})
     contracted_once = True
     if not cycles:
       break  # path 축약은 차수 불변 → 새 체인이 생길 수 없다
@@ -120,7 +120,7 @@ def contract_chains(
   if not contracted_once:
     # 체인이 없어도 클론을 돌려준다 — solver 의 in-place 방향 고정으로부터
     # 원본을 항상 보호해 호출부 분기를 없앤다.
-    current = Graph(edges=_clone_edges(current, set()))
+    current = Graph(edges={edge.id: edge for edge in _clone_edges(current, set())})
 
   return ContractionResult(
     contracted_graph=current,

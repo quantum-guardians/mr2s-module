@@ -23,13 +23,38 @@ from mr2s_module.cycle import (
     SnowballFaceClusterer,
 )
 
+from mr2s_module.util import inner_faces_by_edge_id
+
 from tests.cycle.partition_visualization import (
     delaunay_graph_with_pos,
+    draw_partition,
     partition_balance_report,
     render_face_cycle_partition_png,
 )
 
 _OUTPUT_DIR = Path(__file__).parent / "output"
+
+
+def test_draw_partition_fills_every_inner_face() -> None:
+    """면 색칠이 실제로 폴리곤을 그리는지 검증한다.
+
+    이전 구현은 정점쌍 키(face_edges)와 edge id 집합을 교집합해서 owner 가 항상
+    None 이었고, PNG 존재만 보는 테스트라 색칠이 100% 죽은 걸 못 잡았다.
+    """
+    import matplotlib.pyplot as plt
+
+    graph, pos = delaunay_graph_with_pos(n=60, seed=42)
+    face_cycle = FaceClusterPartition(target_k=6, clusterer=KMeansFaceClusterer())
+    np.random.seed(42)
+    partition = face_cycle.run(graph)
+
+    fig, ax = plt.subplots()
+    try:
+        draw_partition(ax, graph, partition, pos)
+        assert len(ax.patches) == len(inner_faces_by_edge_id(graph, pos))
+        assert len(ax.patches) > 0
+    finally:
+        plt.close(fig)
 
 
 @pytest.mark.parametrize("seed,n_points,target_k", [(42, 60, 6), (7, 80, 8)])

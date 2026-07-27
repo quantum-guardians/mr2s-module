@@ -182,7 +182,7 @@ def test_run_with_embedding_returns_default_solution_when_sampler_returns_empty_
 
 def test_run_with_embedding_stores_fixed_embedding_composite(monkeypatch) -> None:
   child_sampler = OneSampleSampler()
-  embedding = {"e_1_2": ["q1"]}
+  embedding: dict[object, list[object]] = {"e_1_2": ["q1"]}
 
   class FakeFixedEmbeddingComposite:
     def __init__(self, child, embedding):
@@ -249,6 +249,7 @@ def test_fixed_embedding_target_graph_prefers_to_networkx_graph() -> None:
 
   target_graph = solver.fixed_embedding_target_graph()
 
+  assert target_graph is not None
   assert target_graph is not target
   assert set(target_graph.edges) == {("q1", "q2"), ("q2", "q3")}
 
