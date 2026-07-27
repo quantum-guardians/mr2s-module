@@ -63,12 +63,21 @@ class StubMr2sSolver:
         raise NotImplementedError("StubMr2sSolver.run must not be called")
 
 
-class UnusedMr2sSolver:
-    """mr2s_solver 가 사용되지 않는 경로를 증명하는 stub — 모든 접근이 실패한다."""
-
-    @property
-    def evaluator(self) -> EvaluatorProtocol:
+class _UnusedEvaluator:
+    def run(self, solution: Solution) -> Score:
         raise NotImplementedError("mr2s_solver must not be used")
+
+
+class UnusedMr2sSolver:
+    """mr2s_solver 가 사용되지 않는 경로를 증명하는 stub — 모든 호출이 실패한다.
+
+    evaluator 를 raise 하는 property 로 두면 Python 3.11 의 runtime_checkable
+    Protocol isinstance 검사(hasattr 기반)가 property 를 실행해 터진다.
+    3.12 부터는 getattr_static 이라 안 터지는 버전 의존 동작이므로,
+    속성 접근은 허용하고 실제 호출만 실패하는 형태로 둔다.
+    """
+
+    evaluator: EvaluatorProtocol = _UnusedEvaluator()
 
     def run(self, graph: Graph) -> Solution:
         raise NotImplementedError("mr2s_solver must not be used")
