@@ -2,8 +2,8 @@ import time
 
 import pytest
 
-from mr2s_module.edge_orient.t_join import Tjoin
 from mr2s_module.domain import Graph, Solution
+from mr2s_module.edge_orient.t_join import Tjoin
 from mr2s_module.evaluator import Evaluator
 from mr2s_module.solver.dnc_mr2s_solver import DnCMr2sSolver, DnCSolution
 from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver

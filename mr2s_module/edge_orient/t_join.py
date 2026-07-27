@@ -5,7 +5,6 @@ from typing import cast
 
 import networkx as nx
 
-
 from mr2s_module.domain import Edge, Graph
 from mr2s_module.domain.orientation_result import OrientedEdges
 from mr2s_module.util import domain_graph_to_networkx
@@ -63,7 +62,9 @@ class Tjoin:
         j_edges_keys: set[tuple[int, int]] = set()
         if odd_nodes:
             # All-pairs shortest paths
-            dist_map = dict(nx.all_pairs_dijkstra_path_length(nx_graph, weight="weight"))
+            dist_map = dict(
+                nx.all_pairs_dijkstra_path_length(nx_graph, weight="weight")
+            )
 
             # Complete graph of odd nodes
             complete = nx.Graph()
@@ -85,7 +86,9 @@ class Tjoin:
                     path_edges_count[e] = path_edges_count.get(e, 0) + 1
 
             # Symmetric difference J: edges that appear an odd number of times in the matching paths
-            j_edges_keys = {e for e, count in path_edges_count.items() if count % 2 != 0}
+            j_edges_keys = {
+                e for e, count in path_edges_count.items() if count % 2 != 0
+            }
 
         # 3. Eulerian subgraph G_E = G \Delta J
         eulerian_edge_keys = set(endpoint_to_edge.keys()) ^ j_edges_keys
@@ -102,9 +105,7 @@ class Tjoin:
             if sub.number_of_edges() == 0:
                 continue
 
-            circuit = cast(
-                "list[tuple[int, int]]", list(nx.eulerian_circuit(sub))
-            )
+            circuit = cast("list[tuple[int, int]]", list(nx.eulerian_circuit(sub)))
             for u, v in circuit:
                 orig_edge = endpoint_to_edge[_endpoint_key(u, v)]
                 oriented_edges.append(orig_edge.oriented(u, v))

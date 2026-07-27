@@ -68,7 +68,7 @@ def test_door_only_partition_is_complete_cover(seed: int) -> None:
     result = DoorOnlyFaceClusterPartition(target_k=6).run(graph)
 
     input_ids = set(graph.edges.keys())
-    covered_ids = {
-        e.id for sg in result.sub_graphs for e in sg.edges.values()
-    } | {e.id for e in result.remaining_edges}
+    covered_ids = {e.id for sg in result.sub_graphs for e in sg.edges.values()} | {
+        e.id for e in result.remaining_edges
+    }
     assert covered_ids == input_ids

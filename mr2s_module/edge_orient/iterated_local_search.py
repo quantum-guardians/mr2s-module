@@ -1,4 +1,4 @@
-from typing import Callable
+from collections.abc import Callable
 
 import networkx as nx
 import numpy as np
@@ -6,9 +6,12 @@ import numpy as np
 from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.orientation_result import OrientedEdges
-from mr2s_module.util import domain_graph_to_networkx_multi, flow_imbalance, robbins_orient
+from mr2s_module.util import (
+    domain_graph_to_networkx_multi,
+    flow_imbalance,
+    robbins_orient,
+)
 from mr2s_module.util.nx_multigraph import multi_edge_copies
-
 
 EdgeMap = dict[int, Edge]
 
@@ -37,7 +40,7 @@ class IteratedLocalSearch:
         nodes = list(nx_graph.nodes())
 
         best_edges: EdgeMap | None = None
-        best_score = float('inf')
+        best_score = float("inf")
         stale_count = 0
 
         for iteration, (cand_edges, cand_score) in enumerate(
@@ -63,7 +66,9 @@ class IteratedLocalSearch:
 
         while True:
             cand_edges = self._perturb(cur_edges, nodes, level=self.perturb_strength)
-            cand_edges, cand_score = self._vnd_local_search(cand_edges, base_graph, nodes)
+            cand_edges, cand_score = self._vnd_local_search(
+                cand_edges, base_graph, nodes
+            )
 
             if self.is_relaxed or cand_score < cur_score:  # RILS 일 시 무조건 수정.
                 cur_edges = cand_edges
@@ -115,7 +120,7 @@ class IteratedLocalSearch:
             ek = edge_keys[int(self.rng.integers(0, n_edges))]
             original = new_edges[ek]
             new_edges[ek] = original.flip()
-            if evaluate_score(new_edges, nodes) == float('inf'):
+            if evaluate_score(new_edges, nodes) == float("inf"):
                 new_edges[ek] = original
             else:
                 flips_done += 1
@@ -140,7 +145,7 @@ def evaluate_score(
     단일 코어에 위임 — Evaluator/SA/QUBO poly 와 같은 수식이라 orienter/최종 평가가 정렬됨.
     """
     if not nodes:
-        return float('inf')
+        return float("inf")
 
     D = nx.DiGraph()
     D.add_nodes_from(nodes)
@@ -149,11 +154,10 @@ def evaluate_score(
         D.add_edge(u, v)
 
     if not nx.is_strongly_connected(D):
-        return float('inf')
+        return float("inf")
 
     return flow_imbalance(
-        (*edge.vertices, float(edge.weight))
-        for edge in edges.values()
+        (*edge.vertices, float(edge.weight)) for edge in edges.values()
     )
 
 

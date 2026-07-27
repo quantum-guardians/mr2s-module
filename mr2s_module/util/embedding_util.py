@@ -1,8 +1,8 @@
 from typing import cast
 
-import networkx as nx
-import minorminer
 import dwave_networkx as dnx
+import minorminer
+import networkx as nx
 from dimod import BinaryQuadraticModel
 
 from mr2s_module.domain import EmbeddingEstimate
@@ -17,7 +17,9 @@ def _get_pegasus_p16() -> nx.Graph:
     return _pegasus_graph
 
 
-def estimate_required_qubits(bqm: BinaryQuadraticModel, target_graph: nx.Graph = _get_pegasus_p16()) -> EmbeddingEstimate:
+def estimate_required_qubits(
+    bqm: BinaryQuadraticModel, target_graph: nx.Graph = _get_pegasus_p16()
+) -> EmbeddingEstimate:
     """minorminer + Pegasus P16 토폴로지를 사용하여 필요 물리 큐빗 수를 추정한다."""
     source_graph = nx.Graph()
     source_graph.add_nodes_from(bqm.variables)

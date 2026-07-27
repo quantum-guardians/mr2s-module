@@ -8,7 +8,7 @@ from mr2s_module.domain import EmbeddingEstimate, Graph
 
 @dataclass
 class QuboSolveContext:
-  graph: Graph
-  bqm: Any
-  target_graph: nx.Graph | None = None
-  embedding_estimate: EmbeddingEstimate | None = None
+    graph: Graph
+    bqm: Any
+    target_graph: nx.Graph | None = None
+    embedding_estimate: EmbeddingEstimate | None = None

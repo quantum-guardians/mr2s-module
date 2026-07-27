@@ -3,21 +3,22 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Score:
-  apsp_sum: float
-  strong_connect_rate: float
-  flow_score: float
-  sample_score: float = 0.0
+    apsp_sum: float
+    strong_connect_rate: float
+    flow_score: float
+    sample_score: float = 0.0
+
 
 @dataclass
 class EmbeddingEstimate:
-  num_logical_variables: int
-  num_quadratic_couplings: int
-  num_physical_qubits: int
-  max_chain_length: int
-  embedding: dict[object, list[object]] = field(default_factory=dict)
+    num_logical_variables: int
+    num_quadratic_couplings: int
+    num_physical_qubits: int
+    max_chain_length: int
+    embedding: dict[object, list[object]] = field(default_factory=dict)
 
-  @property
-  def has_physical_embedding(self) -> bool:
-    if self.num_logical_variables == 0:
-      return True
-    return bool(self.embedding) and all(self.embedding.values())
+    @property
+    def has_physical_embedding(self) -> bool:
+        if self.num_logical_variables == 0:
+            return True
+        return bool(self.embedding) and all(self.embedding.values())

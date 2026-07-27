@@ -18,10 +18,7 @@ def graph_from_pairs(
     directed: bool = False,
 ) -> Graph:
     """Build a project Graph from vertex pairs with one shared edge policy."""
-    return Graph(edges=[
-        Edge(u, v, weight, directed)
-        for u, v in pairs
-    ])
+    return Graph(edges=[Edge(u, v, weight, directed) for u, v in pairs])
 
 
 def delaunay_graph(n: int, seed: int, *, weight: int = 1) -> Graph:

@@ -9,6 +9,7 @@
 `FaceClusterPartition.run` 결과와 진단용으로 재현한 파이프라인의 final_boundary 가
 일치해야 한다 (같은 numpy seed 하에서).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,9 +20,9 @@ matplotlib = pytest.importorskip("matplotlib")
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
 import networkx as nx
 import numpy as np
+from matplotlib.patches import Polygon
 
 pytest.importorskip("scipy.spatial")
 
@@ -29,8 +30,8 @@ from mr2s_module.cycle import FaceClusterPartition
 from mr2s_module.cycle.face_clusterer import SnowballFaceClusterer
 from mr2s_module.domain import Graph
 from mr2s_module.util import (
-    build_edge_id_face_edges_map,
     build_dual_base,
+    build_edge_id_face_edges_map,
     domain_graph_to_edge_subdivision,
     domain_graph_to_networkx,
     enumerate_faces,
@@ -45,9 +46,7 @@ _OUTPUT_DIR = Path(__file__).parent / "output"
 _PALETTE = ("#1f77b4", "#ff7f0e")
 
 
-def _run_diagnostic(
-    graph: Graph, pos: dict[int, np.ndarray], target_k: int
-) -> dict:
+def _run_diagnostic(graph: Graph, pos: dict[int, np.ndarray], target_k: int) -> dict:
     """`FaceClusterPartition._partition_component` 와 동일한 흐름을 순수 함수로 재현,
     중간 산출물(면, 컴포넌트, 2-coloring) 을 함께 반환."""
     nx_graph = domain_graph_to_networkx(graph)
@@ -102,7 +101,7 @@ def _run_diagnostic(
     if merged.number_of_nodes() > 0 and nx.is_bipartite(merged):
         coloring = nx.bipartite.color(merged)
     else:
-        coloring = {i: 0 for i in range(len(components))}
+        coloring = dict.fromkeys(range(len(components)), 0)
 
     return {
         "nx_graph": nx_graph,
@@ -118,7 +117,9 @@ def _run_diagnostic(
 
 def _draw_original(ax, nx_graph: nx.Graph, pos: dict[int, np.ndarray]) -> None:
     ax.set_title("1. Original (Delaunay) graph", fontsize=14)
-    nx.draw_networkx_edges(nx_graph, pos, ax=ax, alpha=0.5, edge_color="#666", width=0.7)
+    nx.draw_networkx_edges(
+        nx_graph, pos, ax=ax, alpha=0.5, edge_color="#666", width=0.7
+    )
     nx.draw_networkx_nodes(nx_graph, pos, ax=ax, node_size=18, node_color="#222")
     ax.set_aspect("equal")
     ax.axis("off")
@@ -148,8 +149,7 @@ def _draw_faces(ax, diag: dict, pos: dict[int, np.ndarray]) -> None:
         pos,
         ax=ax,
         edgelist=[
-            diag["edge_endpoints"][edge_id]
-            for edge_id in diag["final_boundary"]
+            diag["edge_endpoints"][edge_id] for edge_id in diag["final_boundary"]
         ],
         edge_color="black",
         width=2.5,
@@ -160,8 +160,7 @@ def _draw_faces(ax, diag: dict, pos: dict[int, np.ndarray]) -> None:
 
 def _draw_rotations(ax, diag: dict, pos: dict[int, np.ndarray]) -> None:
     ax.set_title(
-        "3. Boundary cycle rotation "
-        "(blue: CCW, orange: CW — from 2-coloring)",
+        "3. Boundary cycle rotation (blue: CCW, orange: CW — from 2-coloring)",
         fontsize=14,
     )
     nx.draw_networkx_edges(

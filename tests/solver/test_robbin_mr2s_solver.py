@@ -1,56 +1,60 @@
 from mr2s_module.domain import Edge, Graph
 from mr2s_module.reduction import ReductionMr2sSolver
-from mr2s_module.solver.robbin_mr2s_solver import RobbinMR2SSolver
 from mr2s_module.solver.predefined import create_robbin_solver
+from mr2s_module.solver.robbin_mr2s_solver import RobbinMR2SSolver
 
 
 def test_robbin_solver_triangle_graph() -> None:
-  # 삼각형 그래프: 강연결 가능
-  graph = Graph(edges=[
-    Edge(1, 2, 1, False),
-    Edge(2, 3, 1, False),
-    Edge(1, 3, 1, False),
-  ])
-  solver = RobbinMR2SSolver()
-  solution = solver.run(graph)
+    # 삼각형 그래프: 강연결 가능
+    graph = Graph(
+        edges=[
+            Edge(1, 2, 1, False),
+            Edge(2, 3, 1, False),
+            Edge(1, 3, 1, False),
+        ]
+    )
+    solver = RobbinMR2SSolver()
+    solution = solver.run(graph)
 
-  assert len(solution.edges) == 3
-  # 모든 간선에 대해 방향이 결정되어 있어야 함
-  assert set(solution.edges) == set(graph.edges)
-  
-  # score 검증
-  assert solution.score is not None
-  assert solution.score.strong_connect_rate == 1.0
-  assert solution.score.apsp_sum == 1.5  # 사이클 방향화: 정방향 stretch 1, 역방향 2 → 평균 1.5
+    assert len(solution.edges) == 3
+    # 모든 간선에 대해 방향이 결정되어 있어야 함
+    assert set(solution.edges) == set(graph.edges)
 
-  # sample_set 검증
-  assert solution.sample_set is not None
-  samples = list(solution.sample_set.samples())
-  assert len(samples) == 1
-  for edge in graph.edges.values():
-    assert edge.to_key() in samples[0]
+    # score 검증
+    assert solution.score is not None
+    assert solution.score.strong_connect_rate == 1.0
+    assert (
+        solution.score.apsp_sum == 1.5
+    )  # 사이클 방향화: 정방향 stretch 1, 역방향 2 → 평균 1.5
+
+    # sample_set 검증
+    assert solution.sample_set is not None
+    samples = list(solution.sample_set.samples())
+    assert len(samples) == 1
+    for edge in graph.edges.values():
+        assert edge.to_key() in samples[0]
 
 
 def test_robbin_solver_orients_parallel_pair_anti_parallel() -> None:
-  # 평행쌍만으로 이뤄진 멀티그래프: 다중도 2 라 브릿지가 아니고,
-  # robbins 교대 배정으로 반평행 강연결 방향이 나와야 함
-  edge_a = Edge(0, 1, 3, False)
-  edge_b = Edge(0, 1, 3, False)
-  graph = Graph(edges=[edge_a, edge_b])
+    # 평행쌍만으로 이뤄진 멀티그래프: 다중도 2 라 브릿지가 아니고,
+    # robbins 교대 배정으로 반평행 강연결 방향이 나와야 함
+    edge_a = Edge(0, 1, 3, False)
+    edge_b = Edge(0, 1, 3, False)
+    graph = Graph(edges=[edge_a, edge_b])
 
-  solution = RobbinMR2SSolver().run(graph)
+    solution = RobbinMR2SSolver().run(graph)
 
-  assert len(solution.edges) == 2
-  assert solution.edges[edge_a.id] == tuple(reversed(solution.edges[edge_b.id]))
-  assert solution.score is not None
-  assert solution.score.flow_score == 0.0
-  assert solution.score.strong_connect_rate == 1.0
+    assert len(solution.edges) == 2
+    assert solution.edges[edge_a.id] == tuple(reversed(solution.edges[edge_b.id]))
+    assert solution.score is not None
+    assert solution.score.flow_score == 0.0
+    assert solution.score.strong_connect_rate == 1.0
 
 
 def test_create_robbin_solver_factory() -> None:
-  solver = create_robbin_solver()
-  assert isinstance(solver, ReductionMr2sSolver)
-  assert isinstance(solver.mr2s_solver, RobbinMR2SSolver)
+    solver = create_robbin_solver()
+    assert isinstance(solver, ReductionMr2sSolver)
+    assert isinstance(solver.mr2s_solver, RobbinMR2SSolver)
 
-  bare = create_robbin_solver(use_reduction=False)
-  assert isinstance(bare, RobbinMR2SSolver)
+    bare = create_robbin_solver(use_reduction=False)
+    assert isinstance(bare, RobbinMR2SSolver)

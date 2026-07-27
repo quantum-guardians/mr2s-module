@@ -27,11 +27,12 @@ from __future__ import annotations
 
 import itertools
 import sys
-from pathlib import Path
 from collections.abc import Sequence
+from pathlib import Path
 from typing import cast
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
@@ -66,7 +67,6 @@ from mr2s_module.util.planar_graph import (
     is_edge_node,
     polygon_area,
 )
-
 from tests.util.graph_fixtures import delaunay_graph_with_pos
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "visualizations"
@@ -77,6 +77,7 @@ TARGET_K = 4
 
 
 # ── unprotected repair (외벽 보호 OFF) ────────────────────────────
+
 
 def unprotected_repair(
     g_euler: nx.Graph,
@@ -123,6 +124,7 @@ class NoWallProtection(FaceClusterPartition):
 
 # ── intermediate state (clustering 고정, repair 두 종류) ──────────
 
+
 def largest_biconnected(graph: Graph) -> nx.Graph | None:
     """면 분할이 도는 최대 이중연결 컴포넌트 (edge subdivision 위에서)."""
     subdivision = domain_graph_to_edge_subdivision(graph)
@@ -134,7 +136,9 @@ def largest_biconnected(graph: Graph) -> nx.Graph | None:
     return max(comps, key=lambda g: g.number_of_edges())
 
 
-def compute_state(component: nx.Graph, pos: dict[int, np.ndarray], seed: int) -> dict | None:
+def compute_state(
+    component: nx.Graph, pos: dict[int, np.ndarray], seed: int
+) -> dict | None:
     raw_faces = enumerate_faces(component)
     if len(raw_faces) < 2:
         return None
@@ -191,7 +195,9 @@ def _seg(ax, st, edge_id: int, **kw):
     ax.plot([pos[u][0], pos[v][0]], [pos[u][1], pos[v][1]], **kw)
 
 
-def draw_panel(ax, st, repair_edges: set[int], final_boundary: set[int], title: str) -> int:
+def draw_panel(
+    ax, st, repair_edges: set[int], final_boundary: set[int], title: str
+) -> int:
     pos = st["pos"]
     outer = st["outer"]
     f2c = st["face_to_cluster"]
@@ -202,8 +208,14 @@ def draw_panel(ax, st, repair_edges: set[int], final_boundary: set[int], title: 
         if c is None:
             continue
         pts = np.array([pos[v] for v in ring])
-        ax.fill(pts[:, 0], pts[:, 1], color=COLORS[c % len(COLORS)],
-                alpha=0.45, ec="none", zorder=0)
+        ax.fill(
+            pts[:, 0],
+            pts[:, 1],
+            color=COLORS[c % len(COLORS)],
+            alpha=0.45,
+            ec="none",
+            zorder=0,
+        )
 
     # 전체 그래프 연하게
     for edge_id in st["edge_endpoints"]:
@@ -258,13 +270,19 @@ def run_visualization(seed: int) -> bool:
 
     fig, axes = plt.subplots(1, 2, figsize=(17, 8.5))
     draw_panel(
-        axes[0], st, st["repair_on"], st["final_on"],
+        axes[0],
+        st,
+        st["repair_on"],
+        st["final_on"],
         f"외벽 보호 ON (현재 동작)\n"
         f"odd={odd}  repair={len(st['repair_on'])}  "
         f"wall-damage={len(st['repair_on'] & st['outer'])}  → macros={macros_on}",
     )
     dmg = draw_panel(
-        axes[1], st, st["repair_off"], st["final_off"],
+        axes[1],
+        st,
+        st["repair_off"],
+        st["final_off"],
         f"외벽 보호 OFF (균일 가중치)\n"
         f"odd={odd}  repair={len(st['repair_off'])}  "
         f"wall-damage={len(st['repair_off'] & st['outer'])}  → macros={macros_off}",
@@ -276,8 +294,7 @@ def run_visualization(seed: int) -> bool:
         Line2D([0], [0], color="#2e7d32", lw=2.6, label="수리 간선(내륙)"),
         Line2D([0], [0], color="#d32f2f", lw=4.0, label="외벽 파괴 수리"),
     ]
-    fig.legend(handles=legend, loc="lower center", ncol=4, fontsize=10,
-               frameon=False)
+    fig.legend(handles=legend, loc="lower center", ncol=4, fontsize=10, frameon=False)
     fig.suptitle(
         f"Seed {seed} — T-join boundary repair: wall protection ON vs OFF",
         fontsize=12,

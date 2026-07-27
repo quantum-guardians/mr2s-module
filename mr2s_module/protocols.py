@@ -5,15 +5,15 @@ from dimod.higherorder.polynomial import BinaryPolynomial
 
 if TYPE_CHECKING:
     from mr2s_module.domain.edge import Edge as EdgeModel
+    from mr2s_module.domain.embeddable_graph_partition import (
+        EmbeddableGraphPartition as EmbeddableGraphPartitionModel,
+    )
     from mr2s_module.domain.graph import Graph as GraphModel
     from mr2s_module.domain.graph_partition_result import (
         GraphPartitionResult as GraphPartitionResultModel,
     )
     from mr2s_module.domain.orientation_result import (
         OrientationResult as OrientationResultModel,
-    )
-    from mr2s_module.domain.embeddable_graph_partition import (
-        EmbeddableGraphPartition as EmbeddableGraphPartitionModel,
     )
     from mr2s_module.domain.score import Score as ScoreModel
     from mr2s_module.domain.solution import Solution as SolutionModel
@@ -92,8 +92,6 @@ class QuboBackedMr2sSolverProtocol(Mr2sSolverProtocol, Protocol):
     """
 
     def build_bqm(self, graph: Graph) -> QuboMatrix: ...
-
-
 
 
 class SolutionRankerProtocol(Protocol):
