@@ -1,0 +1,213 @@
+<title>Supernode Cactus View</title>
+<style>
+  :root {
+    --bg:#0f1216; --panel:#171c22; --panel2:#1d242c; --line:#2b333d;
+    --ink:#e8edf2; --muted:#8b96a3; --faint:#66707c;
+    --arc:#f0a500; --arc-dim:#7a5608; --complex:#e5484d;
+    --strong:#3fb950; --broken:#f85149; --sup:#6ea8fe; --supstroke:#93c0ff;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:light){
+    :root{--bg:#f5f7fa;--panel:#fff;--panel2:#eef1f5;--line:#d7dde4;
+      --ink:#1b2027;--muted:#5b6675;--faint:#8a94a1;
+      --arc:#b8790a;--arc-dim:#d8ac52;--complex:#c93a3f;
+      --strong:#1a7f37;--broken:#cf222e;--sup:#3b82f6;--supstroke:#2563eb;}
+  }
+  :root[data-theme="dark"]{--bg:#0f1216;--panel:#171c22;--panel2:#1d242c;--line:#2b333d;
+    --ink:#e8edf2;--muted:#8b96a3;--faint:#66707c;--arc:#f0a500;--arc-dim:#7a5608;
+    --complex:#e5484d;--strong:#3fb950;--broken:#f85149;--sup:#6ea8fe;--supstroke:#93c0ff;}
+  :root[data-theme="light"]{--bg:#f5f7fa;--panel:#fff;--panel2:#eef1f5;--line:#d7dde4;
+    --ink:#1b2027;--muted:#5b6675;--faint:#8a94a1;--arc:#b8790a;--arc-dim:#d8ac52;
+    --complex:#c93a3f;--strong:#1a7f37;--broken:#cf222e;--sup:#3b82f6;--supstroke:#2563eb;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .head{padding:22px 26px 6px;max-width:1200px;margin:0 auto;}
+  h1{font-size:17px;margin:0;font-weight:650;letter-spacing:.01em;}
+  .sub{font-size:12.5px;color:var(--muted);margin-top:4px;max-width:70ch;}
+  .banner{max-width:1200px;margin:14px auto 0;padding:0 26px;}
+  .banner .box{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:13px 16px;font-size:13px;display:flex;gap:18px;flex-wrap:wrap;align-items:baseline;}
+  .banner b{color:var(--ink);} .banner .mono{font-family:var(--mono);}
+  .kpi{font-family:var(--mono);font-size:15px;font-weight:650;}
+  .kpi.ok{color:var(--strong);} .kpi.bad{color:var(--broken);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;max-width:1200px;margin:16px auto 40px;padding:0 26px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;}
+  .card.strong{border-color:color-mix(in srgb,var(--strong) 55%,var(--line));}
+  .card.broken{border-color:color-mix(in srgb,var(--broken) 60%,var(--line));}
+  .card .top{display:flex;align-items:center;gap:8px;padding:11px 13px 8px;}
+  .card .name{font-family:var(--mono);font-weight:650;font-size:13.5px;}
+  .pill{font-size:10px;font-weight:650;padding:2px 7px;border-radius:999px;letter-spacing:.03em;}
+  .pill.ok{background:color-mix(in srgb,var(--strong) 20%,transparent);color:var(--strong);}
+  .pill.bad{background:color-mix(in srgb,var(--broken) 22%,transparent);color:var(--broken);}
+  .pill.cactus{background:color-mix(in srgb,var(--sup) 20%,transparent);color:var(--sup);margin-left:auto;}
+  .card svg{width:100%;height:210px;display:block;background:color-mix(in srgb,var(--panel2) 60%,transparent);}
+  .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line);}
+  .meta div{background:var(--panel);padding:7px 6px;text-align:center;}
+  .meta .k{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+  .meta .v{font-family:var(--mono);font-size:14px;margin-top:1px;font-variant-numeric:tabular-nums;}
+  .meta .v.count{color:var(--arc);font-weight:650;}
+  .sup-c{fill:var(--sup);stroke:var(--supstroke);stroke-width:1.2;}
+  .arc{stroke:var(--arc);stroke-width:2;cursor:pointer;}
+  .arc:hover{stroke-width:3.5;}
+  .arc.complex{stroke:var(--complex);}
+  .ctrl{max-width:1200px;margin:0 auto;padding:0 26px;display:flex;gap:9px;flex-wrap:wrap;}
+  button{font-family:var(--sans);font-size:12.5px;font-weight:550;color:var(--ink);background:var(--panel2);border:1px solid var(--line);padding:8px 13px;border-radius:8px;cursor:pointer;}
+  button:hover{border-color:var(--arc);}
+  button.primary{background:color-mix(in srgb,var(--arc) 15%,var(--panel2));border-color:var(--arc-dim);}
+  button:focus-visible{outline:2px solid var(--arc);outline-offset:1px;}
+  .legend{max-width:1200px;margin:8px auto 0;padding:0 26px;font-size:12px;color:var(--muted);display:flex;gap:18px;flex-wrap:wrap;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .lz{width:12px;height:12px;border-radius:3px;} .ll{width:20px;height:0;border-top:2px solid;}
+  .foot{max-width:1200px;margin:20px auto 40px;padding:0 26px;font-size:12px;color:var(--muted);line-height:1.6;}
+  .foot code{font-family:var(--mono);color:var(--ink);background:var(--panel2);padding:1px 5px;border-radius:4px;}
+  #tip{position:fixed;pointer-events:none;opacity:0;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:6px 9px;font-family:var(--mono);font-size:11px;z-index:10;transition:opacity .1s;box-shadow:0 6px 20px rgba(0,0,0,.3);}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+
+<div class="head">
+  <h1>Supernode Cactus View</h1>
+  <div class="sub">각 macro 를 <b>free 내부간선으로 축약</b>(supernode)하고 macro 경계 <b>door 만 arc</b> 로 남긴 본질 구조. 모든 macro 가 <b>cactus</b>(biconnected 블록이 전부 단일 사이클) → 강연결 배향 수 = 정확히 <span class="mono">2^(cycle rank)</span>. door(arc)를 클릭하면 방향이 뒤집히고 해당 macro 강연결 여부를 재판정한다.</div>
+</div>
+
+<div class="banner"><div class="box">
+  <span>전 macro 동시 강연결: <span class="kpi" id="kAll">6 / 6</span></span>
+  <span>canonical 유효 조합(door 방향): <span class="mono" id="kProd">—</span></span>
+  <span>이론 상한 <span class="mono">2^(Σ cycle rank)</span> = <span class="mono" id="kTheory">—</span></span>
+</div></div>
+
+<div class="legend">
+  <span><span class="lz" style="background:var(--sup)"></span> supernode (크기 ∝ 포함 정점 수)</span>
+  <span><span class="ll" style="border-color:var(--arc)"></span> door arc (클릭=flip)</span>
+  <span><span class="ll" style="border-color:var(--complex)"></span> non-cactus 블록 arc</span>
+  <span><span class="lz" style="background:var(--strong)"></span> macro 강연결</span>
+  <span><span class="lz" style="background:var(--broken)"></span> 실패</span>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="ctrl">
+  <button class="primary" id="btnReset">Canonical 복원</button>
+  <button id="btnRandom">전 door 무작위</button>
+</div>
+
+<div class="foot" id="foot"></div>
+<div id="tip"></div>
+
+<script>
+const DATA = {"seed": 42, "macros": [{"id": 0, "n_sup": 20, "supernodes": [{"pos": [0.8585979199113825, 0.6973680290593639], "size": 1}, {"pos": [0.5545847870158348, 0.06381725610417532], "size": 1}, {"pos": [0.4667210037270342, 0.04380376578722878], "size": 1}, {"pos": [0.19990820247510832, 0.007362269751005512], "size": 1}, {"pos": [0.7869243775021384, 0.6648508565920321], "size": 1}, {"pos": [0.908580690707607, 0.6997071338107496], "size": 1}, {"pos": [0.04161417386189248, 0.49399081924451893], "size": 1}, {"pos": [0.581061139700395, 0.34686980453483707], "size": 1}, {"pos": [0.5909154914814168, 0.022803871029697498], "size": 1}, {"pos": [0.2909178381401186, 0.5150571292317145], "size": 1}, {"pos": [0.5188583603864491, 0.315929051830793], "size": 1}, {"pos": [0.013936287708201545, 0.22965602999885526], "size": 1}, {"pos": [0.6942624356428865, 0.5811166092209024], "size": 1}, {"pos": [0.024859491386256316, 0.5551980423268247], "size": 1}, {"pos": [0.6339751116810851, 0.1058974037507533], "size": 1}, {"pos": [0.017836783976987736, 0.10914399676573494], "size": 1}, {"pos": [0.3179910969520494, 0.5045262370222301], "size": 1}, {"pos": [0.7794775407713289, 0.6424832759955477], "size": 1}, {"pos": [0.9312362356901018, 0.11973358850112281], "size": 1}, {"pos": [0.4961543658333861, 0.30236285088947396], "size": 92}], "arcs": [{"eid": 2, "a": 19, "b": 0, "complex": false}, {"eid": 3, "a": 0, "b": 4, "complex": false}, {"eid": 21, "a": 2, "b": 1, "complex": false}, {"eid": 22, "a": 1, "b": 19, "complex": false}, {"eid": 25, "a": 19, "b": 17, "complex": false}, {"eid": 26, "a": 4, "b": 19, "complex": false}, {"eid": 36, "a": 8, "b": 2, "complex": false}, {"eid": 52, "a": 19, "b": 6, "complex": false}, {"eid": 74, "a": 19, "b": 3, "complex": false}, {"eid": 75, "a": 3, "b": 19, "complex": false}, {"eid": 97, "a": 19, "b": 10, "complex": false}, {"eid": 101, "a": 7, "b": 19, "complex": false}, {"eid": 102, "a": 6, "b": 19, "complex": false}, {"eid": 128, "a": 12, "b": 19, "complex": false}, {"eid": 140, "a": 10, "b": 19, "complex": false}, {"eid": 150, "a": 19, "b": 5, "complex": false}, {"eid": 151, "a": 5, "b": 19, "complex": false}, {"eid": 180, "a": 19, "b": 13, "complex": false}, {"eid": 185, "a": 19, "b": 7, "complex": false}, {"eid": 186, "a": 19, "b": 8, "complex": false}, {"eid": 228, "a": 9, "b": 19, "complex": false}, {"eid": 229, "a": 16, "b": 9, "complex": false}, {"eid": 253, "a": 19, "b": 11, "complex": false}, {"eid": 254, "a": 11, "b": 15, "complex": false}, {"eid": 256, "a": 13, "b": 19, "complex": false}, {"eid": 257, "a": 19, "b": 12, "complex": false}, {"eid": 278, "a": 19, "b": 14, "complex": false}, {"eid": 279, "a": 14, "b": 19, "complex": false}, {"eid": 287, "a": 15, "b": 19, "complex": false}, {"eid": 294, "a": 19, "b": 16, "complex": false}, {"eid": 318, "a": 19, "b": 18, "complex": false}, {"eid": 320, "a": 17, "b": 19, "complex": false}, {"eid": 340, "a": 18, "b": 19, "complex": false}], "cycle_rank": 14, "is_cactus": true}, {"id": 1, "n_sup": 25, "supernodes": [{"pos": [0.8276311719925821, 0.6316643991220648], "size": 1}, {"pos": [0.8322598013952011, 0.8047643574968019], "size": 1}, {"pos": [0.7223593505964503, 0.4618772302513874], "size": 1}, {"pos": [0.19011870064568892, 0.6528482548635625], "size": 15}, {"pos": [0.908580690707607, 0.6997071338107496], "size": 1}, {"pos": [0.4320930397751037, 0.6273088407024432], "size": 1}, {"pos": [0.10340296772255164, 0.587644572177712], "size": 1}, {"pos": [0.581061139700395, 0.34686980453483707], "size": 1}, {"pos": [0.14024908899861077, 0.5540361435390494], "size": 1}, {"pos": [0.2909178381401186, 0.5150571292317145], "size": 1}, {"pos": [0.5188583603864491, 0.315929051830793], "size": 1}, {"pos": [0.19977565166005762, 0.8041245261822627], "size": 1}, {"pos": [0.024859491386256316, 0.5551980423268247], "size": 1}, {"pos": [0.9662319121431817, 0.5960425532343728], "size": 1}, {"pos": [0.8605529405688251, 0.7727125538910555], "size": 2}, {"pos": [0.14617324419269828, 0.8246641904563413], "size": 1}, {"pos": [0.6807145267995064, 0.39363045683202824], "size": 1}, {"pos": [0.9795706805865927, 0.8020258802735936], "size": 1}, {"pos": [0.37946407972692897, 0.6857433454559454], "size": 1}, {"pos": [0.8485604887736246, 0.652587340560102], "size": 1}, {"pos": [0.8008841760850967, 0.5936820044663541], "size": 1}, {"pos": [0.6045547445000461, 0.6494119956001618], "size": 45}, {"pos": [0.38331982277740984, 0.7296857086773779], "size": 1}, {"pos": [0.5529930652528999, 0.9361399868384622], "size": 1}, {"pos": [0.7177602360036435, 0.9511946600038411], "size": 1}], "arcs": [{"eid": 2, "a": 19, "b": 21, "complex": false}, {"eid": 25, "a": 0, "b": 21, "complex": false}, {"eid": 26, "a": 21, "b": 0, "complex": false}, {"eid": 56, "a": 21, "b": 23, "complex": false}, {"eid": 64, "a": 1, "b": 14, "complex": false}, {"eid": 65, "a": 14, "b": 1, "complex": false}, {"eid": 85, "a": 21, "b": 5, "complex": false}, {"eid": 97, "a": 21, "b": 10, "complex": false}, {"eid": 101, "a": 7, "b": 21, "complex": false}, {"eid": 128, "a": 21, "b": 2, "complex": false}, {"eid": 130, "a": 2, "b": 16, "complex": false}, {"eid": 135, "a": 3, "b": 15, "complex": false}, {"eid": 140, "a": 10, "b": 21, "complex": false}, {"eid": 150, "a": 17, "b": 4, "complex": false}, {"eid": 151, "a": 4, "b": 13, "complex": false}, {"eid": 173, "a": 5, "b": 21, "complex": false}, {"eid": 180, "a": 6, "b": 12, "complex": false}, {"eid": 181, "a": 8, "b": 6, "complex": false}, {"eid": 185, "a": 16, "b": 7, "complex": false}, {"eid": 211, "a": 3, "b": 8, "complex": false}, {"eid": 228, "a": 9, "b": 3, "complex": false}, {"eid": 229, "a": 21, "b": 9, "complex": false}, {"eid": 234, "a": 14, "b": 17, "complex": false}, {"eid": 257, "a": 20, "b": 21, "complex": false}, {"eid": 261, "a": 11, "b": 3, "complex": false}, {"eid": 262, "a": 15, "b": 11, "complex": false}, {"eid": 271, "a": 23, "b": 21, "complex": false}, {"eid": 272, "a": 21, "b": 24, "complex": false}, {"eid": 277, "a": 12, "b": 3, "complex": false}, {"eid": 282, "a": 13, "b": 19, "complex": false}, {"eid": 288, "a": 21, "b": 14, "complex": false}, {"eid": 297, "a": 3, "b": 22, "complex": false}, {"eid": 320, "a": 21, "b": 20, "complex": false}, {"eid": 326, "a": 3, "b": 21, "complex": false}, {"eid": 327, "a": 18, "b": 3, "complex": false}, {"eid": 329, "a": 22, "b": 18, "complex": false}, {"eid": 336, "a": 24, "b": 21, "complex": false}], "cycle_rank": 13, "is_cactus": true}, {"id": 2, "n_sup": 6, "supernodes": [{"pos": [0.15231210271316842, 0.696320375077736], "size": 1}, {"pos": [0.13182221778652103, 0.6776586736128575], "size": 1}, {"pos": [0.19977565166005762, 0.8041245261822627], "size": 1}, {"pos": [0.024859491386256316, 0.5551980423268247], "size": 1}, {"pos": [0.1333813478435139, 0.8949147135644446], "size": 13}, {"pos": [0.3763594734808262, 0.986631544924322], "size": 1}], "arcs": [{"eid": 5, "a": 5, "b": 4, "complex": false}, {"eid": 135, "a": 0, "b": 4, "complex": false}, {"eid": 136, "a": 1, "b": 0, "complex": false}, {"eid": 154, "a": 4, "b": 5, "complex": false}, {"eid": 168, "a": 2, "b": 4, "complex": false}, {"eid": 255, "a": 4, "b": 1, "complex": false}, {"eid": 262, "a": 4, "b": 2, "complex": false}, {"eid": 276, "a": 4, "b": 3, "complex": false}, {"eid": 277, "a": 3, "b": 4, "complex": false}], "cycle_rank": 4, "is_cactus": true}, {"id": 3, "n_sup": 15, "supernodes": [{"pos": [0.9706980243949033, 0.8931211213221977], "size": 1}, {"pos": [0.45891577553833995, 0.5687411959528937], "size": 1}, {"pos": [0.891677266254914, 0.7486080194569492], "size": 1}, {"pos": [0.19977565166005762, 0.8041245261822627], "size": 1}, {"pos": [0.6628642127635824, 0.9556232570469699], "size": 1}, {"pos": [0.8294286148827363, 0.7968170883251617], "size": 1}, {"pos": [0.8270664305185708, 0.8851299745960548], "size": 10}, {"pos": [0.9795706805865927, 0.8020258802735936], "size": 1}, {"pos": [0.40577855975101634, 0.6565260930791943], "size": 2}, {"pos": [0.3398024417518983, 0.584739210003003], "size": 3}, {"pos": [0.6947981288184982, 0.8607190683258941], "size": 1}, {"pos": [0.7826241046295469, 0.7951148389830859], "size": 1}, {"pos": [0.36307040760791565, 0.8653729509865106], "size": 9}, {"pos": [0.5529930652528999, 0.9361399868384622], "size": 1}, {"pos": [0.3763594734808262, 0.986631544924322], "size": 1}], "arcs": [{"eid": 15, "a": 12, "b": 14, "complex": false}, {"eid": 30, "a": 0, "b": 6, "complex": false}, {"eid": 31, "a": 6, "b": 0, "complex": false}, {"eid": 56, "a": 12, "b": 13, "complex": false}, {"eid": 64, "a": 6, "b": 2, "complex": false}, {"eid": 65, "a": 5, "b": 6, "complex": false}, {"eid": 83, "a": 9, "b": 1, "complex": false}, {"eid": 85, "a": 1, "b": 8, "complex": false}, {"eid": 173, "a": 8, "b": 12, "complex": false}, {"eid": 208, "a": 6, "b": 11, "complex": false}, {"eid": 209, "a": 10, "b": 6, "complex": false}, {"eid": 225, "a": 14, "b": 12, "complex": false}, {"eid": 233, "a": 6, "b": 12, "complex": false}, {"eid": 234, "a": 2, "b": 7, "complex": false}, {"eid": 261, "a": 3, "b": 12, "complex": false}, {"eid": 263, "a": 12, "b": 3, "complex": false}, {"eid": 271, "a": 13, "b": 4, "complex": false}, {"eid": 272, "a": 4, "b": 6, "complex": false}, {"eid": 283, "a": 7, "b": 6, "complex": false}, {"eid": 288, "a": 11, "b": 5, "complex": false}, {"eid": 327, "a": 8, "b": 9, "complex": false}, {"eid": 329, "a": 12, "b": 8, "complex": false}, {"eid": 336, "a": 6, "b": 10, "complex": false}], "cycle_rank": 9, "is_cactus": true}, {"id": 4, "n_sup": 3, "supernodes": [{"pos": [0.5592071607454135, 0.3039500980626122], "size": 1}, {"pos": [0.6329176292676207, 0.2881556141824617], "size": 1}, {"pos": [0.6161657000241213, 0.1712913040927888], "size": 1}], "arcs": [{"eid": 98, "a": 0, "b": 1, "complex": false}, {"eid": 99, "a": 2, "b": 0, "complex": false}, {"eid": 334, "a": 1, "b": 2, "complex": false}], "cycle_rank": 1, "is_cactus": true}, {"id": 5, "n_sup": 3, "supernodes": [{"pos": [0.19977565166005762, 0.8041245261822627], "size": 1}, {"pos": [0.2528089139684708, 0.930502871566139], "size": 7}, {"pos": [0.3763594734808262, 0.986631544924322], "size": 1}], "arcs": [{"eid": 154, "a": 1, "b": 2, "complex": false}, {"eid": 168, "a": 0, "b": 1, "complex": false}, {"eid": 225, "a": 2, "b": 1, "complex": false}, {"eid": 263, "a": 1, "b": 0, "complex": false}], "cycle_rank": 2, "is_cactus": true}]};
+const SVGNS='http://www.w3.org/2000/svg';
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function el(t,a){const e=document.createElementNS(SVGNS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+
+// door 방향 상태: eid → 0(canonical a→b) / 1(flipped)
+let flip = {};
+function resetFlip(){ flip={}; for(const m of DATA.macros) for(const a of m.arcs) flip[a.eid]=0; }
+resetFlip();
+
+function reach(adj,s,n){const seen=new Set([s]);const q=[s];while(q.length){const x=q.pop();const ns=adj.get(x);if(ns)for(const y of ns)if(!seen.has(y)){seen.add(y);q.push(y);}}return seen.size===n;}
+function macroStrong(m){
+  if(m.n_sup<=1) return true;
+  const fwd=new Map(),bwd=new Map();
+  const add=(mp,x,y)=>{let l=mp.get(x);if(!l){l=[];mp.set(x,l);}l.push(y);};
+  for(const a of m.arcs){
+    const [x,y] = flip[a.eid] ? [a.b,a.a] : [a.a,a.b];
+    add(fwd,x,y); add(bwd,y,x);
+  }
+  return reach(fwd,0,m.n_sup) && reach(bwd,0,m.n_sup);
+}
+
+// 좌표: 각 macro supernode pos([0,1] 원본) → 카드 viewBox 정규화
+function fitTransform(m,W,H,pad){
+  const xs=m.supernodes.map(s=>s.pos[0]), ys=m.supernodes.map(s=>s.pos[1]);
+  let x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  const sx=(x1-x0)||1, sy=(y1-y0)||1;
+  return p=>[ pad+((p[0]-x0)/sx)*(W-2*pad), H-(pad+((p[1]-y0)/sy)*(H-2*pad)) ];
+}
+
+const grid=document.getElementById('grid');
+const cards=[];
+for(const m of DATA.macros){
+  const card=document.createElement('div'); card.className='card';
+  const W=300,H=210,pad=26;
+  const T=fitTransform(m,W,H,pad);
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,preserveAspectRatio:'xMidYMid meet'});
+  const defs=el('defs',{});
+  const mk=el('marker',{id:`ah${m.id}`,viewBox:'0 0 10 10',refX:'9',refY:'5',markerWidth:'7',markerHeight:'7',orient:'auto-start-reverse'});
+  const mp=el('path',{d:'M0,0 L10,5 L0,10 z'});mp.setAttribute('fill','var(--arc)');mk.appendChild(mp);defs.appendChild(mk);svg.appendChild(defs);
+  const gArc=el('g',{}),gSup=el('g',{}); svg.append(gArc,gSup);
+  // supernodes
+  const pos=m.supernodes.map(s=>T(s.pos));
+  for(let i=0;i<m.supernodes.length;i++){
+    const r=3.2+Math.sqrt(m.supernodes[i].size)*1.6;
+    const c=el('circle',{cx:pos[i][0],cy:pos[i][1],r:r,class:'sup-c'});
+    gSup.appendChild(c);
+  }
+  // arcs
+  const arcEls=[];
+  for(const a of m.arcs){
+    const ln=el('line',{class:'arc'+(a.complex?' complex':'')});
+    ln.style.markerEnd=`url(#ah${m.id})`;
+    ln.addEventListener('click',()=>{ flip[a.eid]^=1; render(); });
+    ln.addEventListener('mousemove',ev=>{tip.style.opacity='1';tip.textContent=`door e${a.eid} · ${flip[a.eid]?'flipped':'canonical'}`;tip.style.left=(ev.clientX+12)+'px';tip.style.top=(ev.clientY+12)+'px';});
+    ln.addEventListener('mouseleave',()=>tip.style.opacity='0');
+    gArc.appendChild(ln); arcEls.push({a,ln});
+  }
+  card.appendChild(svg);
+  const meta=document.createElement('div'); meta.className='meta';
+  meta.innerHTML=`
+    <div><div class="k">super</div><div class="v">${m.n_sup}</div></div>
+    <div><div class="k">door</div><div class="v">${m.arcs.length}</div></div>
+    <div><div class="k">cycle rank</div><div class="v">${m.cycle_rank}</div></div>
+    <div><div class="k">강연결 수</div><div class="v count">2^${m.cycle_rank}</div></div>`;
+  card.appendChild(meta);
+  grid.appendChild(card);
+  cards.push({m,card,arcEls,pos,T});
+}
+
+const tip=document.getElementById('tip');
+
+function render(){
+  let okAll=0;
+  for(const c of cards){
+    const strong=macroStrong(c.m);
+    okAll += strong?1:0;
+    c.card.classList.toggle('strong',strong);
+    c.card.classList.toggle('broken',!strong);
+    // 카드 top 갱신
+    let top=c.card.querySelector('.top');
+    if(!top){ top=document.createElement('div'); top.className='top'; c.card.insertBefore(top,c.card.firstChild); }
+    top.innerHTML=`<span class="name">macro ${c.m.id}</span>
+      <span class="pill ${strong?'ok':'bad'}">${strong?'STRONG':'BROKEN'}</span>
+      <span class="pill cactus">${c.m.is_cactus?'cactus':'non-cactus'}</span>`;
+    // arc 좌표/방향
+    for(const {a,ln} of c.arcEls){
+      const [xi,yi] = flip[a.eid] ? [a.b,a.a] : [a.a,a.b];
+      const A=c.pos[xi], B=c.pos[yi];
+      const dx=B[0]-A[0],dy=B[1]-A[1],L=Math.hypot(dx,dy)||1;
+      const rB=3.2+Math.sqrt(c.m.supernodes[yi].size)*1.6+4;
+      const rA=3.2+Math.sqrt(c.m.supernodes[xi].size)*1.6+2;
+      ln.setAttribute('x1',A[0]+dx/L*rA); ln.setAttribute('y1',A[1]+dy/L*rA);
+      ln.setAttribute('x2',B[0]-dx/L*rB); ln.setAttribute('y2',B[1]-dy/L*rB);
+    }
+  }
+  const kAll=document.getElementById('kAll');
+  kAll.textContent=`${okAll} / ${DATA.macros.length}`;
+  kAll.className='kpi '+(okAll===DATA.macros.length?'ok':'bad');
+}
+
+// 이론값 배너
+const totalRank=DATA.macros.reduce((s,m)=>s+m.cycle_rank,0);
+document.getElementById('kTheory').textContent=`2^${totalRank}`;
+document.getElementById('kProd').innerHTML=DATA.macros.map(m=>`2^${m.cycle_rank}`).join(' · ')+` (macro별 독립 상한)`;
+
+document.getElementById('btnReset').addEventListener('click',()=>{resetFlip();render();});
+document.getElementById('btnRandom').addEventListener('click',()=>{for(const k in flip)flip[k]=Math.random()<0.5?1:0;render();});
+
+document.getElementById('foot').innerHTML=
+  `<b>읽는 법.</b> supernode = macro 내부에서 free(양방향) 간선으로 서로 오갈 수 있는 정점 뭉치. 그 뭉치들 사이를 잇는 것이 door(방향 고정). macro 강연결 ⟺ 이 축약 그래프가 강연결. `+
+  `모든 macro 가 <b>cactus</b>라 각 독립 사이클마다 CW/CCW 2택 → macro 강연결 door 조합 = <code>2^(cycle rank)</code> 정확. `+
+  `단 door 92개 중 35개가 두 macro에 동시에 걸쳐(공유) 있어, 6개를 <b>동시에</b> 강연결시키는 전역 조합은 macro별 곱이 아니라 결합된 교집합(#P-hard, 병목 macro 1). `+
+  `<code>전 door 무작위</code>를 눌러보면 대부분 macro가 즉시 깨지는 걸 볼 수 있다.`;
+
+render();
+</script>

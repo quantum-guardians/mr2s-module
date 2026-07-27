@@ -125,7 +125,8 @@ def test_chain_coexists_with_direct_parallel_edge() -> None:
         Edge(10, 11, 1, False),
         Edge(11, 1, 1, False),
     ]
-    edges = chain_edges + [
+    edges = [
+        *chain_edges,
         Edge(0, 1, 1, False),  # 직행
         # 본체 K4 {0,1,2,3}의 나머지
         Edge(0, 2, 1, False),

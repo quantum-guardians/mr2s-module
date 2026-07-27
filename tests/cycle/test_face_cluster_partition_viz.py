@@ -53,9 +53,7 @@ def _run_diagnostic(graph: Graph, pos: dict[int, np.ndarray], target_k: int) -> 
     subdivision = domain_graph_to_edge_subdivision(graph)
     edge_endpoints = {edge.id: edge.endpoints() for edge in graph.edges.values()}
     # subdivision 은 edge node 도 좌표가 필요하다 — 키가 int 가 아니다.
-    sub_pos: dict[SubdivisionNode, Point] = {
-        vertex: point for vertex, point in pos.items()
-    }
+    sub_pos: dict[SubdivisionNode, Point] = dict(pos.items())
     for node in subdivision.nodes:
         if is_edge_node(node):
             u, v = edge_endpoints[node[1]]
@@ -200,13 +198,13 @@ def _draw_rotations(ax, diag: dict, pos: dict[int, np.ndarray]) -> None:
                 "",
                 xy=pos[b],
                 xytext=pos[a],
-                arrowprops=dict(
-                    arrowstyle="-|>",
-                    color=color,
-                    lw=1.6,
-                    alpha=0.95,
-                    mutation_scale=14,
-                ),
+                arrowprops={
+                    "arrowstyle": "-|>",
+                    "color": color,
+                    "lw": 1.6,
+                    "alpha": 0.95,
+                    "mutation_scale": 14,
+                },
             )
     ax.set_aspect("equal")
     ax.axis("off")

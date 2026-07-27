@@ -104,7 +104,7 @@ class SAMR2SSolver:
         ]
         triples.extend(
             (*cls._build_direction(edge, bit), float(edge.weight))
-            for edge, bit in zip(variable_edges, state_bits)
+            for edge, bit in zip(variable_edges, state_bits, strict=True)
         )
         return triples
 
@@ -325,7 +325,10 @@ class SAMR2SSolver:
         best_bits, best_objective = self._anneal_bits(
             graph, variable_edges, treewidth, undirected_lengths
         )
-        sample = {edge.to_key(): bit for edge, bit in zip(variable_edges, best_bits)}
+        sample = {
+            edge.to_key(): bit
+            for edge, bit in zip(variable_edges, best_bits, strict=True)
+        }
         sample_set = SampleSet.from_samples(
             [sample],
             vartype="BINARY",
@@ -336,7 +339,7 @@ class SAMR2SSolver:
         # edge id → 방향. 비트가 variable_edges 와 같은 순서라 평행 간선도 id 별 독립 복원.
         solution_edges: dict[int, tuple[int, int]] = {
             edge.id: self._build_direction(edge, bit)
-            for edge, bit in zip(variable_edges, best_bits)
+            for edge, bit in zip(variable_edges, best_bits, strict=True)
         }
         for edge in graph.edges.values():
             if edge.directed:

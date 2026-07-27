@@ -81,7 +81,7 @@ class Tjoin:
                 path = cast(
                     "list[int]", nx.shortest_path(nx_graph, u, v, weight="weight")
                 )
-                for a, b in zip(path[:-1], path[1:]):
+                for a, b in itertools.pairwise(path):
                     e = _endpoint_key(a, b)
                     path_edges_count[e] = path_edges_count.get(e, 0) + 1
 

@@ -1,0 +1,321 @@
+{
+ "seed": 42,
+ "remove_ratio": 0.4,
+ "enum_cap": 18,
+ "configs": [
+  {
+   "n_vertices": 200,
+   "n_edges": 348,
+   "target_k": 10,
+   "macros": [
+    {
+     "macro": 0,
+     "nv": 111,
+     "n_door": 25,
+     "n_outer": 25,
+     "n_intern": 130,
+     "fc": {
+      "skip": true,
+      "bits": 130
+     },
+     "do": {
+      "skip": true,
+      "bits": 155
+     },
+     "all": {
+      "skip": true,
+      "bits": 180
+     },
+     "elapsed_s": 0.0
+    },
+    {
+     "macro": 1,
+     "nv": 84,
+     "n_door": 46,
+     "n_outer": 0,
+     "n_intern": 79,
+     "fc": {
+      "skip": true,
+      "bits": 79
+     },
+     "do": {
+      "skip": true,
+      "bits": 79
+     },
+     "all": {
+      "skip": true,
+      "bits": 125
+     },
+     "elapsed_s": 0.0
+    },
+    {
+     "macro": 2,
+     "nv": 18,
+     "n_door": 9,
+     "n_outer": 4,
+     "n_intern": 15,
+     "fc": {
+      "skip": false,
+      "bits": 15,
+      "n": 6048,
+      "best": 1330.0
+     },
+     "do": {
+      "skip": true,
+      "bits": 19
+     },
+     "all": {
+      "skip": true,
+      "bits": 28
+     },
+     "elapsed_s": 0.6
+    },
+    {
+     "macro": 3,
+     "nv": 35,
+     "n_door": 22,
+     "n_outer": 7,
+     "n_intern": 26,
+     "fc": {
+      "skip": true,
+      "bits": 26
+     },
+     "do": {
+      "skip": true,
+      "bits": 33
+     },
+     "all": {
+      "skip": true,
+      "bits": 55
+     },
+     "elapsed_s": 0.0
+    },
+    {
+     "macro": 4,
+     "nv": 3,
+     "n_door": 3,
+     "n_outer": 0,
+     "n_intern": 0,
+     "fc": {
+      "skip": false,
+      "bits": 0,
+      "n": 1,
+      "best": 9.0
+     },
+     "do": {
+      "skip": false,
+      "bits": 0,
+      "n": 1,
+      "best": 9.0
+     },
+     "all": {
+      "skip": false,
+      "bits": 3,
+      "n": 2,
+      "best": 9.0
+     },
+     "elapsed_s": 0.0
+    },
+    {
+     "macro": 5,
+     "nv": 9,
+     "n_door": 7,
+     "n_outer": 0,
+     "n_intern": 6,
+     "fc": {
+      "skip": false,
+      "bits": 6,
+      "n": 24,
+      "best": 212.0
+     },
+     "do": {
+      "skip": false,
+      "bits": 6,
+      "n": 24,
+      "best": 212.0
+     },
+     "all": {
+      "skip": false,
+      "bits": 13,
+      "n": 216,
+      "best": 202.0
+     },
+     "elapsed_s": 0.0
+    }
+   ]
+  },
+  {
+   "n_vertices": 100,
+   "n_edges": 172,
+   "target_k": 10,
+   "macros": [
+    {
+     "macro": 0,
+     "nv": 59,
+     "n_door": 21,
+     "n_outer": 17,
+     "n_intern": 52,
+     "fc": {
+      "skip": true,
+      "bits": 52
+     },
+     "do": {
+      "skip": true,
+      "bits": 69
+     },
+     "all": {
+      "skip": true,
+      "bits": 90
+     },
+     "elapsed_s": 0.0
+    },
+    {
+     "macro": 1,
+     "nv": 36,
+     "n_door": 29,
+     "n_outer": 0,
+     "n_intern": 25,
+     "fc": {
+      "skip": true,
+      "bits": 25
+     },
+     "do": {
+      "skip": true,
+      "bits": 25
+     },
+     "all": {
+      "skip": true,
+      "bits": 54
+     },
+     "elapsed_s": 0.0
+    },
+    {
+     "macro": 2,
+     "nv": 19,
+     "n_door": 11,
+     "n_outer": 3,
+     "n_intern": 13,
+     "fc": {
+      "skip": false,
+      "bits": 13,
+      "n": 576,
+      "best": 1510.0
+     },
+     "do": {
+      "skip": false,
+      "bits": 16,
+      "n": 576,
+      "best": 1510.0
+     },
+     "all": {
+      "skip": true,
+      "bits": 27
+     },
+     "elapsed_s": 0.4
+    },
+    {
+     "macro": 3,
+     "nv": 15,
+     "n_door": 12,
+     "n_outer": 1,
+     "n_intern": 8,
+     "fc": {
+      "skip": false,
+      "bits": 8,
+      "n": 96,
+      "best": 872.0
+     },
+     "do": {
+      "skip": false,
+      "bits": 9,
+      "n": 96,
+      "best": 872.0
+     },
+     "all": {
+      "skip": true,
+      "bits": 21
+     },
+     "elapsed_s": 0.0
+    },
+    {
+     "macro": 4,
+     "nv": 4,
+     "n_door": 4,
+     "n_outer": 0,
+     "n_intern": 0,
+     "fc": {
+      "skip": false,
+      "bits": 0,
+      "n": 1,
+      "best": 24.0
+     },
+     "do": {
+      "skip": false,
+      "bits": 0,
+      "n": 1,
+      "best": 24.0
+     },
+     "all": {
+      "skip": false,
+      "bits": 4,
+      "n": 2,
+      "best": 24.0
+     },
+     "elapsed_s": 0.0
+    },
+    {
+     "macro": 5,
+     "nv": 14,
+     "n_door": 14,
+     "n_outer": 0,
+     "n_intern": 4,
+     "fc": {
+      "skip": false,
+      "bits": 4,
+      "n": 12,
+      "best": 871.0
+     },
+     "do": {
+      "skip": false,
+      "bits": 4,
+      "n": 12,
+      "best": 871.0
+     },
+     "all": {
+      "skip": false,
+      "bits": 18,
+      "n": 216,
+      "best": 841.0
+     },
+     "elapsed_s": 0.9
+    },
+    {
+     "macro": 6,
+     "nv": 4,
+     "n_door": 3,
+     "n_outer": 0,
+     "n_intern": 2,
+     "fc": {
+      "skip": false,
+      "bits": 2,
+      "n": 2,
+      "best": 21.0
+     },
+     "do": {
+      "skip": false,
+      "bits": 2,
+      "n": 2,
+      "best": 21.0
+     },
+     "all": {
+      "skip": false,
+      "bits": 5,
+      "n": 6,
+      "best": 21.0
+     },
+     "elapsed_s": 0.0
+    }
+   ]
+  }
+ ]
+}

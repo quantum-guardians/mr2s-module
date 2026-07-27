@@ -505,7 +505,7 @@ class DnCMr2sSolver:
                     solve_context,
                 )
                 for sub_graph, embedding_estimate, solve_context in zip(
-                    sub_graphs, estimates, contexts
+                    sub_graphs, estimates, contexts, strict=True
                 )
             ]
             logger.info(
@@ -530,7 +530,7 @@ class DnCMr2sSolver:
                         empty_sample_set,
                     )
                     for sub_graph, embedding_estimate, solve_context in zip(
-                        sub_graphs, estimates, contexts
+                        sub_graphs, estimates, contexts, strict=True
                     )
                 ],
             )
@@ -553,7 +553,7 @@ class DnCMr2sSolver:
                     solve_context,
                 )
                 for sub_graph, embedding_estimate, solve_context in zip(
-                    sub_graphs, estimates, contexts
+                    sub_graphs, estimates, contexts, strict=True
                 )
             ]
             logger.info(

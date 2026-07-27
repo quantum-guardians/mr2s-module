@@ -1,3 +1,4 @@
+import contextlib
 import multiprocessing
 import os
 import queue
@@ -40,10 +41,8 @@ def default_process_start_method() -> ProcessStartMethod:
 
 def _prepare_child_process_group() -> None:
     if os.name == "posix" and hasattr(os, "setsid"):
-        try:
+        with contextlib.suppress(OSError):
             os.setsid()
-        except OSError:
-            pass
 
 
 def _terminate_process_tree(process: BaseProcess) -> None:
@@ -138,7 +137,7 @@ class ProcessRunner:
                             process.join()
                             raise ProcessExecutionError(
                                 f"process {process.pid} exited with code {process.exitcode}"
-                            )
+                            ) from None
                     continue
 
                 process = active.pop(index)

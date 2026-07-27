@@ -137,7 +137,7 @@ def _chain_directions(chain: Chain, forward: bool) -> list[tuple[int, tuple[int,
         edge_ids.reverse()
     return [
         (edge_id, (tail, head))
-        for edge_id, tail, head in zip(edge_ids, vertices, vertices[1:])
+        for edge_id, tail, head in zip(edge_ids, vertices, vertices[1:], strict=False)
     ]
 
 

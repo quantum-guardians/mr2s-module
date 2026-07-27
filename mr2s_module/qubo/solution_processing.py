@@ -70,9 +70,9 @@ def select_best_sample(
         return ranker.run(solution)
 
     return min(
-        map(
-            lambda sample: process_solution(sample, canonical_edges),
-            sample_set.samples(),
+        (
+            process_solution(dict(sample), canonical_edges)
+            for sample in sample_set.samples()
         ),
         key=get_effective_score,
     )

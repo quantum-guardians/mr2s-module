@@ -56,7 +56,7 @@ def test_parallel_edges_produce_distinct_qubo_variables() -> None:
     graph = Graph(edges=[Edge(0, 1, 3, False), Edge(0, 1, 5, False)])
     poly = FlowPolyGenerator().run(graph)
 
-    variables = {v for term in poly.keys() for v in term}
+    variables = {v for term in poly for v in term}
     expected = {edge.to_key() for edge in graph.edges.values()}
     assert len(expected) == 2
     assert expected.issubset(variables)  # 평행 간선마다 독립 변수
