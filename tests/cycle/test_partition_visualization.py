@@ -4,6 +4,7 @@
 `FaceCycleProtocol` 구현체가 반환한 `GraphPartitionResult` 를 같은 렌더러로
 그려서 구현체별 partition PNG 를 저장한다.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,15 +23,13 @@ from mr2s_module.cycle import (
     KMeansFaceClusterer,
     SnowballFaceClusterer,
 )
-
 from mr2s_module.util import inner_faces_by_edge_id
-
 from tests.cycle.partition_visualization import (
-    delaunay_graph_with_pos,
     draw_partition,
     partition_balance_report,
     render_face_cycle_partition_png,
 )
+from tests.util.graph_fixtures import delaunay_graph_with_pos
 
 _OUTPUT_DIR = Path(__file__).parent / "output"
 
@@ -95,19 +94,13 @@ def test_face_cycle_partition_visualization_renders(
     face_cycle = face_cycle_factory(target_k=target_k)
     np.random.seed(seed)
 
-    out_path = (
-        _OUTPUT_DIR
-        / f"{name}_partition_seed{seed}_n{n_points}_k{target_k}.png"
-    )
+    out_path = _OUTPUT_DIR / f"{name}_partition_seed{seed}_n{n_points}_k{target_k}.png"
     partition = render_face_cycle_partition_png(
         graph=graph,
         pos=pos,
         face_cycle=face_cycle,
         path=out_path,
-        title=(
-            f"{name} partition - n={n_points}, target_k={target_k}, "
-            f"seed={seed}"
-        ),
+        title=(f"{name} partition - n={n_points}, target_k={target_k}, seed={seed}"),
     )
 
     assert len(partition.sub_graphs) > 0

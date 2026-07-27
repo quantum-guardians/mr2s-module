@@ -4,30 +4,34 @@ from dimod import BinaryQuadraticModel
 from mr2s_module import EmbeddingEstimate
 from mr2s_module.domain import Edge, Graph
 from mr2s_module.qubo import FlowPolyGenerator
-from mr2s_module.util import estimate_required_qubits, map_binary_poly_to_bqm
 from mr2s_module.util import EmbeddingEstimate as UtilEmbeddingEstimate
+from mr2s_module.util import estimate_required_qubits, map_binary_poly_to_bqm
 
 
 def _build_triangle_graph() -> Graph:
-    return Graph(edges=[
-        Edge(1, 2, 1, False),
-        Edge(2, 3, 1, False),
-        Edge(1, 3, 1, False),
-    ])
+    return Graph(
+        edges=[
+            Edge(1, 2, 1, False),
+            Edge(2, 3, 1, False),
+            Edge(1, 3, 1, False),
+        ]
+    )
 
 
 def _build_5node_graph() -> Graph:
     """5노드 8간선 그래프."""
-    return Graph(edges=[
-        Edge(1, 2, 1, False),
-        Edge(1, 3, 1, False),
-        Edge(1, 4, 1, False),
-        Edge(2, 3, 1, False),
-        Edge(2, 4, 1, False),
-        Edge(3, 4, 1, False),
-        Edge(3, 5, 1, False),
-        Edge(4, 5, 1, False),
-    ])
+    return Graph(
+        edges=[
+            Edge(1, 2, 1, False),
+            Edge(1, 3, 1, False),
+            Edge(1, 4, 1, False),
+            Edge(2, 3, 1, False),
+            Edge(2, 4, 1, False),
+            Edge(3, 4, 1, False),
+            Edge(3, 5, 1, False),
+            Edge(4, 5, 1, False),
+        ]
+    )
 
 
 class TestMapBinaryPolyToBqm:
@@ -80,7 +84,10 @@ class TestEstimateRequiredQubits:
         assert result.num_physical_qubits >= result.num_logical_variables
         assert result.max_chain_length >= 1
         assert set(result.embedding) == set(bqm.variables)
-        assert sum(len(chain) for chain in result.embedding.values()) == result.num_physical_qubits
+        assert (
+            sum(len(chain) for chain in result.embedding.values())
+            == result.num_physical_qubits
+        )
 
     @pytest.mark.slow
     def test_returns_embedding_estimate_for_5node_graph(self) -> None:
@@ -96,4 +103,7 @@ class TestEstimateRequiredQubits:
         assert result.num_physical_qubits >= result.num_logical_variables
         assert result.max_chain_length >= 1
         assert set(result.embedding) == set(bqm.variables)
-        assert sum(len(chain) for chain in result.embedding.values()) == result.num_physical_qubits
+        assert (
+            sum(len(chain) for chain in result.embedding.values())
+            == result.num_physical_qubits
+        )

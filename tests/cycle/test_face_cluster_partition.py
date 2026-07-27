@@ -6,7 +6,7 @@ import pytest
 
 from mr2s_module.cycle import FaceClusterPartition
 from mr2s_module.cycle.face_cluster_partition import _ComponentPartition
-from mr2s_module.domain import Edge, Graph, GraphPartitionResult
+from mr2s_module.domain import Edge, Graph
 from mr2s_module.util.planar_graph import (
     build_edge_id_face_edges_map,
     domain_graph_to_edge_subdivision,
@@ -18,11 +18,7 @@ from tests.util.graph_fixtures import delaunay_graph, graph_from_pairs
 
 def _edge_ids_for_endpoints(graph: Graph, u: int, v: int) -> set[int]:
     endpoints = (u, v) if u <= v else (v, u)
-    return {
-        edge.id
-        for edge in graph.edges.values()
-        if edge.endpoints() == endpoints
-    }
+    return {edge.id for edge in graph.edges.values() if edge.endpoints() == endpoints}
 
 
 def _edge_id_for_endpoints(graph: Graph, u: int, v: int) -> int:
@@ -54,10 +50,12 @@ def test_non_planar_graph_opts_out() -> None:
 
 
 def test_directed_input_graph_raises_error() -> None:
-    graph = Graph(edges=[
-        Edge(0, 1, 1, True),
-        Edge(1, 2, 1, False),
-    ])
+    graph = Graph(
+        edges=[
+            Edge(0, 1, 1, True),
+            Edge(1, 2, 1, False),
+        ]
+    )
 
     with pytest.raises(ValueError, match="undirected input graph"):
         FaceClusterPartition().run(graph)
@@ -86,10 +84,16 @@ def test_cut_vertex_components_are_processed_independently() -> None:
     # Two triangles glued at vertex 2 — graph is not biconnected.
     # Each biconnected sub-component should contribute its full triangle
     # to remaining_edges with directions assigned.
-    graph = graph_from_pairs([
-        (0, 1), (1, 2), (0, 2),
-        (2, 3), (3, 4), (2, 4),
-    ])
+    graph = graph_from_pairs(
+        [
+            (0, 1),
+            (1, 2),
+            (0, 2),
+            (2, 3),
+            (3, 4),
+            (2, 4),
+        ]
+    )
     result = FaceClusterPartition().run(graph)
     ids = {e.id for e in result.directed_edges()}
 
@@ -108,11 +112,13 @@ def test_cut_vertex_components_are_processed_independently() -> None:
 def test_directed_edges_carry_input_weight() -> None:
     # FaceClusterPartition emits oriented Edge objects in remaining_edges so that
     # define_edge_direction can replace the caller's undirected edges by id.
-    graph = Graph(edges=[
-        Edge(0, 1, 7, False),
-        Edge(1, 2, 11, False),
-        Edge(0, 2, 13, False),
-    ])
+    graph = Graph(
+        edges=[
+            Edge(0, 1, 7, False),
+            Edge(1, 2, 11, False),
+            Edge(0, 2, 13, False),
+        ]
+    )
     weight_by_id = {e.id: e.weight for e in graph.edges.values()}
 
     directed = FaceClusterPartition().run(graph).directed_edges()
@@ -132,7 +138,9 @@ def test_directions_form_consistent_cycle_on_triangle() -> None:
     # face in one direction (either all CW or all CCW), forming a cycle.
     graph = graph_from_pairs([(0, 1), (1, 2), (0, 2)])
 
-    pairs = {edge.vertices for edge in FaceClusterPartition().run(graph).directed_edges()}
+    pairs = {
+        edge.vertices for edge in FaceClusterPartition().run(graph).directed_edges()
+    }
     out_degree: dict[int, int] = {0: 0, 1: 0, 2: 0}
     in_degree: dict[int, int] = {0: 0, 1: 0, 2: 0}
     for u, v in pairs:
@@ -147,10 +155,15 @@ def test_bridge_edges_pass_through_remaining_undirected() -> None:
     # (3,4) and (2,3) sit in 1-edge biconnected components (bridges); the
     # pipeline filters them out (len(bcc) < 3), so they must land in
     # remaining_edges untouched (still undirected).
-    graph = graph_from_pairs([
-        (0, 1), (1, 2), (0, 2),
-        (2, 3), (3, 4),
-    ])
+    graph = graph_from_pairs(
+        [
+            (0, 1),
+            (1, 2),
+            (0, 2),
+            (2, 3),
+            (3, 4),
+        ]
+    )
     result = FaceClusterPartition().run(graph)
 
     by_id = {e.id: e for e in result.remaining_edges}
@@ -167,12 +180,14 @@ def test_bridge_edges_pass_through_remaining_undirected() -> None:
 
 
 def test_self_loops_are_never_directed() -> None:
-    graph = Graph(edges=[
-        Edge(0, 0, 1, False),
-        Edge(0, 1, 1, False),
-        Edge(1, 2, 1, False),
-        Edge(0, 2, 1, False),
-    ])
+    graph = Graph(
+        edges=[
+            Edge(0, 0, 1, False),
+            Edge(0, 1, 1, False),
+            Edge(1, 2, 1, False),
+            Edge(0, 2, 1, False),
+        ]
+    )
     result = FaceClusterPartition().run(graph)
 
     for edge in result.remaining_edges:
@@ -194,9 +209,7 @@ def test_delaunay_partition_is_complete_cover(seed: int) -> None:
     directed_ids = {e.id for e in result.directed_edges()}
     assert directed_ids.issubset(input_ids)
     assert len(directed_ids) > 0
-    covered_ids = {
-        e.id for sg in result.sub_graphs for e in sg.edges.values()
-    } | {
+    covered_ids = {e.id for sg in result.sub_graphs for e in sg.edges.values()} | {
         e.id for e in result.remaining_edges
     }
     assert covered_ids == input_ids
@@ -378,15 +391,13 @@ def test_parallel_boundary_copy_placement_is_deterministic() -> None:
     u, v = _first_boundary_pair_in_macro(FaceClusterPartition(target_k=4).run(base))
 
     def copy_macro_indices() -> list[int]:
-        edges = list(base.edges.values()) + [Edge(u, v, 1, False)]
+        edges = [*list(base.edges.values()), Edge(u, v, 1, False)]
         parallel_id = edges[-1].id
         graph = Graph(edges=edges)
         np.random.seed(31)
         result = FaceClusterPartition(target_k=4).run(graph)
         owning = [
-            idx
-            for idx, sg in enumerate(result.sub_graphs)
-            if parallel_id in sg.edges
+            idx for idx, sg in enumerate(result.sub_graphs) if parallel_id in sg.edges
         ]
         assert owning
         return owning
@@ -412,7 +423,7 @@ def test_parallel_copy_on_inner_edge_preserves_both_ids() -> None:
     assert inner_pair is not None
     u, v = inner_pair
 
-    edges = list(base.edges.values()) + [Edge(u, v, 1, False)]
+    edges = [*list(base.edges.values()), Edge(u, v, 1, False)]
     parallel_id = edges[-1].id
     multigraph = Graph(edges=edges)
 

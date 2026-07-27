@@ -1,6 +1,6 @@
+import networkx as nx
 from dimod import Vartype
 from dimod.higherorder.polynomial import BinaryPolynomial
-import networkx as nx
 
 from mr2s_module.domain import Edge, EmbeddingEstimate, Graph, Score, Solution
 from mr2s_module.solver import QuboMR2SSolver

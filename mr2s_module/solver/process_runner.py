@@ -1,14 +1,16 @@
-from dataclasses import dataclass
+import contextlib
 import multiprocessing
-from multiprocessing.process import BaseProcess
 import os
 import queue
 import signal
 import sys
-from typing import TYPE_CHECKING, Callable, Iterable, Literal, TypeVar, cast
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+from multiprocessing.process import BaseProcess
+from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
 if TYPE_CHECKING:
-  from multiprocessing.context import ForkContext, SpawnContext
+    from multiprocessing.context import ForkContext, SpawnContext
 
 
 ProcessStartMethod = Literal["spawn", "fork"]
@@ -18,139 +20,137 @@ _R = TypeVar("_R")
 
 
 class ProcessExecutionError(RuntimeError):
-  pass
+    pass
 
 
 def validate_process_start_method(start_method: str) -> None:
-  if start_method not in {"spawn", "fork"}:
-    raise ValueError("start_method must be 'spawn' or 'fork'")
-  if start_method not in multiprocessing.get_all_start_methods():
-    raise ValueError(
-      f"start_method {start_method!r} is not supported on this platform"
-    )
+    if start_method not in {"spawn", "fork"}:
+        raise ValueError("start_method must be 'spawn' or 'fork'")
+    if start_method not in multiprocessing.get_all_start_methods():
+        raise ValueError(
+            f"start_method {start_method!r} is not supported on this platform"
+        )
 
 
 def default_process_start_method() -> ProcessStartMethod:
-  available_methods = multiprocessing.get_all_start_methods()
-  if os.name == "nt" or sys.platform == "darwin" or "fork" not in available_methods:
-    return "spawn"
-  return "fork"
+    available_methods = multiprocessing.get_all_start_methods()
+    if os.name == "nt" or sys.platform == "darwin" or "fork" not in available_methods:
+        return "spawn"
+    return "fork"
 
 
 def _prepare_child_process_group() -> None:
-  if os.name == "posix" and hasattr(os, "setsid"):
-    try:
-      os.setsid()
-    except OSError:
-      pass
+    if os.name == "posix" and hasattr(os, "setsid"):
+        with contextlib.suppress(OSError):
+            os.setsid()
 
 
 def _terminate_process_tree(process: BaseProcess) -> None:
-  if not process.is_alive():
-    return
+    if not process.is_alive():
+        return
 
-  if os.name == "posix":
-    pid = process.pid
-    # start() 이후에만 호출되므로 pid 는 항상 설정되어 있다.
-    assert pid is not None
-    try:
-      os.killpg(pid, signal.SIGTERM)
-      return
-    except (AttributeError, ProcessLookupError, PermissionError):
-      pass
-    except OSError:
-      pass
+    if os.name == "posix":
+        pid = process.pid
+        # start() 이후에만 호출되므로 pid 는 항상 설정되어 있다.
+        assert pid is not None
+        try:
+            os.killpg(pid, signal.SIGTERM)
+            return
+        except (AttributeError, ProcessLookupError, PermissionError):
+            pass
+        except OSError:
+            pass
 
-  process.terminate()
+    process.terminate()
 
 
 def _run_process_task(func, index: int, item, result_queue) -> None:
-  _prepare_child_process_group()
-  try:
-    result_queue.put((index, True, func(item)))
-  except Exception as exc:
-    result_queue.put((index, False, f"{exc.__class__.__name__}: {exc!s}"))
+    _prepare_child_process_group()
+    try:
+        result_queue.put((index, True, func(item)))
+    except Exception as exc:
+        result_queue.put((index, False, f"{exc.__class__.__name__}: {exc!s}"))
 
 
 def _close_result_queue(result_queue) -> None:
-  result_queue.close()
-  result_queue.join_thread()
+    result_queue.close()
+    result_queue.join_thread()
 
 
 @dataclass(frozen=True)
 class ProcessRunner:
-  max_workers: int
-  start_method: ProcessStartMethod | None = None
+    max_workers: int
+    start_method: ProcessStartMethod | None = None
 
-  def __post_init__(self) -> None:
-    if self.max_workers < 1:
-      raise ValueError("max_workers must be at least 1")
-    if self.start_method is not None:
-      validate_process_start_method(self.start_method)
+    def __post_init__(self) -> None:
+        if self.max_workers < 1:
+            raise ValueError("max_workers must be at least 1")
+        if self.start_method is not None:
+            validate_process_start_method(self.start_method)
 
-  def _resolved_start_method(self) -> ProcessStartMethod:
-    if self.start_method is not None:
-      return self.start_method
-    return default_process_start_method()
+    def _resolved_start_method(self) -> ProcessStartMethod:
+        if self.start_method is not None:
+            return self.start_method
+        return default_process_start_method()
 
-  def map(self, func: Callable[[_T], _R], items: Iterable[_T]) -> list[_R]:
-    item_list = list(items)
-    if not item_list:
-      return []
+    def map(self, func: Callable[[_T], _R], items: Iterable[_T]) -> list[_R]:
+        item_list = list(items)
+        if not item_list:
+            return []
 
-    # 스텁의 get_context 는 Literal 유니언 인자에서 BaseContext 로 넓혀지지만
-    # 실제 반환형은 start method 별 구체 컨텍스트다 (stub limitation).
-    context = cast(
-      "SpawnContext | ForkContext",
-      multiprocessing.get_context(self._resolved_start_method()),
-    )
-    result_queue = context.Queue()
-    results: list[_R | None] = [None] * len(item_list)
-    pending = iter(enumerate(item_list))
-    active: dict[int, BaseProcess] = {}
-    completed = 0
-
-    def start_available_processes() -> None:
-      while len(active) < self.max_workers:
-        try:
-          index, item = next(pending)
-        except StopIteration:
-          return
-
-        process = context.Process(
-          target=_run_process_task,
-          args=(func, index, item, result_queue),
+        # 스텁의 get_context 는 Literal 유니언 인자에서 BaseContext 로 넓혀지지만
+        # 실제 반환형은 start method 별 구체 컨텍스트다 (stub limitation).
+        context = cast(
+            "SpawnContext | ForkContext",
+            multiprocessing.get_context(self._resolved_start_method()),
         )
-        process.daemon = False
-        process.start()
-        active[index] = process
+        result_queue = context.Queue()
+        results: list[_R | None] = [None] * len(item_list)
+        pending = iter(enumerate(item_list))
+        active: dict[int, BaseProcess] = {}
+        completed = 0
 
-    try:
-      start_available_processes()
-      while completed < len(item_list):
+        def start_available_processes() -> None:
+            while len(active) < self.max_workers:
+                try:
+                    index, item = next(pending)
+                except StopIteration:
+                    return
+
+                process = context.Process(
+                    target=_run_process_task,
+                    args=(func, index, item, result_queue),
+                )
+                process.daemon = False
+                process.start()
+                active[index] = process
+
         try:
-          index, succeeded, payload = result_queue.get(timeout=0.1)
-        except queue.Empty:
-          for index, process in list(active.items()):
-            if process.exitcode not in (None, 0):
-              active.pop(index)
-              process.join()
-              raise ProcessExecutionError(
-                f"process {process.pid} exited with code {process.exitcode}"
-              )
-          continue
+            start_available_processes()
+            while completed < len(item_list):
+                try:
+                    index, succeeded, payload = result_queue.get(timeout=0.1)
+                except queue.Empty:
+                    for index, process in list(active.items()):
+                        if process.exitcode not in (None, 0):
+                            active.pop(index)
+                            process.join()
+                            raise ProcessExecutionError(
+                                f"process {process.pid} exited with code {process.exitcode}"
+                            ) from None
+                    continue
 
-        process = active.pop(index)
-        process.join()
-        completed += 1
-        if not succeeded:
-          raise ProcessExecutionError(payload)
-        results[index] = payload
-        start_available_processes()
-    finally:
-      for process in active.values():
-        _terminate_process_tree(process)
-        process.join()
-      _close_result_queue(result_queue)
+                process = active.pop(index)
+                process.join()
+                completed += 1
+                if not succeeded:
+                    raise ProcessExecutionError(payload)
+                results[index] = payload
+                start_available_processes()
+        finally:
+            for process in active.values():
+                _terminate_process_tree(process)
+                process.join()
+            _close_result_queue(result_queue)
 
-    return [cast(_R, result) for result in results]
+        return [cast(_R, result) for result in results]

@@ -3,14 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
 import numpy as np
+from matplotlib.patches import Polygon
 
 from mr2s_module.domain import Edge, Graph, GraphPartitionResult
 from mr2s_module.protocols import FaceCycleProtocol
 from mr2s_module.util import face_vertex_ring, inner_faces_by_edge_id
-from tests.util.graph_fixtures import delaunay_graph_with_pos
-
 
 BACKGROUND_COLOR = "#bcbcbc"
 
@@ -73,19 +71,25 @@ def draw_partition(
     _fill_partition_faces(ax, graph, partition, pos, palette)
 
     for edge in partition.remaining_edges:
-        _plot_edge(ax, edge, pos, color=BACKGROUND_COLOR, alpha=0.5, linewidth=0.8, zorder=1)
+        _plot_edge(
+            ax, edge, pos, color=BACKGROUND_COLOR, alpha=0.5, linewidth=0.8, zorder=1
+        )
 
     for macro_id, sub_graph in enumerate(partition.sub_graphs):
         color = palette[macro_id]
         for edge in sub_graph.edges.values():
             if not edge.directed:
-                _plot_edge(ax, edge, pos, color=color, alpha=0.55, linewidth=1.0, zorder=2)
+                _plot_edge(
+                    ax, edge, pos, color=color, alpha=0.55, linewidth=1.0, zorder=2
+                )
 
     for macro_id, sub_graph in enumerate(partition.sub_graphs):
         color = palette[macro_id]
         for edge in sub_graph.edges.values():
             if edge.directed:
-                _plot_edge(ax, edge, pos, color=color, alpha=0.98, linewidth=3.2, zorder=3)
+                _plot_edge(
+                    ax, edge, pos, color=color, alpha=0.98, linewidth=3.2, zorder=3
+                )
 
     for vertex, point in pos.items():
         macro_id = vertex_to_macro.get(vertex)
@@ -120,10 +124,7 @@ def _fill_partition_faces(
     if not palette:
         return
 
-    macro_edge_ids = [
-        set(sub_graph.edges.keys())
-        for sub_graph in partition.sub_graphs
-    ]
+    macro_edge_ids = [set(sub_graph.edges.keys()) for sub_graph in partition.sub_graphs]
 
     for face in inner_faces_by_edge_id(graph, pos):
         owner = _best_face_owner({step[0] for step in face}, macro_edge_ids)

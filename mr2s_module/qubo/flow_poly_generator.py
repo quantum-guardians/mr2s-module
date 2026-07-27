@@ -3,41 +3,47 @@ from dimod.higherorder.polynomial import BinaryPolynomial
 
 from mr2s_module.domain import Edge
 from mr2s_module.protocols import Graph
-from mr2s_module.util import get_indicator_function, add_polys, multiply_polys
+from mr2s_module.util import add_polys, get_indicator_function, multiply_polys
 
 
 class FlowPolyGenerator:
+    @staticmethod
+    def _get_a_term(vertex: int, incident_edges: set[Edge]) -> BinaryPolynomial:
+        term = BinaryPolynomial({}, Vartype.BINARY)
+        for edge in incident_edges:
+            if edge.directed:
+                temp = edge.weight if edge.vertices[0] == vertex else -edge.weight
+                term = add_polys(term, BinaryPolynomial({(): temp}, Vartype.BINARY))
+                continue
 
-  @staticmethod
-  def _get_a_term(vertex: int, incident_edges: set[Edge]) -> BinaryPolynomial:
-    term = BinaryPolynomial({}, Vartype.BINARY)
-    for edge in incident_edges:
+            # 나가는 방향이 +w, 들어오는 방향이 -w (2w·indicator − w)
+            indicator_function = get_indicator_function(
+                vertex, edge.other_vertex(vertex), edge.id, edge.weight
+            )
+            indicator_function.scale(2)
+            temp = add_polys(
+                indicator_function, BinaryPolynomial({(): -edge.weight}, Vartype.BINARY)
+            )
+            term = add_polys(term, temp)
+        return multiply_polys(term, term)
 
-      if edge.directed:
-        temp = edge.weight if edge.vertices[0] == vertex else -edge.weight
-        term = add_polys(term, BinaryPolynomial({(): temp}, Vartype.BINARY))
-        continue
+    def _get_total_term(
+        self, vertices: set[int], edges: list[Edge]
+    ) -> BinaryPolynomial:
+        term = BinaryPolynomial({}, Vartype.BINARY)
 
-      # 나가는 방향이 +w, 들어오는 방향이 -w (2w·indicator − w)
-      indicator_function = get_indicator_function(vertex, edge.other_vertex(vertex), edge.id, edge.weight)
-      indicator_function.scale(2)
-      temp = add_polys(indicator_function, BinaryPolynomial({(): -edge.weight}, Vartype.BINARY))
-      term = add_polys(term, temp)
-    return multiply_polys(term, term)
+        for vertex in vertices:
+            temp = self._get_a_term(
+                vertex, {edge for edge in edges if vertex in edge.vertices}
+            )
+            term = add_polys(term, temp)
 
-  def _get_total_term(self, vertices: set[int], edges: list[Edge]) -> BinaryPolynomial:
-    term = BinaryPolynomial({}, Vartype.BINARY)
+        return term
 
-    for vertex in vertices:
-      temp = self._get_a_term(vertex, {edge for edge in edges if vertex in edge.vertices})
-      term = add_polys(term, temp)
+    def run(self, graph: Graph) -> BinaryPolynomial:
+        if graph.is_empty():
+            return BinaryPolynomial({}, Vartype.BINARY)
 
-    return term
+        vertices = graph.get_vertices()
 
-  def run(self, graph: Graph) -> BinaryPolynomial:
-    if graph.is_empty():
-      return BinaryPolynomial({}, Vartype.BINARY)
-
-    vertices = graph.get_vertices()
-
-    return self._get_total_term(vertices, list(graph.edges.values()))
+        return self._get_total_term(vertices, list(graph.edges.values()))

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
-from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.edge import Edge
+from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.orientation_result import OrientationResult
 
 
@@ -14,6 +14,7 @@ class GraphPartitionResult(OrientationResult):
                             inner undirected edge는 중복되지 않아야한다.
     - `remaining_edges`   : 어떤 macro 에도 속하지 않은 간선 — 브리지, 외톨이, 고아 directed.
     """
+
     sub_graphs: list[Graph] = field(default_factory=list)
     remaining_edges: list[Edge] = field(default_factory=list)
     _directed_edges: list[Edge] = field(init=False, default_factory=list, repr=False)
@@ -41,7 +42,9 @@ class GraphPartitionResult(OrientationResult):
 
     def get_inner_subgraph(self, index: int) -> Graph:
         """macro `index` 의 내부 간선 (undirected) 만 담은 Graph."""
-        return Graph(edges=[e for e in self.sub_graphs[index].edges.values() if not e.directed])
+        return Graph(
+            edges=[e for e in self.sub_graphs[index].edges.values() if not e.directed]
+        )
 
     def get_subgraph(self, index: int) -> Graph:
         """macro `index` 의 full subgraph — `sub_graphs[index]` 와 동일."""

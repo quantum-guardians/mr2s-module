@@ -34,21 +34,23 @@ def _fixture(
     return base, out
 
 
-def _edges(*pairs: tuple[int, int], weights: dict[tuple[int, int], int] | None = None) -> dict:
+def _edges(
+    *pairs: tuple[int, int], weights: dict[tuple[int, int], int] | None = None
+) -> dict:
     return _fixture(*pairs, weights=weights)[1]
 
 
 class TestEvaluateScore:
     def test_empty_graph_returns_inf(self):
-        assert evaluate_score({}, []) == float('inf')
+        assert evaluate_score({}, []) == float("inf")
 
     def test_disconnected_returns_inf(self):
         edges = _edges((0, 1))
-        assert evaluate_score(edges, [0, 1, 2]) == float('inf')
+        assert evaluate_score(edges, [0, 1, 2]) == float("inf")
 
     def test_not_strongly_connected_returns_inf(self):
         edges = _edges((0, 1), (1, 2), (0, 2))
-        assert evaluate_score(edges, [0, 1, 2]) == float('inf')
+        assert evaluate_score(edges, [0, 1, 2]) == float("inf")
 
     def test_directed_cycle_score(self):
         edges = _edges((0, 1), (1, 2), (2, 0))
@@ -57,7 +59,9 @@ class TestEvaluateScore:
 
     def test_weighted_score_differs_from_unweighted(self):
         edges = _edges(
-            (0, 1), (1, 2), (2, 0),
+            (0, 1),
+            (1, 2),
+            (2, 0),
             weights={(0, 1): 1, (1, 2): 1, (2, 0): 100},
         )
         # v0: in=100, out=1 → 99² / v1: in=1, out=1 → 0 / v2: in=1, out=100 → 99²
@@ -66,7 +70,7 @@ class TestEvaluateScore:
 
     def test_weighted_disconnected_returns_inf(self):
         edges = _edges((0, 1), (1, 2), weights={(0, 1): 10, (1, 2): 10})
-        assert evaluate_score(edges, [0, 1, 2]) == float('inf')
+        assert evaluate_score(edges, [0, 1, 2]) == float("inf")
 
 
 class TestN1Search:
@@ -74,8 +78,8 @@ class TestN1Search:
         rng = np.random.default_rng(0)
         base, bad = _fixture((0, 1), (1, 2), (0, 2))
         snapshot = dict(bad)
-        new_edges, new_score = n1_search(bad, float('inf'), base, [0, 1, 2], rng)
-        assert new_score < float('inf')
+        new_edges, new_score = n1_search(bad, float("inf"), base, [0, 1, 2], rng)
+        assert new_score < float("inf")
         assert new_edges != snapshot
         assert bad == snapshot  # 입력은 변형되지 않아야 함
 
@@ -93,8 +97,8 @@ class TestN2Search:
         rng = np.random.default_rng(0)
         base, bad = _fixture((0, 1), (1, 2), (0, 2))
         snapshot = dict(bad)
-        new_edges, new_score = n2_search(bad, float('inf'), base, [0, 1, 2], rng)
-        assert new_score < float('inf')
+        new_edges, new_score = n2_search(bad, float("inf"), base, [0, 1, 2], rng)
+        assert new_score < float("inf")
         assert new_edges != snapshot
         assert bad == snapshot
 
@@ -112,21 +116,21 @@ class TestN3Search:
         rng = np.random.default_rng(0)
         base, edges = _fixture((0, 1), (1, 2), (2, 3), (3, 0))
         score = evaluate_score(edges, [0, 1, 2, 3])
-        assert score < float('inf')
-        new_edges, new_score = n3_search(edges, score, base, [0, 1, 2, 3], rng)
-        assert new_score < float('inf')
+        assert score < float("inf")
+        _new_edges, new_score = n3_search(edges, score, base, [0, 1, 2, 3], rng)
+        assert new_score < float("inf")
 
     def test_with_dag_orientation_returns_original(self):
         rng = np.random.default_rng(0)
         base, dag = _fixture((0, 1), (1, 2), (0, 2))
-        new_edges, new_score = n3_search(dag, float('inf'), base, [0, 1, 2], rng)
-        assert new_score == float('inf')
+        new_edges, new_score = n3_search(dag, float("inf"), base, [0, 1, 2], rng)
+        assert new_score == float("inf")
         assert new_edges == dag
 
     def test_acyclic_graph_returns_original(self):
         rng = np.random.default_rng(0)
         base, tree = _fixture((0, 1), (1, 2))
-        score = float('inf')
+        score = float("inf")
         new_edges, new_score = n3_search(tree, score, base, [0, 1, 2], rng)
         assert new_score == score
         assert new_edges == tree
@@ -172,8 +176,12 @@ class TestIteratedLocalSearch:
 
     def test_k4_returns_strongly_connected(self):
         pairs = [
-            (0, 1), (0, 2), (0, 3),
-            (1, 2), (1, 3), (2, 3),
+            (0, 1),
+            (0, 2),
+            (0, 3),
+            (1, 2),
+            (1, 3),
+            (2, 3),
         ]
         result = IteratedLocalSearch().run(graph_from_pairs(pairs))
         edges = result.get_edges()
@@ -187,9 +195,16 @@ class TestIteratedLocalSearch:
 
     def test_k5_returns_strongly_connected(self):
         pairs = [
-            (0, 1), (0, 2), (0, 3), (0, 4),
-            (1, 2), (1, 3), (1, 4),
-            (2, 3), (2, 4), (3, 4),
+            (0, 1),
+            (0, 2),
+            (0, 3),
+            (0, 4),
+            (1, 2),
+            (1, 3),
+            (1, 4),
+            (2, 3),
+            (2, 4),
+            (3, 4),
         ]
         result = IteratedLocalSearch().run(graph_from_pairs(pairs))
         edges = result.get_edges()
@@ -208,11 +223,13 @@ class TestIteratedLocalSearch:
         assert edges[0].directed
 
     def test_preserves_edge_weights(self):
-        graph = Graph(edges=[
-            Edge(0, 1, weight=5, directed=False),
-            Edge(1, 2, weight=3, directed=False),
-            Edge(0, 2, weight=2, directed=False),
-        ])
+        graph = Graph(
+            edges=[
+                Edge(0, 1, weight=5, directed=False),
+                Edge(1, 2, weight=3, directed=False),
+                Edge(0, 2, weight=2, directed=False),
+            ]
+        )
         result = IteratedLocalSearch().run(graph)
         edges = result.get_edges()
         weight_map = {e.endpoints(): e.weight for e in edges}

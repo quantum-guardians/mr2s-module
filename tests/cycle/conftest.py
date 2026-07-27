@@ -34,8 +34,7 @@ def remove_edges_by_percent(
         else:
             nx_graph.add_edge(u, v)
 
-    thinned_graph = Graph(edges=[
-        Edge(min(u, v), max(u, v), weight, False)
-        for u, v in nx_graph.edges()
-    ])
+    thinned_graph = Graph(
+        edges=[Edge(min(u, v), max(u, v), weight, False) for u, v in nx_graph.edges()]
+    )
     return thinned_graph, removed_count

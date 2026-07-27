@@ -41,3 +41,20 @@ tag-pattern = "^v(?P<version>.+)$"
 markers = [
     "slow: long-running tests (full QUBO pipeline with SA), deselect with -m 'not slow'",
 ]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "C4", "SIM", "RUF"]
+ignore = [
+    # 솔버·평가기 기본 인스턴스를 인자 기본값으로 주입하는 패턴을 허용
+    "B008",
+]
+# 한국어 문서의 수학 기호(−, ×, –)는 오탐이므로 허용
+allowed-confusables = ["−", "×", "–"]
+
+[tool.ruff.lint.per-file-ignores]
+# 데모·시각화 스크립트는 sys.path 조정 후 import 하므로 E402 허용
+"tests/**" = ["E402"]

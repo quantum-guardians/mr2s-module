@@ -17,6 +17,7 @@ class OrientationResult(ABC):
 @dataclass
 class OrientedEdges(OrientationResult):
     """매크로 분할 없는 단순 간선 방향 결정 결과."""
+
     edges: list[Edge] = field(default_factory=list)
 
     def get_edges(self) -> list[Edge]:

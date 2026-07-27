@@ -14,11 +14,12 @@ Usage:
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 from collections.abc import Sequence
+from pathlib import Path
 from typing import cast
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -29,9 +30,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from mr2s_module import FaceClusterPartition, Edge, Graph
 from matplotlib.colors import ListedColormap
 
+from mr2s_module import Edge, FaceClusterPartition, Graph
 from mr2s_module.util.planar_graph import (
     domain_graph_to_networkx,
     enumerate_faces,
@@ -45,6 +46,7 @@ N_VERTICES = 80
 
 
 # ── graph generation ─────────────────────────────────────────────
+
 
 def delaunay_graph(n: int, seed: int) -> tuple[Graph, dict[int, np.ndarray]]:
     rng = np.random.default_rng(seed)
@@ -68,6 +70,7 @@ def delaunay_graph(n: int, seed: int) -> tuple[Graph, dict[int, np.ndarray]]:
 
 # ── macro dual construction ──────────────────────────────────────
 
+
 def build_macro_dual(sub_graphs: list[Graph]) -> nx.Graph:
     outline_keys: list[set[int]] = []
     for sg in sub_graphs:
@@ -88,6 +91,7 @@ def build_macro_dual(sub_graphs: list[Graph]) -> nx.Graph:
 
 # ── face → macro assignment ─────────────────────────────────────
 
+
 def assign_faces_to_macros(
     inner_faces: list[list[int]],
     sub_graphs: list[Graph],
@@ -103,7 +107,10 @@ def assign_faces_to_macros(
     assignment: dict[int, int] = {}
     for f_idx, face in enumerate(inner_faces):
         fe = {
-            (min(face[i], face[(i + 1) % len(face)]), max(face[i], face[(i + 1) % len(face)]))
+            (
+                min(face[i], face[(i + 1) % len(face)]),
+                max(face[i], face[(i + 1) % len(face)]),
+            )
             for i in range(len(face))
         }
         best_m, best_n = -1, -1
@@ -156,21 +163,23 @@ COLORS = cast(
     cast(ListedColormap, matplotlib.colormaps["Set2"]).colors,
 )
 
-def _face_centroid(face: list[int],
-                   pos: dict[int, np.ndarray]) -> np.ndarray:
+
+def _face_centroid(face: list[int], pos: dict[int, np.ndarray]) -> np.ndarray:
     return np.mean([pos[v] for v in face], axis=0)
 
 
-def draw_graph_panel(ax, nx_g, pos, inner_faces, raw_faces, outer_idx,
-                     assignment, sub_graphs, title: str) -> None:
+def draw_graph_panel(
+    ax, nx_g, pos, inner_faces, raw_faces, outer_idx, assignment, sub_graphs, title: str
+) -> None:
     """Draw original planar graph with face coloring + boundary highlight."""
     for f_idx, face in enumerate(inner_faces):
         m = assignment.get(f_idx)
         if m is None:
             continue
         pts = np.array([pos[v] for v in face])
-        ax.fill(pts[:, 0], pts[:, 1],
-                color=COLORS[m % len(COLORS)], alpha=0.25, ec="none")
+        ax.fill(
+            pts[:, 0], pts[:, 1], color=COLORS[m % len(COLORS)], alpha=0.25, ec="none"
+        )
 
     oface = raw_faces[outer_idx]
     opts = np.array([pos[v] for v in oface])
@@ -183,23 +192,35 @@ def draw_graph_panel(ax, nx_g, pos, inner_faces, raw_faces, outer_idx,
             if not e.directed:
                 continue
             u, v = e.endpoints()
-            ax.plot([pos[u][0], pos[v][0]], [pos[u][1], pos[v][1]],
-                    color=COLORS[m_idx % len(COLORS)],
-                    linewidth=2.0, alpha=0.8, zorder=3)
+            ax.plot(
+                [pos[u][0], pos[v][0]],
+                [pos[u][1], pos[v][1]],
+                color=COLORS[m_idx % len(COLORS)],
+                linewidth=2.0,
+                alpha=0.8,
+                zorder=3,
+            )
 
-    nx.draw_networkx_nodes(nx_g, pos, ax=ax,
-                           node_size=12, node_color="black", linewidths=0)
+    nx.draw_networkx_nodes(
+        nx_g, pos, ax=ax, node_size=12, node_color="black", linewidths=0
+    )
     ax.set_aspect("equal")
     ax.axis("off")
     ax.set_title(title, fontsize=9)
 
 
-def draw_dual_panel(ax, sub_graphs, assignment, inner_faces, pos,
-                    title: str) -> None:
+def draw_dual_panel(ax, sub_graphs, assignment, inner_faces, pos, title: str) -> None:
     """Draw macro dual with bipartite layout."""
     if len(sub_graphs) <= 1:
-        ax.text(0.5, 0.5, f"macro dual: {len(sub_graphs)} macro(s)\n(no partition)",
-                ha="center", va="center", fontsize=10, transform=ax.transAxes)
+        ax.text(
+            0.5,
+            0.5,
+            f"macro dual: {len(sub_graphs)} macro(s)\n(no partition)",
+            ha="center",
+            va="center",
+            fontsize=10,
+            transform=ax.transAxes,
+        )
         ax.axis("off")
         return
 
@@ -263,13 +284,22 @@ def draw_dual_panel(ax, sub_graphs, assignment, inner_faces, pos,
         shared = len(outline_keys[i] & outline_keys[j])
         edge_labels[(i, j)] = str(shared)
 
-    nx.draw(dual, pos=final_pos, ax=ax,
-            node_color=node_c, node_size=600,
-            edge_color="#555", width=2.5, alpha=0.9,
-            with_labels=True, font_size=10, font_weight="bold")
-    nx.draw_networkx_edge_labels(dual, pos=final_pos, ax=ax,
-                                 edge_labels=edge_labels, font_size=8,
-                                 label_pos=0.5)
+    nx.draw(
+        dual,
+        pos=final_pos,
+        ax=ax,
+        node_color=node_c,
+        node_size=600,
+        edge_color="#555",
+        width=2.5,
+        alpha=0.9,
+        with_labels=True,
+        font_size=10,
+        font_weight="bold",
+    )
+    nx.draw_networkx_edge_labels(
+        dual, pos=final_pos, ax=ax, edge_labels=edge_labels, font_size=8, label_pos=0.5
+    )
 
     lc, rc = len(color_a), len(color_b)
 
@@ -279,6 +309,7 @@ def draw_dual_panel(ax, sub_graphs, assignment, inner_faces, pos,
 
 
 # ── per-run ──────────────────────────────────────────────────────
+
 
 def run_visualization(seed: int) -> None:
     rng = np.random.default_rng(seed)
@@ -306,19 +337,34 @@ def run_visualization(seed: int) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(16, 7.5))
 
     if len(sg) <= 1:
-        draw_graph_panel(axes[0], nx_g, pos, inner_faces, raw_faces, outer_idx,
-                         {}, sg,
-                         f"Seed {seed} — {len(inner_faces)} faces, no partition")
+        draw_graph_panel(
+            axes[0],
+            nx_g,
+            pos,
+            inner_faces,
+            raw_faces,
+            outer_idx,
+            {},
+            sg,
+            f"Seed {seed} — {len(inner_faces)} faces, no partition",
+        )
         draw_dual_panel(axes[1], sg, {}, inner_faces, pos, "Macro dual")
         fname = f"macro_dual_seed{seed:02d}_nopart.png"
     else:
         assignment = assign_faces_to_macros(inner_faces, sg)
         fill_unassigned(assignment, inner_faces)
-        draw_graph_panel(axes[0], nx_g, pos, inner_faces, raw_faces, outer_idx,
-                         assignment, sg,
-                         f"Seed {seed} — {len(inner_faces)} faces, {len(sg)} macros")
-        draw_dual_panel(axes[1], sg, assignment, inner_faces, pos,
-                        "Macro dual (k=2)")
+        draw_graph_panel(
+            axes[0],
+            nx_g,
+            pos,
+            inner_faces,
+            raw_faces,
+            outer_idx,
+            assignment,
+            sg,
+            f"Seed {seed} — {len(inner_faces)} faces, {len(sg)} macros",
+        )
+        draw_dual_panel(axes[1], sg, assignment, inner_faces, pos, "Macro dual (k=2)")
         fname = f"macro_dual_seed{seed:02d}.png"
 
     fig.tight_layout()

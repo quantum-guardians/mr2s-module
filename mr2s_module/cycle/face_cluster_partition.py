@@ -13,20 +13,18 @@ from mr2s_module.cycle.face_clusterer import (
 from mr2s_module.domain.edge import Edge
 from mr2s_module.domain.graph import Graph
 from mr2s_module.domain.graph_partition_result import GraphPartitionResult
-from mr2s_module.protocols import FaceCycleProtocol
 from mr2s_module.util.planar_graph import (
     EdgeStep,
     SubdivisionNode,
     build_dual_base,
     build_edge_id_face_edges_map,
     domain_graph_to_edge_subdivision,
-    planar_position_map,
     enumerate_faces,
     face_edge_steps,
     is_edge_node,
+    planar_position_map,
     polygon_area,
 )
-
 
 _OUTER_WALL_WEIGHT = 999_999
 _INNER_WEIGHT = 1
@@ -35,6 +33,7 @@ _INNER_WEIGHT = 1
 @dataclass
 class _ComponentPartition:
     """단일 biconnected component 의 거대 군집 분할 결과."""
+
     macro_internal_edges: list[set[int]] = field(default_factory=list)
     macro_outline_keys: list[set[int]] = field(default_factory=list)
     directed_steps: set[EdgeStep] = field(default_factory=set)
@@ -144,9 +143,7 @@ class FaceClusterPartition:
         if overlaps:
             details = ", ".join(
                 f"{edge_id}@({owner0},{owner1})"
-                for edge_id, (owner0, owner1) in sorted(
-                    overlaps.items()
-                )
+                for edge_id, (owner0, owner1) in sorted(overlaps.items())
             )
             raise ValueError(
                 f"Undirected edge overlap detected across subgraphs: {details}"
@@ -180,18 +177,13 @@ class FaceClusterPartition:
         if len(all_raw_faces) < 2:
             return _ComponentPartition()
 
-        outer_idx = int(np.argmax([
-            abs(polygon_area(face, pos))
-            for face in all_raw_faces
-        ]))
-        inner_raw_faces = [
-            f for i, f in enumerate(all_raw_faces) if i != outer_idx
-        ]
+        outer_idx = int(
+            np.argmax([abs(polygon_area(face, pos)) for face in all_raw_faces])
+        )
+        inner_raw_faces = [f for i, f in enumerate(all_raw_faces) if i != outer_idx]
         if not inner_raw_faces:
             return _ComponentPartition()
-        inner_face_steps = [
-            face_edge_steps(face) for face in inner_raw_faces
-        ]
+        inner_face_steps = [face_edge_steps(face) for face in inner_raw_faces]
 
         face_edges_map = build_edge_id_face_edges_map(inner_face_steps)
         face_centroids = [
@@ -201,9 +193,7 @@ class FaceClusterPartition:
         dual_base = build_dual_base(face_edges_map)
 
         target_k = max(1, min(self.target_k, len(inner_raw_faces)))
-        face_to_cluster = self.clusterer.run(
-            face_centroids, dual_base, target_k
-        )
+        face_to_cluster = self.clusterer.run(face_centroids, dual_base, target_k)
 
         # 2. 외벽 보호 2차 T-join 수리
         boundary_edges, outer_edges = self._collect_boundary_edges(
@@ -235,9 +225,7 @@ class FaceClusterPartition:
 
         # 7. 방향 부여 — 2-coloring 으로 face traversal × CW/CCW 결정
         coloring = (
-            nx.bipartite.color(merged_dual)
-            if merged_dual.number_of_nodes() > 0
-            else {}
+            nx.bipartite.color(merged_dual) if merged_dual.number_of_nodes() > 0 else {}
         )
         face_to_color: dict[int, int] = {}
         for c_idx, comp in enumerate(true_components):
@@ -332,7 +320,9 @@ class FaceClusterPartition:
         outer_edges: set[int] = set()
         for edge_id, f_indices in face_edges_map.items():
             if len(f_indices) == 2:
-                if face_to_cluster.get(f_indices[0]) != face_to_cluster.get(f_indices[1]):
+                if face_to_cluster.get(f_indices[0]) != face_to_cluster.get(
+                    f_indices[1]
+                ):
                     boundary_edges.add(edge_id)
             else:
                 # 외곽: 한쪽에만 면이 붙어있는 간선
@@ -351,9 +341,7 @@ class FaceClusterPartition:
         for edge_id in boundary_edges:
             u, v = edge_endpoints[edge_id]
             b_sub.add_edge(u, v, key=edge_id)
-        degrees = cast(
-            "Iterable[tuple[SubdivisionNode, int]]", b_sub.degree()
-        )
+        degrees = cast("Iterable[tuple[SubdivisionNode, int]]", b_sub.degree())
         odd_nodes = [v for v, d in degrees if d % 2 != 0]
         if not odd_nodes:
             return set()

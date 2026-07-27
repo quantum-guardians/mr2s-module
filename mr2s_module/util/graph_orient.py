@@ -6,9 +6,7 @@ from mr2s_module.domain.edge import Edge
 from mr2s_module.util.nx_multigraph import multi_edge_copies
 
 
-def robbins_orient(
-    base_graph: nx.MultiGraph, start_node: int
-) -> dict[int, Edge]:
+def robbins_orient(base_graph: nx.MultiGraph, start_node: int) -> dict[int, Edge]:
     """DFS 기반 Robbins 방향 결정.
 
     트리 간선은 부모→자식, back 간선은 자손→조상으로 향한다.

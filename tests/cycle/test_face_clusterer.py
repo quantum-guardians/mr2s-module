@@ -20,16 +20,18 @@ class RecordingClusterer:
         target_k: int,
     ) -> dict[int, int]:
         self.calls += 1
-        return {face_idx: 0 for face_idx in range(len(centroids))}
+        return dict.fromkeys(range(len(centroids)), 0)
 
 
 def test_face_cycle_uses_injected_clusterer() -> None:
     clusterer = RecordingClusterer()
-    graph = Graph(edges=[
-        Edge(1, 2, 1, False),
-        Edge(2, 3, 1, False),
-        Edge(3, 1, 1, False),
-    ])
+    graph = Graph(
+        edges=[
+            Edge(1, 2, 1, False),
+            Edge(2, 3, 1, False),
+            Edge(3, 1, 1, False),
+        ]
+    )
 
     FaceClusterPartition(clusterer=clusterer).run(graph)
 
@@ -83,8 +85,7 @@ def test_balanced_face_graph_clusterer_splits_dual_graph() -> None:
         target_k=4,
     )
     cluster_sizes = sorted(
-        list(result.values()).count(cluster_id)
-        for cluster_id in set(result.values())
+        list(result.values()).count(cluster_id) for cluster_id in set(result.values())
     )
 
     assert set(result) == set(range(8))

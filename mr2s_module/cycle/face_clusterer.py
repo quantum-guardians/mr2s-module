@@ -11,8 +11,7 @@ class FaceClusterer(Protocol):
         centroids: list[np.ndarray],
         dual_base: nx.Graph,
         target_k: int,
-    ) -> dict[int, int]:
-        ...
+    ) -> dict[int, int]: ...
 
 
 @dataclass
@@ -64,6 +63,7 @@ class SnowballFaceClusterer:
 @dataclass
 class KMeansFaceClusterer:
     """표준 lloyd k-means"""
+
     max_iter: int = 100
     tolerance: float = 1e-6
 
@@ -145,9 +145,7 @@ class BalancedFaceGraphClusterer:
 
         target_k = max(1, min(target_k, face_count))
         partitions: list[set[int]] = [
-            set(component)
-            for component in nx.connected_components(graph)
-            if component
+            set(component) for component in nx.connected_components(graph) if component
         ]
 
         if not partitions:
@@ -177,9 +175,7 @@ class BalancedFaceGraphClusterer:
         partitions: list[set[int]],
     ) -> int | None:
         candidates = [
-            (idx, len(part))
-            for idx, part in enumerate(partitions)
-            if len(part) > 1
+            (idx, len(part)) for idx, part in enumerate(partitions) if len(part) > 1
         ]
         if not candidates:
             return None
