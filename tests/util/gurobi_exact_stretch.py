@@ -8,7 +8,7 @@
   f[s,a] ≥ 0    — 출발점 s 의 호 a 위 유량
   목적          — Σ cost(a)·f[s,a],  cost = 1/w
   게이팅        — f[s,a] ≤ TD(s)·(1−x[e]) 또는 TD(s)·x[e]
-  보존          — 출발점 s 는 TD(s) 를 뿜고 각 t 는 α(s,t)=1/D(s,t) 를 흡수
+  보존          — 출발점 s 는 TD(s) 를 뿜고 각 t 는 alpha(s,t)=1/D(s,t) 를 흡수
 고정된 x 에서 최소비용유량은 각 수요를 최단경로로 보내므로 목적값이 정확히
 Σ d→(s,t)/D(s,t) 가 된다. 강연결은 infeasibility 로 공짜 하드 제약.
 
@@ -138,14 +138,14 @@ def solve(
     두면 M 이 버킷 수요합으로 준다. 완전 disaggregation 은 V=200 에서 변수가
     2,800만이라 불가능. 모든 G 에 대해 유효한 하한이다.
     """
-    import gurobipy as gp
-    from gurobipy import GRB
+    import gurobipy as gp  # pyright: ignore[reportMissingImports]
+    from gurobipy import GRB  # pyright: ignore[reportMissingImports]
 
     vertices = sorted(graph.nodes())
     num_vertices = len(vertices)
     pair_count = num_vertices * (num_vertices - 1)
 
-    # 거리 = 1/w, w=1 이므로 홉 거리. 수요 α(s,t) = 1/D(s,t).
+    # 거리 = 1/w, w=1 이므로 홉 거리. 수요 alpha(s,t) = 1/D(s,t).
     hops = dict(nx.all_pairs_shortest_path_length(graph))
 
     edges = [(u, v) if u < v else (v, u) for u, v in graph.edges()]
@@ -191,7 +191,7 @@ def solve(
         )
         bucket_size = -(-len(targets) // buckets)
         for chunk_start in range(0, len(targets), bucket_size):
-            bucket_targets = targets[chunk_start:chunk_start + bucket_size]
+            bucket_targets = targets[chunk_start : chunk_start + bucket_size]
             commodities.append(
                 (source, {t: 1.0 / hops_from_source[t] for t in bucket_targets})
             )
@@ -231,7 +231,8 @@ def solve(
     # 이전 실행의 incumbent 를 시작해로 — Robbins 에서 재출발하면 좋은 해를
     # 다시 찾는 데 수천 초를 쓴다. 그 시간을 전부 하한 조이기로 돌린다.
     if warm_start:
-        loaded = json.load(open(warm_start, encoding="utf-8"))
+        with open(warm_start, encoding="utf-8") as fh:
+            loaded = json.load(fh)
         arc_by_pair = {frozenset(arc): tuple(arc) for arc in loaded["orientation"]}
         for i, edge in enumerate(edges):
             arc = arc_by_pair.get(frozenset(edge))
@@ -292,7 +293,8 @@ def solve(
                 (edge[1], edge[0]) if x[i].X > 0.5 else edge
                 for i, edge in enumerate(edges)
             ]
-            if has_sol else None
+            if has_sol
+            else None
         ),
         "num_vars": model.NumVars,
         "num_constraints": model.NumConstrs,
@@ -316,17 +318,31 @@ def main() -> None:
     parser.add_argument("--seeds", default="0")
     parser.add_argument("--time-limit", type=float, default=3600.0)
     parser.add_argument("--threads", type=int, default=0)
-    parser.add_argument("--out-dir", default="gurobi_runs",
-                        help="결과·로그·incumbent 가 전부 여기 쌓인다")
-    parser.add_argument("--buckets", type=int, default=1,
-                        help="목적지 버킷 수 G. 클수록 big-M 이 타이트하고 변수는 G배")
+    parser.add_argument(
+        "--out-dir",
+        default="gurobi_runs",
+        help="결과·로그·incumbent 가 전부 여기 쌓인다",
+    )
+    parser.add_argument(
+        "--buckets",
+        type=int,
+        default=1,
+        help="목적지 버킷 수 G. 클수록 big-M 이 타이트하고 변수는 G배",
+    )
     parser.add_argument("--mipfocus", type=int, default=0, help="3 = dual bound 집중")
     parser.add_argument("--cuts", type=int, default=-1, help="3 = 공격적 컷")
     parser.add_argument("--presolve", type=int, default=-1, help="2 = 공격적 presolve")
-    parser.add_argument("--nodefile-gb", type=float, default=8.0,
-                        help="탐색 트리가 이 GB 를 넘으면 디스크로 스필. 0 = 끔")
-    parser.add_argument("--warm-start", default="",
-                        help="이전 incumbent JSON 을 MIP start 로 사용 (시드 1개일 때만)")
+    parser.add_argument(
+        "--nodefile-gb",
+        type=float,
+        default=8.0,
+        help="탐색 트리가 이 GB 를 넘으면 디스크로 스필. 0 = 끔",
+    )
+    parser.add_argument(
+        "--warm-start",
+        default="",
+        help="이전 incumbent JSON 을 MIP start 로 사용 (시드 1개일 때만)",
+    )
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -342,19 +358,25 @@ def main() -> None:
             f"bridgeless={nx.is_biconnected(graph)} ===",
             flush=True,
         )
+        row: dict
         try:
             row = solve(
-                graph, args.time_limit, args.threads,
+                graph,
+                args.time_limit,
+                args.threads,
                 log_path=os.path.join(args.out_dir, f"gurobi_v{args.v}_s{seed}.log"),
                 incumbent_path=os.path.join(
                     args.out_dir, f"incumbent_v{args.v}_s{seed}.json"
                 ),
-                buckets=args.buckets, mip_focus=args.mipfocus,
-                cuts=args.cuts, presolve=args.presolve,
-                nodefile_gb=args.nodefile_gb, nodefile_dir=args.out_dir,
+                buckets=args.buckets,
+                mip_focus=args.mipfocus,
+                cuts=args.cuts,
+                presolve=args.presolve,
+                nodefile_gb=args.nodefile_gb,
+                nodefile_dir=args.out_dir,
                 warm_start=args.warm_start,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             row = {"status": "error", "message": str(exc)[:300]}
             print(f"  실패: {exc}", flush=True)
         row["target_n"] = args.v
@@ -376,7 +398,9 @@ def main() -> None:
             json.dump({"v": args.v, "rows": rows}, fh)
 
     print(f"\nwrote {out_path}")
-    print(f"\n{'seed':>5} {'상태':>13} {'lb_avg':>9} {'ub_avg':>9} {'gap%':>8} {'초':>7}")
+    print(
+        f"\n{'seed':>5} {'상태':>13} {'lb_avg':>9} {'ub_avg':>9} {'gap%':>8} {'초':>7}"
+    )
     for row in rows:
         if row["status"] == "error":
             print(f"{row['seed']:>5} {'error':>13}")
