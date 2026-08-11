@@ -1,7 +1,20 @@
 """exact stretch MIP — Gurobi 백엔드 (학술 라이선스, 변수 상한 없음).
 
 단독 실행 파일 — 저장소 밖에서도 이 파일 하나로 돈다.
-필요 패키지: gurobipy, networkx, numpy, scipy
+필요 패키지: pip install gurobipy networkx numpy scipy
+
+Gurobi 라이선스 — pip 에 딸려오는 trial 은 변수 2,000개 상한이라 부족하다
+(V=200 이면 flow 변수만 약 12만 개). 실제 라이선스 발급 절차:
+  1. 학술 named-user (개인 PC 권장):
+     https://portal.gurobi.com 에 대학 메일로 가입 → Licenses →
+     "Named-User Academic" 발급 → 대학 네트워크(또는 VPN)에 물린 상태로
+     `grbgetkey <발급된 키>` 실행 → ~/gurobi.lic 생성. 환경변수 불필요.
+     비표준 경로에 두는 경우만 GRB_LICENSE_FILE=<경로> 설정.
+  2. 학술 WLS (서버·컨테이너 권장, 어디서든 동작):
+     포털에서 "WLS Academic" 발급 → WLSACCESSID/WLSSECRET/LICENSEID
+     3줄짜리 gurobi.lic 다운로드 → ~/gurobi.lic 에 두거나 같은 이름의
+     환경변수(GRB_WLSACCESSID 등)로 설정.
+  gurobi.lic 과 WLS 키는 절대 저장소에 커밋하지 않는다.
 
 정식화 (stretch_exact_mip.py, 커밋 0fb6368 과 동일):
   x[e] ∈ {0,1}  — 무방향 간선 e 의 방향 비트 (0: u→v, 1: v→u)
