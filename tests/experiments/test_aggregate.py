@@ -111,8 +111,9 @@ def test_best_and_paired(results: tuple[Path, Path]) -> None:
     best = best_by_graph(df)
     assert len(best) == 2
     assert (best["hop_key"] == "h2").all() and best["use_reduction"].all()
-    counts = best_config_counts(best)
+    counts = best_config_counts(df)
     assert counts["n_best"].sum() == 2
+    assert set(counts["n_graphs"]) == {2}
 
     paired = paired_reduction(df)
     assert len(paired) == 2 * 2 * 6 - 2 * 1  # timeout 쌍 제외

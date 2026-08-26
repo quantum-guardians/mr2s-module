@@ -158,16 +158,22 @@ def best_by_graph(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def best_config_counts(best: pd.DataFrame) -> pd.DataFrame:
-    if best.empty:
+def best_config_counts(df: pd.DataFrame, tolerance: float = 1e-9) -> pd.DataFrame:
+    """그래프별 최선 stretch 를 낸 구성의 빈도. 동률(예: 0% 그래프의 축약 on/off)은 모두 센다."""
+    sc = _sc(df)
+    if sc.empty:
         return pd.DataFrame()
+    graph_min = sc.groupby("graph_id", observed=True)["apsp_sum"].transform("min")
+    tied = sc[sc["apsp_sum"] <= graph_min + tolerance]
+    # 같은 그래프·같은 구성이 여러 반복에서 동률이면 한 번만 센다.
+    tied = tied.drop_duplicates(["graph_id", "hop_key", "use_reduction"])
     counts = (
-        best.groupby(["vertices", "hop_key", "use_reduction"], observed=True)
+        tied.groupby(["vertices", "hop_key", "use_reduction"], observed=True)
         .size()
         .rename("n_best")
         .reset_index()
     )
-    total = best.groupby("vertices")["graph_id"].size().rename("n_graphs")
+    total = sc.groupby("vertices")["graph_id"].nunique().rename("n_graphs")
     return counts.merge(total, on="vertices")
 
 
@@ -852,7 +858,7 @@ def main(argv: list[str] | None = None) -> None:
     wil_hops.to_csv(results_dir / "wilcoxon_hops.csv", index=False)
     best = best_by_graph(df)
     best.to_csv(results_dir / "best_by_graph.csv", index=False)
-    counts = best_config_counts(best)
+    counts = best_config_counts(df)
     counts.to_csv(results_dir / "best_config_counts.csv", index=False)
     n_solutions = write_solutions_jsonl(df, results_dir / "solutions")
     bok = best_of_k(df)
