@@ -331,6 +331,66 @@ def wilcoxon_hops(df: pd.DataFrame, baseline: str = "h2") -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def paired_arms(dnc: pd.DataFrame, whole: pd.DataFrame) -> pd.DataFrame:
+    """DnC 있음(dnc) vs 없음(whole) 을 같은 (graph, hop, 축약, rep) 끼리 짝짓는다."""
+    keys = [
+        "graph_id",
+        "vertices",
+        "remove_ratio_target",
+        "hop_key",
+        "use_reduction",
+        "rep",
+    ]
+    values = [
+        "apsp_sum",
+        "elapsed_sec",
+        "qubo_vars_total",
+        "n_subgraphs",
+        "strongly_connected",
+        "ok",
+    ]
+    left = dnc[keys + values].rename(columns={v: f"{v}_dnc" for v in values})
+    right = whole[keys + values].rename(columns={v: f"{v}_whole" for v in values})
+    pair = left.merge(right, on=keys, how="inner")
+    pair = pair[pair["ok_dnc"].astype(bool) & pair["ok_whole"].astype(bool)].copy()
+    pair["both_sc"] = pair["strongly_connected_dnc"].astype(bool) & pair[
+        "strongly_connected_whole"
+    ].astype(bool)
+    pair["diff_apsp"] = (
+        pair["apsp_sum_dnc"] - pair["apsp_sum_whole"]
+    )  # 양수 = DnC 가 나쁨
+    pair["ratio_time"] = pair["elapsed_sec_dnc"] / pair["elapsed_sec_whole"]
+    return pair.reset_index(drop=True)
+
+
+def wilcoxon_arms(pair: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    if pair.empty:
+        return pd.DataFrame()
+    for (vertices, hop_key), group in pair.groupby(
+        ["vertices", "hop_key"], observed=True
+    ):
+        sc = group[group["both_sc"]]
+        p_apsp, med_apsp, n_apsp = _wilcoxon(sc["apsp_sum_dnc"], sc["apsp_sum_whole"])
+        p_time, _, _ = _wilcoxon(group["elapsed_sec_dnc"], group["elapsed_sec_whole"])
+        rows.append(
+            {
+                "vertices": vertices,
+                "hop_key": hop_key,
+                "n_pairs": len(group),
+                "n_pairs_both_sc": n_apsp,
+                "sc_rate_dnc": group["strongly_connected_dnc"].mean(),
+                "sc_rate_whole": group["strongly_connected_whole"].mean(),
+                "n_subgraphs_dnc": group["n_subgraphs_dnc"].mean(),
+                "median_diff_apsp": med_apsp,
+                "p_apsp": p_apsp,
+                "median_ratio_time": group["ratio_time"].median(),
+                "p_time": p_time,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 # --- 시간 추정 --------------------------------------------------------------
 
 
@@ -841,6 +901,12 @@ def main(argv: list[str] | None = None) -> None:
         "--verify", action="store_true", help="모든 해를 복원·재평가해 대조"
     )
     parser.add_argument("--no-figures", action="store_true")
+    parser.add_argument(
+        "--compare-with",
+        type=Path,
+        default=None,
+        help="DnC 없는 대조군 결과 디렉터리. 같은 그래프·구성·반복끼리 짝지어 비교한다.",
+    )
     args = parser.parse_args(argv)
 
     results_dir: Path = args.results
@@ -883,6 +949,20 @@ def main(argv: list[str] | None = None) -> None:
         print(table.to_string(index=False, float_format=lambda x: f"{x:.2f}"))
         print(
             f"TOTAL ≈ {table['total_hours_parallel'].sum():.1f} h with {args.workers} workers"
+        )
+    if args.compare_with is not None:
+        whole = collect_runs(args.compare_with / "runs")
+        pair = paired_arms(df, whole)
+        pair.to_csv(results_dir / "paired_dnc_vs_whole.csv", index=False)
+        wil_arms = wilcoxon_arms(pair)
+        wil_arms.to_csv(results_dir / "wilcoxon_dnc_vs_whole.csv", index=False)
+        with (results_dir / "summary.md").open("a") as handle:
+            handle.write(
+                "\n### DnC 있음 vs 없음 (짝지은 Wilcoxon; diff = DnC − 전체그래프, 양수면 DnC 가 나쁨)\n\n"
+            )
+            handle.write(wil_arms.to_markdown(index=False, floatfmt=".4g") + "\n")
+        print(
+            f"compare: {len(pair)} pairs, {int(pair['both_sc'].sum())} both strongly connected"
         )
     if args.verify:
         mismatches = verify_solutions(df, args.graph_dir)

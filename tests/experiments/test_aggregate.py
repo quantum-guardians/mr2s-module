@@ -13,10 +13,12 @@ from experiments.aggregate import (
     estimate_total_hours,
     main,
     make_figures,
+    paired_arms,
     paired_reduction,
     summarize_best_of,
     summarize_by_config,
     verify_solutions,
+    wilcoxon_arms,
     wilcoxon_hops,
     wilcoxon_reduction,
     write_solutions_jsonl,
@@ -199,3 +201,17 @@ def test_best_of_k_is_monotone_and_counts_reps(results: tuple[Path, Path]) -> No
     assert h2_on["best_mean"].is_monotonic_decreasing
     assert h2_on["best_mean"].iloc[0] == pytest.approx(h2_on["best_mean"].iloc[-1])
     assert (h2_on["n_graphs"] == 2).all() and (h2_on["sc_frac"] == 1.0).all()
+
+
+def test_paired_arms_and_wilcoxon(results: tuple[Path, Path]) -> None:
+    df = collect_runs(results[0] / "runs")
+    whole = df.copy()
+    whole["use_dnc"] = False
+    whole["apsp_sum"] = whole["apsp_sum"] - 0.01  # 전체 그래프가 조금 더 좋다고 가정
+    whole["elapsed_sec"] = whole["elapsed_sec"] * 0.5
+    pair = paired_arms(df, whole)
+    assert len(pair) == int(df["ok"].sum())
+    assert (pair.loc[pair["both_sc"], "diff_apsp"] > 0).all()
+    assert pair["ratio_time"].to_numpy() == pytest.approx(2.0)
+    wil = wilcoxon_arms(pair)
+    assert len(wil) == 2 and wil["p_apsp"].between(0, 1).all()
