@@ -1,5 +1,5 @@
 # pandas 3.0 타입 정보 부족으로 인한 pyright 오탐 억제 (experiments/aggregate.py 와 동일).
-# pyright: reportGeneralTypeIssues=false, reportArgumentType=false, reportAttributeAccessIssue=false
+# pyright: reportGeneralTypeIssues=false, reportArgumentType=false, reportAttributeAccessIssue=false, reportCallIssue=false
 import json
 from pathlib import Path
 
@@ -8,6 +8,7 @@ import pytest
 from experiments.aggregate import (
     best_by_graph,
     best_config_counts,
+    best_of_k,
     collect_runs,
     estimate_total_hours,
     main,
@@ -156,7 +157,7 @@ def test_estimate_solutions_verify_and_figures(
     figures = make_figures(
         df, summarize_by_config(df), paired_reduction(df), tmp_path / "figs"
     )
-    assert len(figures) == 5 and all(
+    assert len(figures) == 6 and all(
         f.exists() and f.stat().st_size > 0 for f in figures
     )
 
@@ -186,3 +187,14 @@ def test_main_writes_outputs(results: tuple[Path, Path]) -> None:
         "orientation_bits"
         not in (results_dir / "results.csv").read_text().splitlines()[0]
     )
+
+
+def test_best_of_k_is_monotone_and_counts_reps(results: tuple[Path, Path]) -> None:
+    df = collect_runs(results[0] / "runs")
+    bok = best_of_k(df, max_k=6)
+    assert set(bok["k"]) == set(range(1, 7))
+    h2_on = bok[(bok["hop_key"] == "h2") & bok["use_reduction"]].sort_values("k")
+    # 합성 데이터는 rep 0 이 가장 좋으므로 best-of-k 는 k 에 대해 일정, 단조 비증가.
+    assert h2_on["best_mean"].is_monotonic_decreasing
+    assert h2_on["best_mean"].iloc[0] == pytest.approx(h2_on["best_mean"].iloc[-1])
+    assert (h2_on["n_graphs"] == 2).all() and (h2_on["sc_frac"] == 1.0).all()

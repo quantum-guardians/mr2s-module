@@ -47,17 +47,20 @@ nohup .venv/bin/python -m experiments.run_all --results experiments/results/full
 
 산출물(커밋 대상): `results.csv`, `summary_by_config.csv`, `best_of_by_config.csv`,
 `paired_reduction.csv`, `wilcoxon_reduction.csv`, `wilcoxon_hops.csv`, `best_by_graph.csv`,
-`best_config_counts.csv`, `solutions/<graph_id>.jsonl`(모든 실행의 방향 비트열), `summary.md`,
-`figures/*.pdf`. `--verify` 는 모든 비트열을 복원·재평가해 기록된 점수와 대조한다.
+`best_config_counts.csv`, `best_of_k.csv`(반복 k 회까지의 최선 stretch — 반복 수 충분성 확인),
+`solutions/<graph_id>.jsonl`(모든 실행의 방향 비트열), `summary.md`, `figures/*.pdf`. `--verify` 는 모든 비트열을 복원·재평가해 기록된 점수와 대조한다.
 
 ## 해 복원
 
 ```python
 from experiments.graphs import load_graph
 from experiments.solutions import load_solution, reevaluate
+
 record = load_graph(Path("experiments/data/graphs/v100_s0_p30.json"))
-solution = load_solution(record, bits)   # bits: solutions/*.jsonl 또는 best_by_graph.csv 의 orientation_bits
-print(reevaluate(solution))              # Score(apsp_sum=평균 stretch, ...)
+solution = load_solution(
+    record, bits
+)  # bits: solutions/*.jsonl 또는 best_by_graph.csv 의 orientation_bits
+print(reevaluate(solution))  # Score(apsp_sum=평균 stretch, ...)
 ```
 
 ## 알아둘 점

@@ -171,6 +171,42 @@ def best_config_counts(best: pd.DataFrame) -> pd.DataFrame:
     return counts.merge(total, on="vertices")
 
 
+def best_of_k(df: pd.DataFrame, max_k: int = config.REPS) -> pd.DataFrame:
+    """반복 1..k 회까지의 최선 stretch (수렴 확인용).
+
+    (graph, hop, 축약) 마다 rep 순서대로 누적 최소 stretch 를 구하고, (v, 제거비율, hop, 축약, k)
+    별로 평균낸다. k 가 커져도 best_mean 이 거의 내려가지 않으면 반복 수가 충분하다는 뜻이다.
+    """
+    ok = df[df["ok"]]
+    rows = []
+    keys = ["graph_id", "vertices", "remove_ratio_target", "hop_key", "use_reduction"]
+    for key, group in ok.groupby(keys, observed=True):
+        sc = group[group["strongly_connected"]]
+        for k in range(1, max_k + 1):
+            upto = sc[sc["rep"] < k]["apsp_sum"]
+            rows.append(
+                {
+                    **dict(zip(keys, key, strict=True)),
+                    "k": k,
+                    "best_k": float(upto.min()) if not upto.empty else math.nan,
+                    "has_sc": not upto.empty,
+                }
+            )
+    per_graph = pd.DataFrame(rows)
+    if per_graph.empty:
+        return per_graph
+    return (
+        per_graph.groupby([*GROUP, "k"], observed=True)
+        .agg(
+            best_mean=("best_k", "mean"),
+            best_std=("best_k", "std"),
+            sc_frac=("has_sc", "mean"),
+            n_graphs=("graph_id", "size"),
+        )
+        .reset_index()
+    )
+
+
 # --- 짝지은 비교 --------------------------------------------------------------
 
 
@@ -570,6 +606,35 @@ def make_figures(
         fig.savefig(written[-1])
         plt.close(fig)
 
+    # 6. best-of-k 수렴 (v 별 패널, 축약 on, 제거 비율 평균)
+    bok = best_of_k(df)
+    if not bok.empty:
+        vs = sorted(bok["vertices"].unique())
+        fig, axes = plt.subplots(1, len(vs), figsize=(2.6 * len(vs), 3.2), sharey=False)
+        for ax, vertices in zip(np.atleast_1d(axes), vs, strict=True):
+            part = bok[(bok["vertices"] == vertices) & bok["use_reduction"]]
+            for hop_key in HOP_ORDER:
+                line = part[part["hop_key"] == hop_key].groupby("k")["best_mean"].mean()
+                if line.empty:
+                    continue
+                ax.plot(
+                    line.index,
+                    line.values,
+                    color=HOP_COLORS[hop_key],
+                    marker="o",
+                    label=hop_key,
+                )
+            ax.set_title(f"v = {vertices}")
+            ax.set_xlabel("반복 수 k")
+            ax.set_xticks(sorted(bok["k"].unique()))
+            _style(ax)
+        np.atleast_1d(axes)[0].set_ylabel("best-of-k stretch 평균 (축약 on)")
+        np.atleast_1d(axes)[0].legend(frameon=False, title="hop", fontsize=7)
+        fig.tight_layout()
+        written.append(out_dir / "fig_best_of_k.pdf")
+        fig.savefig(written[-1])
+        plt.close(fig)
+
     # 5. QUBO 변수 수 vs v
     fig, ax = plt.subplots(figsize=(4.8, 3.4))
     for hop_key in HOP_ORDER:
@@ -631,6 +696,45 @@ def _pivot_md(summary: pd.DataFrame, use_reduction: bool, cell: Any, title: str)
     return "\n".join(lines) + "\n"
 
 
+def _best_of_k_md(bok: pd.DataFrame) -> str:
+    if bok.empty:
+        return ""
+    ks = sorted(bok["k"].unique())
+    lines = [
+        "### best-of-k stretch 평균 (반복 k 회까지의 최선, 제거 비율 평균) — k 가 커져도 줄지 않으면 반복 수가 충분",
+        "",
+        "| v | 축약 | hop | "
+        + " | ".join(f"k={k}" for k in ks)
+        + " | 개선 k1→k"
+        + str(ks[-1])
+        + " |",
+        "|---|---|---|" + "---|" * (len(ks) + 1),
+    ]
+    pooled = (
+        bok.groupby(["vertices", "use_reduction", "hop_key", "k"], observed=True)[
+            "best_mean"
+        ]
+        .mean()
+        .reset_index()
+    )
+    for (vertices, use_reduction, hop_key), group in pooled.groupby(
+        ["vertices", "use_reduction", "hop_key"], observed=True
+    ):
+        values = group.set_index("k")["best_mean"]
+        first, last = values.get(ks[0], math.nan), values.get(ks[-1], math.nan)
+        gain = (
+            (first - last) / first * 100
+            if first and not math.isnan(first) and not math.isnan(last)
+            else math.nan
+        )
+        lines.append(
+            f"| {vertices} | {'on' if use_reduction else 'off'} | {hop_key} | "
+            + " | ".join(_fmt(values.get(k, math.nan)) for k in ks)
+            + f" | {_fmt(gain, 2)}% |"
+        )
+    return "\n".join(lines) + "\n"
+
+
 def write_summary_md(
     summary: pd.DataFrame,
     best_of: pd.DataFrame,
@@ -638,6 +742,7 @@ def write_summary_md(
     wil_hops: pd.DataFrame,
     counts: pd.DataFrame,
     path: Path,
+    bok: pd.DataFrame | None = None,
 ) -> None:
     merged = summary.merge(best_of, on=GROUP, how="left")
     parts = ["# 실험 요약 (자동 생성)", ""]
@@ -700,6 +805,8 @@ def write_summary_md(
         parts.append("### 그래프별 최선 해를 낸 구성의 빈도\n")
         parts.append(counts.to_markdown(index=False))
         parts.append("")
+    if bok is not None and not bok.empty:
+        parts.append(_best_of_k_md(bok))
     path.write_text("\n".join(parts))
 
 
@@ -748,8 +855,10 @@ def main(argv: list[str] | None = None) -> None:
     counts = best_config_counts(best)
     counts.to_csv(results_dir / "best_config_counts.csv", index=False)
     n_solutions = write_solutions_jsonl(df, results_dir / "solutions")
+    bok = best_of_k(df)
+    bok.to_csv(results_dir / "best_of_k.csv", index=False)
     write_summary_md(
-        summary, best_of, wil_red, wil_hops, counts, results_dir / "summary.md"
+        summary, best_of, wil_red, wil_hops, counts, results_dir / "summary.md", bok
     )
     print(
         f"runs={len(df)} ok={int(df['ok'].sum())} timeout={int((df['status'] == 'timeout').sum())} "
