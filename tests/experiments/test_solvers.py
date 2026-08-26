@@ -117,3 +117,11 @@ def test_build_poly_generators_rejects_empty() -> None:
 
     with pytest.raises(ValueError):
         build_poly_generators(())
+
+
+def test_build_solver_without_dnc_wraps_qubo_solver_directly() -> None:
+    top, recorder = build_solver((2,), True, seed=1, num_reads=5, use_dnc=False)
+    assert isinstance(top, ReductionMr2sSolver) and top.mr2s_solver is recorder
+    assert isinstance(recorder.inner, QuboMR2SSolver)
+    bare, bare_recorder = build_solver((2,), False, seed=1, num_reads=5, use_dnc=False)
+    assert bare is bare_recorder and isinstance(bare_recorder.inner, QuboMR2SSolver)

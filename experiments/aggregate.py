@@ -65,6 +65,9 @@ def collect_runs(runs_dir: Path) -> pd.DataFrame:
         df["strongly_connected"] = False
     df["strongly_connected"] = df["strongly_connected"].fillna(False).astype(bool)
     df["ok"] = df["status"] == "ok"
+    if "use_dnc" not in df:
+        df["use_dnc"] = True
+    df["use_dnc"] = df["use_dnc"].fillna(True).astype(bool)
     df["hop_key"] = pd.Categorical(df["hop_key"], categories=HOP_ORDER, ordered=True)
     return df.sort_values(
         [

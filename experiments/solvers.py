@@ -70,12 +70,16 @@ class RecordingSolver:
     def __init__(self, inner: Mr2sSolverProtocol) -> None:
         self.inner = inner
         self.last_solution: Solution | None = None
+        self.last_graph: Graph | None = (
+            None  # inner 가 실제로 푼 그래프 (축약 시 축약 그래프)
+        )
 
     @property
     def evaluator(self) -> EvaluatorProtocol:
         return self.inner.evaluator
 
     def run(self, graph: Graph) -> Solution:
+        self.last_graph = graph
         self.last_solution = self.inner.run(graph)
         return self.last_solution
 
@@ -110,9 +114,21 @@ def build_solver(
     *,
     seed: int,
     num_reads: int,
+    use_dnc: bool = True,
 ) -> tuple[ReductionMr2sSolver | RecordingSolver, RecordingSolver]:
-    """(최상위 솔버, DnC 결과 기록 프록시). 구성은 create_dnc_qubo_sa_solver 와 동일."""
+    """(최상위 솔버, inner 결과 기록 프록시).
+
+    use_dnc=True 면 create_dnc_qubo_sa_solver 와 같은 DnC 구성, False 면 DnC 없이
+    QuboMR2SSolver 가 그래프 전체를 한 QUBO 로 푼다 (QPU 제약이 없는 SA 대조군).
+    """
     qubo_solver = build_qubo_solver(hops, seed=seed, num_reads=num_reads)
+    if not use_dnc:
+        recorder = RecordingSolver(qubo_solver)
+        if not use_reduction:
+            return recorder, recorder
+        return ReductionMr2sSolver(
+            mr2s_solver=recorder, evaluator=Evaluator()
+        ), recorder
     face_cycle = FaceClusterPartition(target_k=2, clusterer=KMeansFaceClusterer())
     partition_strategy = DegeneracyPruningFaceCyclePartitionStrategy(
         mr2s_solver=qubo_solver,

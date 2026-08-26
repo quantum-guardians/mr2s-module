@@ -91,6 +91,7 @@ def _failure_record(
         "hop_key": spec.hop_key,
         "hops": "+".join(str(h) for h in spec.hops),
         "use_reduction": spec.use_reduction,
+        "use_dnc": spec.use_dnc,
         "rep": spec.rep,
         "run_seed": spec.run_seed,
         "status": status,
@@ -220,6 +221,11 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="정점 수별 기본표 대신 단일 값 사용",
     )
+    parser.add_argument(
+        "--no-dnc",
+        action="store_true",
+        help="DnC 없이 그래프 전체를 한 QUBO 로 푸는 대조군",
+    )
     parser.add_argument("--retry", type=_parse_strs, default=[])
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
@@ -243,6 +249,7 @@ def main(argv: list[str] | None = None) -> None:
         hop_keys=args.hops,
         reps=args.reps,
         hop4_max_vertices=args.hop4_max_vertices,
+        dnc_modes=(False,) if args.no_dnc else (True,),
     )
     counts = run_matrix(specs, opts)
     print(f"done: {counts}", flush=True)

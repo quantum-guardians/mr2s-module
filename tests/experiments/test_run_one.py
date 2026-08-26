@@ -101,3 +101,19 @@ def test_write_result_is_atomic(tmp_path: Path) -> None:
     write_result(path, {"a": 1})
     assert json.loads(path.read_text()) == {"a": 1}
     assert not path.with_suffix(".json.tmp").exists()
+
+
+@pytest.mark.parametrize("use_reduction", [True, False])
+def test_execute_without_dnc_records_whole_graph_bqm(
+    graph_dir: Path, use_reduction: bool
+) -> None:
+    spec = RunSpec(12, 0, 0.3, "h2", use_reduction, 0, use_dnc=False)
+    result = execute(spec, graph_dir, num_reads=10)
+    assert result["status"] == "ok" and result["use_dnc"] is False
+    assert result["n_subgraphs"] == 1 and result["partition_target_k"] is None
+    assert result["qubo_vars_total"] == result["n_edges_solved"]
+    expected_edges = (
+        result["n_edges_contracted"] if use_reduction else result["n_edges"]
+    )
+    assert result["n_edges_solved"] == expected_edges
+    assert len(result["orientation_bits"]) == result["n_edges"]

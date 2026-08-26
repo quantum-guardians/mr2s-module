@@ -69,6 +69,7 @@ class RunSpec:
     hop_key: str
     use_reduction: bool
     rep: int
+    use_dnc: bool = True  # False = DnC 없이 그래프 전체를 한 QUBO 로 푸는 대조군
 
     @property
     def graph_id(self) -> str:
@@ -84,7 +85,9 @@ class RunSpec:
 
     @property
     def run_id(self) -> str:
-        return f"{self.graph_id}__{self.hop_key}__{self.reduction_tag}__r{self.rep}"
+        # DnC 사용(기본)은 태그 없이 4부분, 전체 그래프 대조군은 "whole" 태그를 끼운 5부분.
+        dnc_tag = "" if self.use_dnc else "__whole"
+        return f"{self.graph_id}__{self.hop_key}__{self.reduction_tag}{dnc_tag}__r{self.rep}"
 
     @property
     def run_seed(self) -> int:
@@ -95,6 +98,12 @@ class RunSpec:
 
 def parse_run_id(run_id: str) -> RunSpec:
     parts = run_id.split("__")
+    use_dnc = True
+    if len(parts) == 5:
+        if parts[3] != "whole":
+            raise ValueError(f"invalid run_id: {run_id!r}")
+        use_dnc = False
+        parts = parts[:3] + parts[4:]
     if len(parts) != 4:
         raise ValueError(f"invalid run_id: {run_id!r}")
     gid, hop_key, reduction_tag, rep_part = parts
@@ -111,6 +120,7 @@ def parse_run_id(run_id: str) -> RunSpec:
         hop_key=hop_key,
         use_reduction=reduction_tag == "red",
         rep=int(rep_part[1:]),
+        use_dnc=use_dnc,
     )
 
 
@@ -123,12 +133,14 @@ def iter_run_specs(
     reduction_modes: Iterable[bool] = REDUCTION_MODES,
     reps: int = REPS,
     hop4_max_vertices: int | None = HOP4_MAX_VERTICES,
+    dnc_modes: Iterable[bool] = (True,),
 ) -> list[RunSpec]:
     """매트릭스 전개. rep 가 가장 바깥 루프라 중간에 멈춰도 구성별 반복 수가 균형을 이룬다."""
     vertex_list = list(vertex_counts)
     seed_list = list(graph_seeds)
     ratio_list = list(remove_ratios)
     reduction_list = list(reduction_modes)
+    dnc_list = list(dnc_modes)
     for hop_key in hop_keys:
         hops_of(hop_key)
 
@@ -145,14 +157,16 @@ def iter_run_specs(
                         ):
                             continue
                         for use_reduction in reduction_list:
-                            specs.append(
-                                RunSpec(
-                                    vertices=vertices,
-                                    graph_seed=seed,
-                                    remove_ratio=ratio,
-                                    hop_key=hop_key,
-                                    use_reduction=use_reduction,
-                                    rep=rep,
+                            for use_dnc in dnc_list:
+                                specs.append(
+                                    RunSpec(
+                                        vertices=vertices,
+                                        graph_seed=seed,
+                                        remove_ratio=ratio,
+                                        hop_key=hop_key,
+                                        use_reduction=use_reduction,
+                                        rep=rep,
+                                        use_dnc=use_dnc,
+                                    )
                                 )
-                            )
     return specs

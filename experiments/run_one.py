@@ -30,11 +30,12 @@ from experiments import config
 from experiments.config import RunSpec, parse_run_id
 from experiments.graphs import GraphRecord, graph_path, load_graph, to_domain_graph
 from experiments.solutions import encode_orientation
-from experiments.solvers import SAMPLER_NAME, build_solver
+from experiments.solvers import SAMPLER_NAME, RecordingSolver, build_solver
 from mr2s_module.domain import Solution
 from mr2s_module.evaluator import Evaluator
 from mr2s_module.reduction import contract_chains
 from mr2s_module.solver.dnc_mr2s_solver import DnCSolution
+from mr2s_module.solver.qubo_mr2s_solver import QuboMR2SSolver
 
 
 def _git_sha() -> str | None:
@@ -65,6 +66,24 @@ def _is_strongly_connected(solution: Solution) -> bool:
     digraph.add_nodes_from(solution.graph.get_vertices())
     digraph.add_edges_from(solution.edges.values())
     return nx.is_strongly_connected(digraph)
+
+
+def _whole_graph_metadata(recorder: RecordingSolver) -> dict[str, Any]:
+    """DnC 없는 대조군: inner QuboMR2SSolver 가 푼 그래프의 BQM 크기를 다시 계산한다."""
+    inner = recorder.inner
+    graph = recorder.last_graph
+    if graph is None or not isinstance(inner, QuboMR2SSolver):
+        return _dnc_metadata(None)
+    bqm = inner.build_bqm(graph)
+    return {
+        "n_subgraphs": 1,
+        "partition_target_k": None,
+        "subgraph_sizes": [len(graph.edges)],
+        "qubo_vars_total": len(bqm.variables),
+        "qubo_vars_max": len(bqm.variables),
+        "qubo_couplings_total": len(bqm.quadratic),
+        "n_edges_solved": len(graph.edges),
+    }
 
 
 def _dnc_metadata(inner: Solution | None) -> dict[str, Any]:
@@ -110,6 +129,7 @@ def base_result(spec: RunSpec, record: GraphRecord, num_reads: int) -> dict[str,
         "hop_key": spec.hop_key,
         "hops": "+".join(str(h) for h in spec.hops),
         "use_reduction": spec.use_reduction,
+        "use_dnc": spec.use_dnc,
         "rep": spec.rep,
         "run_seed": spec.run_seed,
         "status": None,
@@ -146,7 +166,11 @@ def execute(spec: RunSpec, graph_dir: Path, *, num_reads: int) -> dict[str, Any]
     )
 
     solver, recorder = build_solver(
-        spec.hops, spec.use_reduction, seed=spec.run_seed, num_reads=num_reads
+        spec.hops,
+        spec.use_reduction,
+        seed=spec.run_seed,
+        num_reads=num_reads,
+        use_dnc=spec.use_dnc,
     )
     started = perf_counter()
     try:
@@ -168,7 +192,11 @@ def execute(spec: RunSpec, graph_dir: Path, *, num_reads: int) -> dict[str, Any]
     score = solution.score if solution.score is not None else Evaluator().run(solution)
     directed = list(solution.edges.values())
     bits = encode_orientation(record, directed)  # 간선 집합 일치도 여기서 검증된다
-    result.update(_dnc_metadata(recorder.last_solution))
+    result.update(
+        _dnc_metadata(recorder.last_solution)
+        if spec.use_dnc
+        else _whole_graph_metadata(recorder)
+    )
     result.update(
         {
             "status": "ok",
