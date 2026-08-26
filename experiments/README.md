@@ -28,6 +28,9 @@ n-hop 조합 {2, 3, 4, 2+3, 2+3+4} × 간선 축약 on/off 를 같은 그래프 
     --vertices 100,200 --seeds 0,1 --reps 1 --workers 10
 .venv/bin/python -m experiments.aggregate --results experiments/results/pilot --estimate --workers 12
 
+# DnC 없는 대조군 (그래프 전체를 한 QUBO 로, run_id 에 `whole` 태그)
+.venv/bin/python -m experiments.run_all --results experiments/results/whole --no-dnc --reps 1 --workers 12
+
 # 본 실행 (재시작하면 완료된 run_id 는 건너뛴다)
 nohup .venv/bin/python -m experiments.run_all --results experiments/results/full --workers 12 \
     > experiments/results/full/driver.log 2>&1 &
