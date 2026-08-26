@@ -222,3 +222,6 @@ __marimo__/
 
 # Claude Code local worktrees
 .claude/worktrees/
+
+# experiment run outputs (per-run JSON with full solutions; aggregated files are committed)
+experiments/results/**/runs/
