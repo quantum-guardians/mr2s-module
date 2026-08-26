@@ -21,13 +21,13 @@ Fill this document during project initialization. Agents must verify commands ag
 
 | Purpose | Command |
 |---|---|
-| Install dependencies | `.venv/bin/python -m pip install -e ".[test]"` |
+| Install dependencies | `.venv/bin/python -m pip install -e ".[test,experiments]"` |
 | Run locally | Not applicable; import as a Python library |
 | Unit tests | `.venv/bin/python -m pytest -m "not slow"` |
 | Integration tests | `.venv/bin/python -m pytest -m slow` |
-| Lint | `ruff check mr2s_module tests` (ruff 0.16.0, rules in `pyproject.toml`) |
-| Format | `ruff format mr2s_module tests`; CI enforces `ruff format --check` |
-| Type check | `pyright mr2s_module tests` (pyright 1.1.411, matches Pylance) |
+| Lint | `ruff check mr2s_module tests experiments` (ruff 0.16.0, rules in `pyproject.toml`) |
+| Format | `ruff format mr2s_module tests experiments`; CI enforces `ruff format --check` |
+| Type check | `pyright mr2s_module tests experiments` (pyright 1.1.411, matches Pylance) |
 | Build | `.venv/bin/python -m build` |
 
 CI (`.github/workflows/ci.yml`) runs lint, format check, pyright, and
