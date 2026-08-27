@@ -160,7 +160,7 @@ def test_estimate_solutions_verify_and_figures(
     figures = make_figures(
         df, summarize_by_config(df), paired_reduction(df), tmp_path / "figs"
     )
-    assert len(figures) == 6 and all(
+    assert len(figures) == 8 and all(
         f.exists() and f.stat().st_size > 0 for f in figures
     )
 

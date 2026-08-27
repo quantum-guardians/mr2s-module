@@ -704,6 +704,73 @@ def make_figures(
         fig.savefig(written[-1])
         plt.close(fig)
 
+    # 7. 축약 시간 비율(on/off) vs v, 제거 비율별 (순차 색: 희소할수록 진함)
+    if not paired.empty:
+        ratio_colors = dict(
+            zip(ratios, ["#86b6ef", "#5598e7", "#2a78d6", "#184f95"], strict=False)
+        )
+        fig, ax = plt.subplots(figsize=(4.8, 3.4))
+        for ratio in ratios:
+            line = (
+                paired[paired["remove_ratio_target"] == ratio]
+                .groupby("vertices")["ratio_time"]
+                .median()
+            )
+            if line.empty:
+                continue
+            ax.plot(
+                line.index,
+                line.values,
+                color=ratio_colors.get(ratio, "#2a78d6"),
+                marker="o",
+                label=f"제거 {int(ratio * 100)}%",
+            )
+        ax.axhline(1.0, color="#52514e", linewidth=0.8)
+        ax.set_ylim(0, 1.15)
+        ax.set_xlabel("정점 수 v")
+        ax.set_ylabel("실행 시간 비율 (축약 on / off, 중앙값)")
+        ax.legend(frameon=False, fontsize=8)
+        _style(ax)
+        fig.tight_layout()
+        written.append(out_dir / "fig_reduction_time_ratio.pdf")
+        fig.savefig(written[-1])
+        plt.close(fig)
+
+    # 8. 강연결 성공률 vs v, 제거 비율별 패널 (실선 on, 점선 off)
+    fig, axes = plt.subplots(
+        1, len(ratios), figsize=(3.2 * len(ratios), 3.2), sharey=True
+    )
+    for ax, ratio in zip(np.atleast_1d(axes), ratios, strict=True):
+        part = summary[summary["remove_ratio_target"] == ratio]
+        for hop_key in HOP_ORDER:
+            for use_reduction in (True, False):
+                line = part[
+                    (part["hop_key"] == hop_key)
+                    & (part["use_reduction"] == use_reduction)
+                ]
+                line = line.groupby("vertices")["sc_rate"].mean()
+                if line.empty:
+                    continue
+                ax.plot(
+                    line.index,
+                    line.values,
+                    REDUCTION_STYLE[use_reduction],
+                    color=HOP_COLORS[hop_key],
+                    marker="o",
+                    markersize=3,
+                    label=f"{hop_key} {REDUCTION_LABEL[use_reduction]}",
+                )
+        ax.set_title(f"간선 제거 {int(ratio * 100)}%")
+        ax.set_xlabel("정점 수 v")
+        ax.set_ylim(0, 1.05)
+        _style(ax)
+    np.atleast_1d(axes)[0].set_ylabel("강연결 성공률")
+    np.atleast_1d(axes)[-1].legend(frameon=False, fontsize=6, ncol=2)
+    fig.tight_layout()
+    written.append(out_dir / "fig_sc_rate_by_ratio.pdf")
+    fig.savefig(written[-1])
+    plt.close(fig)
+
     # 5. QUBO 변수 수 vs v
     fig, ax = plt.subplots(figsize=(4.8, 3.4))
     for hop_key in HOP_ORDER:
