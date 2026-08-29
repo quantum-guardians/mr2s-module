@@ -26,9 +26,9 @@ jobs:
       - name: Install ruff
         run: pip install "ruff==${RUFF_VERSION}"
       - name: Lint
-        run: ruff check mr2s_module tests
+        run: ruff check mr2s_module tests experiments
       - name: Format check
-        run: ruff format --check mr2s_module tests
+        run: ruff format --check mr2s_module tests experiments
 
   typecheck:
     name: Type check (pyright)
@@ -43,9 +43,9 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install package with test extras
-        run: pip install -e ".[test]" "pyright==${PYRIGHT_VERSION}"
+        run: pip install -e ".[test,experiments]" "pyright==${PYRIGHT_VERSION}"
       - name: Pyright
-        run: pyright --pythonpath "$(which python)" mr2s_module tests
+        run: pyright --pythonpath "$(which python)" mr2s_module tests experiments
 
   test:
     name: Tests (pytest)
@@ -60,6 +60,6 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install package with test extras
-        run: pip install -e ".[test]"
+        run: pip install -e ".[test,experiments]"
       - name: Pytest (slow 제외)
         run: python -m pytest -m "not slow" --tb=short

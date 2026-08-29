@@ -32,6 +32,12 @@ test = [
     "scipy",
     "matplotlib",
 ]
+experiments = [
+    "tabulate",
+    "scipy",
+    "matplotlib",
+    "pandas",
+]
 
 [tool.hatch.version]
 source = "vcs"
