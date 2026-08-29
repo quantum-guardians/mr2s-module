@@ -33,6 +33,7 @@ test = [
     "matplotlib",
 ]
 experiments = [
+    "tabulate",
     "scipy",
     "matplotlib",
     "pandas",
