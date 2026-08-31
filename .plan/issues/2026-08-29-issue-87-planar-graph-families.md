@@ -2,7 +2,7 @@
 
 - Date: 2026-08-29
 - GitHub Issue: #87
-- Status: In progress
+- Status: Done (2026-08-31)
 
 ## Goal
 `experiments.graphs` 에 `--family {delaunay,grid,hexagonal,apollonian}` 을 추가하고, 세 새 계열에
