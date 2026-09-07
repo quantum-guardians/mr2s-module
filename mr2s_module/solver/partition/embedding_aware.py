@@ -205,6 +205,44 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
             solve_contexts=[context],
         )
 
+    def _ungated_single_graph_partition(
+        self,
+        graph: Graph,
+    ) -> EmbeddableGraphPartition | None:
+        """Takes the whole graph when no sampler topology gates the partition.
+
+        `_build_solve_context` substitutes `_fallback_target_graph()` whenever
+        neither this strategy nor the sampler names a target, so every prefilter
+        then measures the QUBO against hardware that will never be used: the SA
+        backend samples locally and embeds nothing. A graph that misses those
+        prefilters and cannot be split — `FaceClusterPartition` returns nothing
+        for a non-planar graph — would otherwise raise, turning work the sampler
+        can do into an error. Returns None when a real target graph is present,
+        so the QA path keeps refusing what it cannot embed.
+        """
+        build_solve_context = getattr(self.mr2s_solver, "build_solve_context", None)
+        if build_solve_context is None:
+            context = QuboSolveContext(
+                graph=graph,
+                bqm=self.mr2s_solver.build_bqm(graph),
+                target_graph=self.target_graph,
+            )
+        else:
+            context = build_solve_context(graph, target_graph=self.target_graph)
+        if context.target_graph is not None:
+            return None
+
+        logger.info(
+            "DnC ungated single-graph partition selected: "
+            "no sampler topology to embed into"
+        )
+        return EmbeddableGraphPartition(
+            sub_graphs=[graph],
+            embedding_estimates=[None],
+            target_k=None,
+            solve_contexts=[context],
+        )
+
     @staticmethod
     def _raise_partition_failed(graph: Graph) -> NoReturn:
         raise RuntimeError(
@@ -231,6 +269,8 @@ class EmbeddingAwareFaceCyclePartitionStrategy:
             return partition
 
         partition = self._find_partition_by_target_k(graph)
+        if partition is None:
+            partition = self._ungated_single_graph_partition(graph)
         if partition is None:
             logger.info(
                 "DnC divide graph failed elapsed_ms=%.3f",
