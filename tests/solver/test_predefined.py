@@ -2,6 +2,7 @@ import random
 
 import networkx as nx
 import numpy as np
+import pytest
 
 from mr2s_module.cycle.face_cluster_partition import FaceClusterPartition
 from mr2s_module.cycle.face_clusterer import KMeansFaceClusterer
@@ -235,3 +236,59 @@ def test_dnc_sa_solver_runs_end_to_end() -> None:
         # Restore state
         np.random.set_state(np_state)
         random.setstate(py_state)
+
+
+# 20 vertices, 28 edges: a cycle plus 8 chords. Non-planar, so FaceClusterPartition
+# returns no subgraphs, and contraction lifts the QUBO interaction graph's
+# degeneracy from 8 to 11, past what the Pegasus stand-in accepts. Before
+# ISSUE-90 that combination raised instead of solving.
+_CHORDED_CYCLE_EDGES = [
+    (0, 1),
+    (0, 10),
+    (0, 19),
+    (1, 2),
+    (2, 3),
+    (2, 8),
+    (3, 4),
+    (3, 12),
+    (4, 5),
+    (4, 16),
+    (5, 6),
+    (5, 15),
+    (6, 7),
+    (6, 18),
+    (7, 8),
+    (7, 13),
+    (8, 9),
+    (9, 10),
+    (9, 17),
+    (10, 11),
+    (11, 12),
+    (12, 13),
+    (13, 14),
+    (14, 15),
+    (15, 16),
+    (16, 17),
+    (17, 18),
+    (18, 19),
+]
+
+
+def _chorded_cycle_graph() -> Graph:
+    return Graph(
+        [
+            Edge(vertex1=u, vertex2=v, weight=1, directed=False)
+            for u, v in _CHORDED_CYCLE_EDGES
+        ]
+    )
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("use_reduction", [True, False])
+def test_dnc_qubo_sa_solver_solves_non_planar_graph(use_reduction: bool) -> None:
+    graph = _chorded_cycle_graph()
+
+    solution = create_dnc_qubo_sa_solver(use_reduction=use_reduction).run(graph)
+
+    assert len(solution.edges) == len(graph.edges)
+    assert solution.score is not None

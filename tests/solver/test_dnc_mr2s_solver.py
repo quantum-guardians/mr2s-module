@@ -927,6 +927,75 @@ def test_divide_graph_raises_when_no_embeddable_partition_is_found(
         solver.divide_graph(graph)
 
 
+def test_divide_graph_takes_whole_graph_when_no_target_graph(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No sampler topology means nothing to embed into, so nothing to refuse.
+
+    The SA backend names no target graph, and the strategy substitutes a stand-in
+    only so the prefilters have something to measure against. A graph that misses
+    those prefilters and cannot be split must still be solved rather than raise.
+    """
+    graph = Graph(
+        edges=[
+            Edge(1, 2, 1, False),
+            Edge(2, 3, 1, False),
+        ]
+    )
+
+    def estimate_always_fails(_bqm, target_graph=None):
+        raise RuntimeError("too large")
+
+    monkeypatch.setattr(
+        embedding_aware,
+        "estimate_required_qubits",
+        estimate_always_fails,
+    )
+    mr2s_solver = StubRunningMr2sSolver()
+    strategy = EmbeddingAwareFaceCyclePartitionStrategy(
+        mr2s_solver=mr2s_solver,
+        face_cycle=StubFaceCycle(sub_graphs=[]),
+        target_graph=None,
+        embedding_estimator=embedding_aware.estimate_required_qubits,
+    )
+
+    partition = strategy.run(graph)
+
+    assert partition.sub_graphs == [graph]
+    assert partition.embedding_estimates == [None]
+    assert partition.target_k is None
+
+
+def test_divide_graph_raises_when_target_graph_gates_the_partition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real target graph keeps refusing what it cannot embed."""
+    graph = Graph(
+        edges=[
+            Edge(1, 2, 1, False),
+            Edge(2, 3, 1, False),
+        ]
+    )
+
+    def estimate_always_fails(_bqm, target_graph=None):
+        raise RuntimeError("too large")
+
+    monkeypatch.setattr(
+        embedding_aware,
+        "estimate_required_qubits",
+        estimate_always_fails,
+    )
+    strategy = EmbeddingAwareFaceCyclePartitionStrategy(
+        mr2s_solver=StubRunningMr2sSolver(),
+        face_cycle=StubFaceCycle(sub_graphs=[]),
+        target_graph=nx.path_graph(100),
+        embedding_estimator=embedding_aware.estimate_required_qubits,
+    )
+
+    with pytest.raises(RuntimeError, match="no embeddable subgraph partition"):
+        strategy.run(graph)
+
+
 def test_divide_graph_finds_target_k_with_binary_search(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
