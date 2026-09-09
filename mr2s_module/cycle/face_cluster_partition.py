@@ -358,10 +358,18 @@ class FaceClusterPartition:
                 _OUTER_WALL_WEIGHT if edge_id in outer_edges else _INNER_WEIGHT
             )
 
-        dist_map = dict(nx.all_pairs_dijkstra_path_length(g_repair, weight="weight"))
+        # 매칭에 필요한 거리는 홀수 차수 정점 쌍뿐이다. all-pairs 로 g_repair 의 모든
+        # 노드에서 Dijkstra 를 돌리면 |V| 회가 되는데(v500 기준 1,981 회), 출발점을
+        # 홀수 정점으로 좁히면 |odd| 회(같은 조건에서 2~88 회)로 줄고 거리 결과는 같다.
+        dist_map = {
+            source: nx.single_source_dijkstra_path_length(
+                g_repair, source, weight="weight"
+            )
+            for source in odd_nodes
+        }
         complete = nx.Graph()
         for u, v in itertools.combinations(odd_nodes, 2):
-            if v in dist_map.get(u, {}):
+            if v in dist_map[u]:
                 complete.add_edge(u, v, weight=dist_map[u][v])
 
         repair_edges: set[int] = set()
