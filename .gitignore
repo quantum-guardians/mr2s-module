@@ -225,3 +225,6 @@ __marimo__/
 
 # experiment run outputs (per-run JSON with full solutions; aggregated files are committed)
 experiments/results/**/runs/
+
+# prefilter bench driver logs (local only)
+experiments/results/**/*.log
