@@ -1,3 +1,5 @@
+import json
+
 import networkx as nx
 import pytest
 
@@ -8,6 +10,7 @@ from experiments.prefilter_bench import (
     CandidateOptions,
     CouplingsPruningFaceCyclePartitionStrategy,
     TreewidthPruningFaceCyclePartitionStrategy,
+    _recheck_jobs,
     _select_pending,
     auc_reject_score,
     best_threshold,
@@ -116,37 +119,49 @@ def _job(candidate_id: str, n_couplings: int) -> CandidateJob:
     )
 
 
-def test_select_pending_rechecks_only_failed_small_candidates(tmp_path) -> None:
-    jobs = [
-        _job("new", 1),
-        _job("failed_small", 2),
-        _job("failed_big", 9),
-        _job("ok", 1),
-    ]
-    (tmp_path / "failed_small.json").write_text('{"embeddable": false}')
-    (tmp_path / "failed_big.json").write_text('{"embeddable": false}')
-    (tmp_path / "ok.json").write_text('{"embeddable": true, "timeout_sec": 60}')
-    base = {
-        "graph_dir": tmp_path,
-        "k_grid": (2,),
-        "per_k": 1,
-        "partition_seed": 0,
-        "fill_in_max_vars": 0,
-        "embed_timeout": 1,
-        "embed_threads": 1,
-        "embed_seed": 0,
-        "embed_retries": 0,
-    }
-    pending, previous = _select_pending(jobs, tmp_path, CandidateOptions(**base))
-    assert [job.candidate_id for job in pending] == ["new"]
-    assert previous == {}
-    pending, previous = _select_pending(
-        jobs,
-        tmp_path,
-        CandidateOptions(**base, recheck_failed=True, recheck_max_couplings=5),
+def test_select_pending_skips_recorded_candidates(tmp_path) -> None:
+    jobs = [_job("new", 1), _job("done", 1)]
+    (tmp_path / "done.json").write_text('{"embeddable": true}')
+    assert [job.candidate_id for job in _select_pending(jobs, tmp_path)] == ["new"]
+
+
+def test_recheck_jobs_restores_failed_small_candidates(tmp_path) -> None:
+    def record(job: CandidateJob, embeddable: bool) -> str:
+        payload = job.meta
+        payload.update(
+            {
+                "embeddable": embeddable,
+                "timeout_sec": 60,
+                "source": {
+                    "variables": list(job.variables),
+                    "couplings": [list(pair) for pair in job.couplings],
+                },
+            }
+        )
+        return json.dumps(payload)
+
+    (tmp_path / "failed_small.json").write_text(record(_job("failed_small", 2), False))
+    (tmp_path / "failed_big.json").write_text(record(_job("failed_big", 9), False))
+    (tmp_path / "ok.json").write_text(record(_job("ok", 1), True))
+    (tmp_path / "legacy.json").write_text('{"embeddable": false}')
+    opts = CandidateOptions(
+        graph_dir=tmp_path,
+        k_grid=(2,),
+        per_k=1,
+        partition_seed=0,
+        fill_in_max_vars=0,
+        embed_timeout=300,
+        embed_threads=1,
+        embed_seed=0,
+        embed_retries=0,
+        recheck_failed=True,
+        recheck_max_couplings=5,
     )
+    pending, previous = _recheck_jobs(tmp_path, opts)
     assert [job.candidate_id for job in pending] == ["failed_small"]
+    assert pending[0].couplings == (("a", "x0"), ("a", "x1"))
     assert previous["ok"]["timeout_sec"] == 60
+    assert set(previous) == {"failed_small", "failed_big", "ok", "legacy"}
 
 
 def test_summarize_e2e_pairs_against_baseline() -> None:

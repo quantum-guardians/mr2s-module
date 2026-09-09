@@ -429,7 +429,32 @@ def evaluate_candidate(job: CandidateJob, opts: CandidateOptions) -> dict[str, A
         )
     )
     result["timeout_sec"] = opts.embed_timeout
+    # 재실측이 같은 인스턴스를 다시 보도록 상호작용 그래프를 함께 저장한다. 면 분할은
+    # Edge 의 주소 해시 순서에 따라 프로세스마다 달라져 재생성으로는 복원되지 않는다.
+    result["source"] = {
+        "variables": [str(v) for v in job.variables],
+        "couplings": [[str(u), str(v)] for u, v in job.couplings],
+    }
     return result
+
+
+def job_from_record(record: dict[str, Any]) -> CandidateJob:
+    """저장된 실측 기록(``source`` 포함)에서 후보를 복원한다."""
+    source = record["source"]
+    return CandidateJob(
+        candidate_id=str(record["candidate_id"]),
+        graph_id=str(record["graph_id"]),
+        vertices=int(record["vertices"]),
+        use_reduction=bool(record["use_reduction"]),
+        hop_key=str(record["hop_key"]),
+        target_k=None if record.get("target_k") is None else int(record["target_k"]),
+        rank=str(record["rank"]),
+        n_vertices=int(record["n_vertices"]),
+        n_edges=int(record["n_edges"]),
+        n_directed=int(record["n_directed"]),
+        variables=tuple(source["variables"]),
+        couplings=tuple((u, v) for u, v in source["couplings"]),
+    )
 
 
 def _generate_task(
@@ -527,26 +552,34 @@ CANDIDATE_COLUMNS: tuple[str, ...] = (
 )
 
 
-def _select_pending(
-    jobs: list[CandidateJob], runs_dir: Path, opts: CandidateOptions
+def _select_pending(jobs: list[CandidateJob], runs_dir: Path) -> list[CandidateJob]:
+    """아직 실측 기록이 없는 후보만 고른다."""
+    existing = {path.stem for path in runs_dir.glob("*.json")}
+    return [job for job in jobs if job.candidate_id not in existing]
+
+
+def _recheck_jobs(
+    runs_dir: Path, opts: CandidateOptions
 ) -> tuple[list[CandidateJob], dict[str, dict[str, Any]]]:
-    """실측할 후보와, 재실측 시 덮어쓸 이전 기록을 고른다."""
-    existing = {path.stem: path for path in runs_dir.glob("*.json")}
-    if not opts.recheck_failed:
-        return [job for job in jobs if job.candidate_id not in existing], {}
+    """임베딩 실패로 기록된 후보를 저장된 상호작용 그래프에서 복원한다.
+
+    ``source`` 가 없는 옛 기록은 같은 인스턴스를 복원할 수 없으므로 건너뛴다.
+    """
     previous = {
-        stem: json.loads(path.read_text(encoding="utf-8"))
-        for stem, path in existing.items()
+        path.stem: json.loads(path.read_text(encoding="utf-8"))
+        for path in runs_dir.glob("*.json")
     }
-    pending = [
-        job
-        for job in jobs
-        if previous.get(job.candidate_id, {}).get("embeddable") is False
-        and (
-            opts.recheck_max_couplings is None
-            or len(job.couplings) <= opts.recheck_max_couplings
-        )
-    ]
+    pending: list[CandidateJob] = []
+    for record in previous.values():
+        if record.get("embeddable") is not False or "source" not in record:
+            continue
+        job = job_from_record(record)
+        if (
+            opts.recheck_max_couplings is not None
+            and len(job.couplings) > opts.recheck_max_couplings
+        ):
+            continue
+        pending.append(job)
     return pending, previous
 
 
@@ -575,8 +608,13 @@ def run_candidates(args: argparse.Namespace) -> None:
     context = get_context("spawn")
     started = perf_counter()
     with ProcessPoolExecutor(max_workers=args.workers, mp_context=context) as pool:
-        jobs = [job for jobs in pool.map(_generate_task, combos) for job in jobs]
-        pending, previous = _select_pending(jobs, runs_dir, opts)
+        previous: dict[str, dict[str, Any]] = {}
+        if opts.recheck_failed:
+            pending, previous = _recheck_jobs(runs_dir, opts)
+            jobs = pending
+        else:
+            jobs = [job for jobs in pool.map(_generate_task, combos) for job in jobs]
+            pending = _select_pending(jobs, runs_dir)
         print(
             f"candidates total={len(jobs)} pending={len(pending)} "
             f"recheck={opts.recheck_failed} "
