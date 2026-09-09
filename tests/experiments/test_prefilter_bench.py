@@ -1,10 +1,14 @@
 import networkx as nx
+import pytest
 
 from experiments.graphs import build_record
 from experiments.prefilter_bench import (
     Arm,
+    CandidateJob,
     CandidateOptions,
+    CouplingsPruningFaceCyclePartitionStrategy,
     TreewidthPruningFaceCyclePartitionStrategy,
+    _select_pending,
     auc_reject_score,
     best_threshold,
     degeneracy,
@@ -13,6 +17,7 @@ from experiments.prefilter_bench import (
     interaction_metrics,
     leave_one_group_out_accuracy,
     parse_arm,
+    summarize_e2e,
     threshold_stats,
     treewidth_upper_bound,
 )
@@ -83,6 +88,94 @@ def test_parse_arm_and_run_id() -> None:
     assert e2e_run_id("v100_s0_p0", "h2+3", True, arm) == (
         "v100_s0_p0__h2+3__red__treewidth130"
     )
+    assert parse_arm("couplings:5194").metric == "couplings"
+    assert (
+        CouplingsPruningFaceCyclePartitionStrategy._estimate_degeneracy(
+            nx.complete_graph(5)
+        )
+        == 10
+    )
+    with pytest.raises(ValueError):
+        parse_arm("maxdegree:15")
+
+
+def _job(candidate_id: str, n_couplings: int) -> CandidateJob:
+    return CandidateJob(
+        candidate_id=candidate_id,
+        graph_id="v100_s0_p0",
+        vertices=100,
+        use_reduction=False,
+        hop_key="h2",
+        target_k=None,
+        rank="whole",
+        n_vertices=3,
+        n_edges=3,
+        n_directed=0,
+        variables=("a", "b", "c"),
+        couplings=tuple(("a", f"x{i}") for i in range(n_couplings)),
+    )
+
+
+def test_select_pending_rechecks_only_failed_small_candidates(tmp_path) -> None:
+    jobs = [
+        _job("new", 1),
+        _job("failed_small", 2),
+        _job("failed_big", 9),
+        _job("ok", 1),
+    ]
+    (tmp_path / "failed_small.json").write_text('{"embeddable": false}')
+    (tmp_path / "failed_big.json").write_text('{"embeddable": false}')
+    (tmp_path / "ok.json").write_text('{"embeddable": true, "timeout_sec": 60}')
+    base = {
+        "graph_dir": tmp_path,
+        "k_grid": (2,),
+        "per_k": 1,
+        "partition_seed": 0,
+        "fill_in_max_vars": 0,
+        "embed_timeout": 1,
+        "embed_threads": 1,
+        "embed_seed": 0,
+        "embed_retries": 0,
+    }
+    pending, previous = _select_pending(jobs, tmp_path, CandidateOptions(**base))
+    assert [job.candidate_id for job in pending] == ["new"]
+    assert previous == {}
+    pending, previous = _select_pending(
+        jobs,
+        tmp_path,
+        CandidateOptions(**base, recheck_failed=True, recheck_max_couplings=5),
+    )
+    assert [job.candidate_id for job in pending] == ["failed_small"]
+    assert previous["ok"]["timeout_sec"] == 60
+
+
+def test_summarize_e2e_pairs_against_baseline() -> None:
+    def row(arm: str, apsp: float, elapsed: float, embeddable: bool) -> dict:
+        return {
+            "graph_id": "v100_s0_p0",
+            "hop_key": "h2",
+            "use_reduction": False,
+            "arm": arm,
+            "status": "ok",
+            "n_subgraphs": 1.0,
+            "qubo_vars_max": 10.0,
+            "elapsed_sec": elapsed,
+            "apsp_sum": apsp,
+            "strongly_connected": True,
+            "partition_embeddable": embeddable,
+            "verify_sec": 1.0,
+        }
+
+    rows = [
+        row("degeneracy8", 1.30, 10.0, True),
+        row("treewidth454", 1.35, 5.0, False),
+    ]
+    summary = {item["arm"]: item for item in summarize_e2e(rows, "degeneracy8")}
+    assert summary["degeneracy8"]["d_apsp_vs_baseline"] == 0.0
+    assert summary["treewidth454"]["d_apsp_vs_baseline"] == pytest.approx(0.05)
+    assert summary["treewidth454"]["time_ratio_vs_baseline"] == 0.5
+    assert summary["treewidth454"]["partition_embeddable_rate"] == 0.0
+    assert summary["degeneracy8"]["n_paired"] == 1
 
 
 def test_generate_candidates_dedupes_and_includes_whole(tmp_path) -> None:

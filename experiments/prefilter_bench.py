@@ -116,9 +116,31 @@ class TreewidthPruningFaceCyclePartitionStrategy(
         return treewidth_upper_bound(graph)
 
 
+@dataclass
+class CouplingsPruningFaceCyclePartitionStrategy(
+    DegeneracyPruningFaceCyclePartitionStrategy,
+):
+    """상호작용 그래프의 커플링(2차 항) 수로 prefilter 하는 대조용 전략.
+
+    후보 실측에서 커플링 수가 가장 판별력이 높게 나와 종단 비교에 넣는다. 부모의
+    ``max_degeneracy`` 가 커플링 수 임계값이다.
+    """
+
+    @staticmethod
+    def _estimate_degeneracy(graph: nx.Graph) -> int:
+        return graph.number_of_edges()
+
+
+ARM_STRATEGIES: dict[str, type[DegeneracyPruningFaceCyclePartitionStrategy]] = {
+    "degeneracy": DegeneracyPruningFaceCyclePartitionStrategy,
+    "treewidth": TreewidthPruningFaceCyclePartitionStrategy,
+    "couplings": CouplingsPruningFaceCyclePartitionStrategy,
+}
+
+
 @dataclass(frozen=True)
 class Arm:
-    metric: str  # degeneracy | treewidth
+    metric: str  # degeneracy | treewidth | couplings
     threshold: int
 
     @property
@@ -127,9 +149,9 @@ class Arm:
 
 
 def parse_arm(text: str) -> Arm:
-    """``degeneracy:8`` / ``treewidth:454`` 형식."""
+    """``degeneracy:8`` / ``treewidth:454`` / ``couplings:5194`` 형식."""
     metric, _, threshold = text.partition(":")
-    if metric not in ("degeneracy", "treewidth") or not threshold.isdigit():
+    if metric not in ARM_STRATEGIES or not threshold.isdigit():
         raise ValueError(f"invalid arm: {text!r} (expected metric:threshold)")
     return Arm(metric=metric, threshold=int(threshold))
 
@@ -140,11 +162,7 @@ def make_strategy(
     qubo = dnc.mr2s_solver
     if not isinstance(qubo, QuboMR2SSolver):
         raise TypeError("prefilter arms require a QuboMR2SSolver inside DnC")
-    strategy_type = (
-        DegeneracyPruningFaceCyclePartitionStrategy
-        if arm.metric == "degeneracy"
-        else TreewidthPruningFaceCyclePartitionStrategy
-    )
+    strategy_type = ARM_STRATEGIES[arm.metric]
     return strategy_type(
         mr2s_solver=qubo,
         face_cycle=dnc.face_cycle,
@@ -318,6 +336,9 @@ class CandidateOptions:
     embed_threads: int
     embed_seed: int
     embed_retries: int
+    # 이미 실측된 후보 중 임베딩 실패로 기록된 것만 더 긴 예산으로 다시 실측한다.
+    recheck_failed: bool = False
+    recheck_max_couplings: int | None = None
 
 
 def _undirected_ids(graph: Graph) -> tuple[int, ...]:
@@ -501,7 +522,32 @@ CANDIDATE_COLUMNS: tuple[str, ...] = (
     "embed_sec",
     "attempts",
     "timeout_sec",
+    "rechecked",
+    "first_timeout_sec",
 )
+
+
+def _select_pending(
+    jobs: list[CandidateJob], runs_dir: Path, opts: CandidateOptions
+) -> tuple[list[CandidateJob], dict[str, dict[str, Any]]]:
+    """실측할 후보와, 재실측 시 덮어쓸 이전 기록을 고른다."""
+    existing = {path.stem: path for path in runs_dir.glob("*.json")}
+    if not opts.recheck_failed:
+        return [job for job in jobs if job.candidate_id not in existing], {}
+    previous = {
+        stem: json.loads(path.read_text(encoding="utf-8"))
+        for stem, path in existing.items()
+    }
+    pending = [
+        job
+        for job in jobs
+        if previous.get(job.candidate_id, {}).get("embeddable") is False
+        and (
+            opts.recheck_max_couplings is None
+            or len(job.couplings) <= opts.recheck_max_couplings
+        )
+    ]
+    return pending, previous
 
 
 def run_candidates(args: argparse.Namespace) -> None:
@@ -515,6 +561,8 @@ def run_candidates(args: argparse.Namespace) -> None:
         embed_threads=args.threads,
         embed_seed=args.embed_seed,
         embed_retries=args.retries,
+        recheck_failed=args.recheck_failed,
+        recheck_max_couplings=args.recheck_max_couplings,
     )
     runs_dir = args.results / "runs" / "candidates"
     runs_dir.mkdir(parents=True, exist_ok=True)
@@ -528,10 +576,10 @@ def run_candidates(args: argparse.Namespace) -> None:
     started = perf_counter()
     with ProcessPoolExecutor(max_workers=args.workers, mp_context=context) as pool:
         jobs = [job for jobs in pool.map(_generate_task, combos) for job in jobs]
-        done = {path.stem for path in runs_dir.glob("*.json")}
-        pending = [job for job in jobs if job.candidate_id not in done]
+        pending, previous = _select_pending(jobs, runs_dir, opts)
         print(
             f"candidates total={len(jobs)} pending={len(pending)} "
+            f"recheck={opts.recheck_failed} "
             f"generated_in={perf_counter() - started:.0f}s workers={args.workers}",
             flush=True,
         )
@@ -545,6 +593,11 @@ def run_candidates(args: argparse.Namespace) -> None:
             except Exception as exc:
                 result = job.meta
                 result["error"] = "".join(traceback.format_exception_only(exc))[:500]
+            if opts.recheck_failed:
+                result["rechecked"] = True
+                result["first_timeout_sec"] = previous.get(job.candidate_id, {}).get(
+                    "timeout_sec"
+                )
             write_json(runs_dir / f"{job.candidate_id}.json", result)
             print(
                 f"[{finished}/{len(pending)}] {job.candidate_id} "
@@ -1108,6 +1161,140 @@ def run_e2e(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# summarize (e2e)
+# ---------------------------------------------------------------------------
+
+
+E2E_NUMERIC: tuple[str, ...] = (
+    "elapsed_sec",
+    "n_subgraphs",
+    "qubo_vars_max",
+    "qubo_vars_total",
+    "apsp_sum",
+    "strong_connect_rate",
+    "verify_sec",
+    "physical_qubits_total",
+    "max_chain_length",
+)
+E2E_SUMMARY_COLUMNS: tuple[str, ...] = (
+    "hop_key",
+    "use_reduction",
+    "arm",
+    "n",
+    "n_ok",
+    "n_subgraphs",
+    "qubo_vars_max",
+    "elapsed_sec",
+    "apsp_sum",
+    "strongly_connected_rate",
+    "partition_embeddable_rate",
+    "verify_sec",
+    "n_paired",
+    "d_apsp_vs_baseline",
+    "time_ratio_vs_baseline",
+)
+
+
+def load_e2e(path: Path) -> list[dict[str, Any]]:
+    with path.open(encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    for row in rows:
+        row["use_reduction"] = _parse_bool(row["use_reduction"])
+        row["strongly_connected"] = _parse_bool(row["strongly_connected"])
+        row["partition_embeddable"] = _parse_bool(row["partition_embeddable"])
+        for column in E2E_NUMERIC:
+            raw = row.get(column)
+            row[column] = float(raw) if raw not in ("", None) else None
+    return rows
+
+
+def _mean(values: Iterable[float | None]) -> float:
+    present = [v for v in values if v is not None]
+    return sum(present) / len(present) if present else float("nan")
+
+
+def summarize_e2e(
+    rows: list[dict[str, Any]], baseline_arm: str
+) -> list[dict[str, Any]]:
+    """(hop, 축약, 전략)별 평균과, 같은 그래프의 baseline 전략 대비 짝 비교."""
+    ok_rows = [row for row in rows if row["status"] == "ok"]
+    baseline = {
+        (row["graph_id"], row["hop_key"], row["use_reduction"]): row
+        for row in ok_rows
+        if row["arm"] == baseline_arm
+    }
+    groups: dict[tuple[str, bool, str], list[dict[str, Any]]] = {}
+    for row in rows:
+        key = (str(row["hop_key"]), bool(row["use_reduction"]), str(row["arm"]))
+        groups.setdefault(key, []).append(row)
+    output: list[dict[str, Any]] = []
+    for (hop_key, use_reduction, arm), members in sorted(groups.items()):
+        ok = [row for row in members if row["status"] == "ok"]
+        paired = [
+            (row, baseline[(row["graph_id"], hop_key, use_reduction)])
+            for row in ok
+            if (row["graph_id"], hop_key, use_reduction) in baseline
+        ]
+        output.append(
+            {
+                "hop_key": hop_key,
+                "use_reduction": use_reduction,
+                "arm": arm,
+                "n": len(members),
+                "n_ok": len(ok),
+                "n_subgraphs": _mean(row["n_subgraphs"] for row in ok),
+                "qubo_vars_max": _mean(row["qubo_vars_max"] for row in ok),
+                "elapsed_sec": _mean(row["elapsed_sec"] for row in ok),
+                "apsp_sum": _mean(row["apsp_sum"] for row in ok),
+                "strongly_connected_rate": _mean(
+                    float(row["strongly_connected"]) for row in ok
+                ),
+                "partition_embeddable_rate": _mean(
+                    float(row["partition_embeddable"]) for row in ok
+                ),
+                "verify_sec": _mean(row["verify_sec"] for row in ok),
+                "n_paired": len(paired),
+                "d_apsp_vs_baseline": _mean(
+                    row["apsp_sum"] - base["apsp_sum"]
+                    for row, base in paired
+                    if row["apsp_sum"] is not None and base["apsp_sum"] is not None
+                ),
+                "time_ratio_vs_baseline": _mean(
+                    row["elapsed_sec"] / base["elapsed_sec"]
+                    for row, base in paired
+                    if row["elapsed_sec"] and base["elapsed_sec"]
+                ),
+            }
+        )
+    return output
+
+
+def format_e2e_table(summary: list[dict[str, Any]]) -> str:
+    header = (
+        "| hop | red | arm | ok/n | subgraphs | vars max | elapsed s | apsp | "
+        "SC | embeddable | verify s | d apsp | time ratio |"
+    )
+    lines = [header, "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for row in summary:
+        lines.append(
+            f"| {row['hop_key']} | {row['use_reduction']} | {row['arm']} "
+            f"| {row['n_ok']}/{row['n']} | {row['n_subgraphs']:.1f} "
+            f"| {row['qubo_vars_max']:.0f} | {row['elapsed_sec']:.0f} "
+            f"| {row['apsp_sum']:.4f} | {row['strongly_connected_rate']:.2f} "
+            f"| {row['partition_embeddable_rate']:.2f} | {row['verify_sec']:.0f} "
+            f"| {row['d_apsp_vs_baseline']:+.4f} | {row['time_ratio_vs_baseline']:.2f} |"
+        )
+    return "\n".join(lines)
+
+
+def run_summarize(args: argparse.Namespace) -> None:
+    rows = load_e2e(args.results / "e2e.csv")
+    summary = summarize_e2e(rows, args.baseline_arm)
+    write_csv(args.results / "e2e_summary.csv", summary, E2E_SUMMARY_COLUMNS)
+    print(format_e2e_table(summary), flush=True)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -1156,11 +1343,27 @@ def build_parser() -> argparse.ArgumentParser:
     candidates.add_argument("--fill-in-max-vars", type=int, default=600)
     candidates.add_argument("--embed-seed", type=int, default=0)
     candidates.add_argument("--workers", type=int, default=8)
+    candidates.add_argument(
+        "--recheck-failed",
+        action="store_true",
+        help="임베딩 실패로 기록된 후보만 현재 --timeout 으로 다시 실측해 덮어쓴다",
+    )
+    candidates.add_argument(
+        "--recheck-max-couplings",
+        type=int,
+        default=None,
+        help="재실측 대상 커플링 수 상한 (더 큰 후보는 실패 확정으로 둔다)",
+    )
     candidates.set_defaults(func=run_candidates)
 
     analyze = sub.add_parser("analyze", help="지표별 AUC 와 임계값 정확도")
     analyze.add_argument("--results", type=Path, default=DEFAULT_RESULTS_DIR)
     analyze.set_defaults(func=run_analyze)
+
+    summarize = sub.add_parser("summarize", help="e2e.csv 를 전략별로 집계")
+    summarize.add_argument("--results", type=Path, default=DEFAULT_RESULTS_DIR)
+    summarize.add_argument("--baseline-arm", default="degeneracy8")
+    summarize.set_defaults(func=run_summarize)
 
     e2e = sub.add_parser("e2e", help="prefilter 전략별 DnC + QUBO-SA 종단 비교")
     _add_matrix_arguments(e2e)
