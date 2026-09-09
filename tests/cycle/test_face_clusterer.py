@@ -91,3 +91,34 @@ def test_balanced_face_graph_clusterer_splits_dual_graph() -> None:
     assert set(result) == set(range(8))
     assert len(set(result.values())) == 4
     assert cluster_sizes == [2, 2, 2, 2]
+
+
+def test_kmeans_initial_centers_pick_far_apart_points() -> None:
+    # 왼쪽에 밀집한 3점 + 멀리 떨어진 2점. farthest-point 초기화라면 어느 점에서
+    # 시작하든 떨어진 두 점(인덱스 3, 4)이 반드시 중심으로 뽑힌다.
+    points = np.array([[0.0, 0.0], [0.05, 0.0], [0.1, 0.0], [10.0, 0.0], [5.0, 9.0]])
+
+    np.random.seed(0)
+    centers = KMeansFaceClusterer._select_initial_centers(points, 3)
+
+    assert len(centers) == len(set(centers)) == 3
+    assert {3, 4} <= set(centers)
+
+
+def test_kmeans_initial_centers_cap_at_point_count() -> None:
+    points = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
+
+    np.random.seed(0)
+    centers = KMeansFaceClusterer._select_initial_centers(points, 10)
+
+    assert sorted(centers) == [0, 1, 2, 3]
+
+
+def test_kmeans_initial_centers_handle_duplicate_points() -> None:
+    # 중복 좌표가 있어도 같은 인덱스를 두 번 고르지 않는다.
+    points = np.array([[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [5.0, 5.0]])
+
+    np.random.seed(0)
+    centers = KMeansFaceClusterer._select_initial_centers(points, 4)
+
+    assert sorted(centers) == [0, 1, 2, 3]
