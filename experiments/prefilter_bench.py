@@ -874,6 +874,8 @@ E2E_COLUMNS: tuple[str, ...] = (
     "physical_qubits_total",
     "max_chain_length",
     "verify_sec",
+    "verify_timeout_sec",
+    "reverified",
 )
 
 
@@ -915,35 +917,27 @@ def dnc_metadata(inner: Solution | None) -> dict[str, Any]:
     }
 
 
-def verify_partition(
-    inner: Solution | None, *, timeout: int, threads: int, seed: int, retries: int
+def verify_sources(
+    sources: Sequence[dict[str, Any]],
+    *,
+    timeout: int,
+    threads: int,
+    seed: int,
+    retries: int,
 ) -> dict[str, Any]:
-    """최종 분할의 서브그래프 BQM 전부를 minorminer 로 실측한다."""
+    """서브그래프 상호작용 그래프 목록을 minorminer 로 실측해 분할 단위로 집계한다."""
     started = perf_counter()
-    if not isinstance(inner, DnCSolution):
-        return {
-            "n_subgraphs_checked": 0,
-            "n_subgraphs_embeddable": 0,
-            "partition_embeddable": None,
-            "physical_qubits_total": None,
-            "max_chain_length": None,
-            "verify_sec": 0.0,
-        }
     checked = 0
     embeddable = 0
     qubits = 0
     max_chain = 0
-    for context in inner.solve_contexts:
-        bqm = getattr(context, "bqm", None)
-        if bqm is None:
-            continue
+    for source in sources:
+        graph = nx.Graph()
+        graph.add_nodes_from(source["variables"])
+        graph.add_edges_from(tuple(pair) for pair in source["couplings"])
         checked += 1
         record = embed_in_pegasus(
-            interaction_graph(bqm),
-            timeout=timeout,
-            threads=threads,
-            seed=seed,
-            retries=retries,
+            graph, timeout=timeout, threads=threads, seed=seed, retries=retries
         )
         if record["embeddable"]:
             embeddable += 1
@@ -956,7 +950,60 @@ def verify_partition(
         "physical_qubits_total": qubits,
         "max_chain_length": max_chain,
         "verify_sec": perf_counter() - started,
+        "verify_timeout_sec": timeout,
     }
+
+
+def partition_sources(inner: Solution | None) -> list[dict[str, Any]]:
+    """최종 분할 서브그래프 BQM 의 상호작용 그래프. 재실측이 같은 인스턴스를 보게 저장한다."""
+    if not isinstance(inner, DnCSolution):
+        return []
+    sources: list[dict[str, Any]] = []
+    for context in inner.solve_contexts:
+        bqm = getattr(context, "bqm", None)
+        if bqm is None:
+            continue
+        sources.append(
+            {
+                "variables": [str(v) for v in bqm.variables],
+                "couplings": [[str(u), str(v)] for u, v in bqm.quadratic],
+            }
+        )
+    return sources
+
+
+def verify_partition(
+    inner: Solution | None, *, timeout: int, threads: int, seed: int, retries: int
+) -> dict[str, Any]:
+    """최종 분할의 서브그래프 BQM 전부를 minorminer 로 실측한다."""
+    sources = partition_sources(inner)
+    if not sources:
+        return {
+            "n_subgraphs_checked": 0,
+            "n_subgraphs_embeddable": 0,
+            "partition_embeddable": None,
+            "physical_qubits_total": None,
+            "max_chain_length": None,
+            "verify_sec": 0.0,
+            "verify_timeout_sec": timeout,
+            "sources": [],
+        }
+    result = verify_sources(
+        sources, timeout=timeout, threads=threads, seed=seed, retries=retries
+    )
+    result["sources"] = sources
+    return result
+
+
+def _reverify_task(args: tuple[dict[str, Any], int, int, int]) -> dict[str, Any]:
+    record, timeout, threads, retries = args
+    record.update(
+        verify_sources(
+            record["sources"], timeout=timeout, threads=threads, seed=0, retries=retries
+        )
+    )
+    record["reverified"] = True
+    return record
 
 
 def e2e_one(
@@ -1163,10 +1210,44 @@ def _e2e_failure(
     }
 
 
+def reverify_failed(args: argparse.Namespace, runs_dir: Path) -> None:
+    """분할이 임베딩 불가로 기록된 실행만 저장된 상호작용 그래프로 다시 실측한다."""
+    records = [
+        record
+        for record in load_jsons(runs_dir)
+        if record.get("status") == "ok"
+        and record.get("partition_embeddable") is False
+        and record.get("sources")
+    ]
+    print(f"reverify pending={len(records)} timeout={args.timeout}", flush=True)
+    context = get_context("spawn")
+    started = perf_counter()
+    with ProcessPoolExecutor(max_workers=args.workers, mp_context=context) as pool:
+        tasks = [
+            (record, args.timeout, args.threads, args.retries) for record in records
+        ]
+        for finished, updated in enumerate(pool.map(_reverify_task, tasks), start=1):
+            write_json(runs_dir / f"{updated['run_id']}.json", updated)
+            print(
+                f"[{finished}/{len(records)}] {updated['run_id']} "
+                f"embeddable={updated['partition_embeddable']} "
+                f"verify={updated['verify_sec']:.0f}s "
+                f"elapsed={(perf_counter() - started) / 60:.1f}m",
+                flush=True,
+            )
+
+
 def run_e2e(args: argparse.Namespace) -> None:
     arms = [parse_arm(text) for text in args.arms]
     runs_dir = args.results / "runs" / "e2e"
     runs_dir.mkdir(parents=True, exist_ok=True)
+    if args.reverify_failed:
+        reverify_failed(args, runs_dir)
+        rows = load_jsons(runs_dir)
+        rows.sort(key=lambda row: str(row["run_id"]))
+        write_csv(args.results / "e2e.csv", rows, E2E_COLUMNS)
+        print(f"wrote {args.results / 'e2e.csv'} rows={len(rows)}", flush=True)
+        return
     specs = [
         E2ESpec(gid, hop_key, use_reduction, arm)
         for gid in iter_graph_ids(args.vertices, args.seeds, args.remove_ratios)
@@ -1415,6 +1496,11 @@ def build_parser() -> argparse.ArgumentParser:
     e2e.add_argument("--num-reads", type=int, default=config.NUM_READS)
     e2e.add_argument("--workers", type=int, default=4)
     e2e.add_argument("--run-timeout", type=int, default=3600, help="실행 1회 초")
+    e2e.add_argument(
+        "--reverify-failed",
+        action="store_true",
+        help="분할이 임베딩 불가로 기록된 실행만 저장된 서브그래프로 --timeout 재실측",
+    )
     e2e.set_defaults(func=run_e2e)
 
     one = sub.add_parser("e2e-one", help="e2e 워커 (드라이버가 호출)")

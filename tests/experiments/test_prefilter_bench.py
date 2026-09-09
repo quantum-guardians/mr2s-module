@@ -11,6 +11,7 @@ from experiments.prefilter_bench import (
     CouplingsPruningFaceCyclePartitionStrategy,
     TreewidthPruningFaceCyclePartitionStrategy,
     _recheck_jobs,
+    _reverify_task,
     _select_pending,
     auc_reject_score,
     best_threshold,
@@ -23,6 +24,8 @@ from experiments.prefilter_bench import (
     summarize_e2e,
     threshold_stats,
     treewidth_upper_bound,
+    verify_partition,
+    verify_sources,
 )
 from mr2s_module.solver.partition.degeneracy_pruning import (
     DegeneracyPruningFaceCyclePartitionStrategy,
@@ -162,6 +165,26 @@ def test_recheck_jobs_restores_failed_small_candidates(tmp_path) -> None:
     assert pending[0].couplings == (("a", "x0"), ("a", "x1"))
     assert previous["ok"]["timeout_sec"] == 60
     assert set(previous) == {"failed_small", "failed_big", "ok", "legacy"}
+
+
+def test_verify_sources_handles_trivial_subgraphs() -> None:
+    sources = [
+        {"variables": ["a", "b"], "couplings": []},
+        {"variables": [], "couplings": []},
+    ]
+    result = verify_sources(sources, timeout=1, threads=1, seed=0, retries=0)
+    assert result["n_subgraphs_checked"] == 2
+    assert result["n_subgraphs_embeddable"] == 2
+    assert result["partition_embeddable"] is True
+    assert result["physical_qubits_total"] == 2
+    assert result["verify_timeout_sec"] == 1
+    empty = verify_partition(None, timeout=1, threads=1, seed=0, retries=0)
+    assert empty["partition_embeddable"] is None and empty["sources"] == []
+    record = {"run_id": "r", "sources": sources, "partition_embeddable": False}
+    updated = _reverify_task((record, 2, 1, 0))
+    assert updated["partition_embeddable"] is True
+    assert updated["reverified"] is True
+    assert updated["verify_timeout_sec"] == 2
 
 
 def test_summarize_e2e_pairs_against_baseline() -> None:
