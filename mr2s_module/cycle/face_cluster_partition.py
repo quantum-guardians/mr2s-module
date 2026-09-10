@@ -1,4 +1,5 @@
 import itertools
+from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import cast
@@ -28,6 +29,8 @@ from mr2s_module.util.planar_graph import (
 
 _OUTER_WALL_WEIGHT = 999_999
 _INNER_WEIGHT = 1
+# repair_terminals="interior" 에서 외벽 정점을 한데 묶는 가상 접지 노드 (간선 노드가 아님).
+_GROUND_NODE: SubdivisionNode = ("ground", -1)
 
 
 @dataclass
@@ -45,12 +48,34 @@ class FaceClusterPartition:
         target_k: int = 10,
         clusterer: FaceClusterer | None = None,
         repair_mode: str = "toggle",
+        repair_terminals: str = "all",
+        boundary_weight: int = _INNER_WEIGHT,
     ):
+        """
+        repair_terminals: T-join 단말로 삼을 홀수 차수 정점.
+            "all"      — 모든 홀수 정점 (현행).
+            "interior" — 외벽 위 정점은 제외하고 내부 홀수 정점만. 외벽은 접지로 취급해
+                         수리 경로가 외벽 아무 정점에서나 끝날 수 있다. 외벽 위 홀수는 안쪽
+                         거대면의 2-채색을 깨지 않으므로 고칠 필요가 없다.
+        boundary_weight: 이미 경계인 간선의 경로 비용. 0 이면 새 선을 긋는 대신
+            기존 경계를 따라가 XOR 로 지우는(군집을 합치는) 수리가 우선된다.
+        기본값 조합("all", 1)은 기존 `_wall_protected_repair` 경로를 그대로 쓴다.
+        """
         self.target_k = target_k
         self.clusterer = clusterer or SnowballFaceClusterer()
         if repair_mode not in {"toggle", "remove"}:
             raise ValueError("repair_mode must be either 'toggle' or 'remove'")
         self.repair_mode = repair_mode
+        if repair_terminals not in {"all", "interior"}:
+            raise ValueError("repair_terminals must be either 'all' or 'interior'")
+        if boundary_weight < 0:
+            raise ValueError("boundary_weight must be non-negative")
+        self.repair_terminals = repair_terminals
+        self.boundary_weight = boundary_weight
+
+    @property
+    def _uses_legacy_repair(self) -> bool:
+        return self.repair_terminals == "all" and self.boundary_weight == _INNER_WEIGHT
 
     def run(self, graph: Graph) -> GraphPartitionResult:
         if any(edge.directed for edge in graph.edges.values()):
@@ -199,9 +224,12 @@ class FaceClusterPartition:
         boundary_edges, outer_edges = self._collect_boundary_edges(
             face_edges_map, face_to_cluster
         )
-        repair_edges = self._wall_protected_repair(
-            component, boundary_edges, outer_edges
-        )
+        if self._uses_legacy_repair:
+            repair_edges = self._wall_protected_repair(
+                component, boundary_edges, outer_edges
+            )
+        else:
+            repair_edges = self._ground_repair(component, boundary_edges, outer_edges)
         final_boundary = self._apply_boundary_repair(boundary_edges, repair_edges)
 
         # 4. Flood fill — 같은 군집의 면들 병합
@@ -374,6 +402,85 @@ class FaceClusterPartition:
                 if is_edge_node(node):
                     repair_edges.add(node[1])
         return repair_edges
+
+    def _ground_repair(
+        self,
+        g_euler: nx.Graph,
+        boundary_edges: set[int],
+        outer_edges: set[int],
+    ) -> set[int]:
+        """repair_terminals / boundary_weight 를 반영한 최소 비용 T-join.
+
+        - 단말: 홀수 차수 정점 전부("all") 또는 내부 정점만("interior"). interior 모드는
+          외벽 정점을 가상 접지 노드에 비용 0 으로 묶어, 내부 홀수 정점이 외벽 아무
+          정점으로 빠져나가는 경로도 허용한다. 내부 정점이 전부 짝수면 안쪽 거대면은
+          항상 2-채색 가능하므로 외벽 위 홀수는 고칠 필요가 없다.
+        - 비용: 외벽 999,999, 기존 경계 boundary_weight, 나머지 1. boundary_weight=0 이면
+          Y자에 매달린 기존 경계를 따라가 XOR 로 지우는(군집을 합치는) 경로가 우선된다.
+        - 경로 간선은 대칭차로 모은다. 비용 0 간선이 있으면 두 매칭 경로가 같은 간선을
+          지날 수 있고, 합집합으로 모으면 그 간선 양 끝의 패리티가 깨진다.
+        """
+        edge_endpoints = self._edge_endpoints(g_euler)
+        hull: set[SubdivisionNode] = set()
+        for edge_id in outer_edges:
+            hull.update(edge_endpoints[edge_id])
+
+        b_sub = nx.MultiGraph()
+        for edge_id in boundary_edges:
+            u, v = edge_endpoints[edge_id]
+            b_sub.add_edge(u, v, key=edge_id)
+        degrees = cast("Iterable[tuple[SubdivisionNode, int]]", b_sub.degree())
+        odd_nodes = [v for v, d in degrees if d % 2 != 0]
+        terminals: list[SubdivisionNode] = (
+            [v for v in odd_nodes if v not in hull]
+            if self.repair_terminals == "interior"
+            else list(odd_nodes)
+        )
+        if not terminals:
+            return set()
+
+        g_repair = g_euler.copy()
+        repair_pairs = cast(
+            "Iterable[tuple[SubdivisionNode, SubdivisionNode]]", g_repair.edges()
+        )
+        for u, v in repair_pairs:
+            edge_id = self._subdivision_edge_id(u, v)
+            if edge_id in outer_edges:
+                weight = _OUTER_WALL_WEIGHT
+            elif edge_id in boundary_edges:
+                weight = self.boundary_weight
+            else:
+                weight = _INNER_WEIGHT
+            g_repair[u][v]["weight"] = weight
+        if self.repair_terminals == "interior":
+            for node in hull:
+                g_repair.add_edge(node, _GROUND_NODE, weight=0)
+            if len(terminals) % 2 == 1:
+                terminals.append(_GROUND_NODE)
+
+        # 단말에서만 Dijkstra 를 돌린다 (all-pairs 불필요).
+        dist = {
+            t: nx.single_source_dijkstra_path_length(g_repair, t, weight="weight")
+            for t in terminals
+        }
+        complete = nx.Graph()
+        for u, v in itertools.combinations(terminals, 2):
+            if v in dist[u]:
+                complete.add_edge(u, v, weight=dist[u][v])
+        paths = [
+            cast(
+                "list[SubdivisionNode]",
+                nx.shortest_path(g_repair, u, v, weight="weight"),
+            )
+            for u, v in nx.min_weight_matching(complete)
+        ]
+        return self._odd_multiplicity_edges(paths)
+
+    @staticmethod
+    def _odd_multiplicity_edges(paths: list[list[SubdivisionNode]]) -> set[int]:
+        """경로들의 대칭차: 홀수 번 지나간 도메인 간선 id 만 남긴다."""
+        use = Counter(node[1] for path in paths for node in path if is_edge_node(node))
+        return {edge_id for edge_id, count in use.items() if count % 2 == 1}
 
     @staticmethod
     def _filter_ghost_components(

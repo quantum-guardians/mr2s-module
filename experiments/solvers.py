@@ -108,6 +108,15 @@ def build_qubo_solver(
     )
 
 
+# 경계 봉합(T-join) 규칙. "legacy" 가 본 실험(10,000회)과 동일한 현행 동작이다.
+# "interior_merge" 는 내부 홀수 정점만 단말로 삼고 기존 경계 비용을 0 으로 두어
+# 새 경계를 긋는 대신 매달린 경계를 지운다 (ISSUE-98).
+REPAIR_OPTIONS: dict[str, dict[str, Any]] = {
+    "legacy": {},
+    "interior_merge": {"repair_terminals": "interior", "boundary_weight": 0},
+}
+
+
 def build_solver(
     hops: Sequence[int],
     use_reduction: bool,
@@ -115,12 +124,16 @@ def build_solver(
     seed: int,
     num_reads: int,
     use_dnc: bool = True,
+    repair: str = "legacy",
 ) -> tuple[ReductionMr2sSolver | RecordingSolver, RecordingSolver]:
     """(최상위 솔버, inner 결과 기록 프록시).
 
     use_dnc=True 면 create_dnc_qubo_sa_solver 와 같은 DnC 구성, False 면 DnC 없이
     QuboMR2SSolver 가 그래프 전체를 한 QUBO 로 푼다 (QPU 제약이 없는 SA 대조군).
+    repair 는 REPAIR_OPTIONS 의 키로, 면 분할의 경계 봉합 규칙을 고른다.
     """
+    if repair not in REPAIR_OPTIONS:
+        raise ValueError(f"unknown repair option: {repair!r}")
     qubo_solver = build_qubo_solver(hops, seed=seed, num_reads=num_reads)
     if not use_dnc:
         recorder = RecordingSolver(qubo_solver)
@@ -129,7 +142,9 @@ def build_solver(
         return ReductionMr2sSolver(
             mr2s_solver=recorder, evaluator=Evaluator()
         ), recorder
-    face_cycle = FaceClusterPartition(target_k=2, clusterer=KMeansFaceClusterer())
+    face_cycle = FaceClusterPartition(
+        target_k=2, clusterer=KMeansFaceClusterer(), **REPAIR_OPTIONS[repair]
+    )
     partition_strategy = DegeneracyPruningFaceCyclePartitionStrategy(
         mr2s_solver=qubo_solver,
         face_cycle=face_cycle,
