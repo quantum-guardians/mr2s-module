@@ -14,7 +14,12 @@ n-hop 조합 {2, 3, 4, 2+3, 2+3+4} × 간선 축약 on/off 를 같은 그래프 
 
 ```bash
 .venv/bin/python -m experiments.graphs            # v∈{100..500} × seed 0–9 × 제거 {0,10,30,50}% = 200개
+.venv/bin/python -m experiments.graphs --family grid   # grid·hexagonal·apollonian·voronoi → data/graphs_{family}/
 ```
+
+다른 계열은 graph_id 형식이 같으므로 `run_all --graph-dir data/graphs_{family} --results results/<name>` 으로 같은 하네스를
+그대로 쓴다. 계열별 결과를 한 표로 묶으려면 `python -m experiments.compare_families --results experiments/results
+--families delaunay:full,grid:full_grid,...` (결과 `results/families_comparison.md`, 해석은 `results/FAMILIES_REPORT.md`).
 
 `v{v}_s{seed}_p{pct}.json`: 좌표 `pos`, 간선 `edges`(u<v 정렬), 목표/실제 제거 비율.
 제거는 이중연결을 유지하는 탐욕 1패스라 같은 seed 의 p30 제거 집합은 p10 을 포함한다.
