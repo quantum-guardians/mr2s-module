@@ -27,6 +27,7 @@ from mr2s_module.util.planar_graph import (
 from mr2s_module.util.qubo_util import (
     add_polys,
     get_indicator_function,
+    indicator_terms,
     map_binary_poly_to_bqm,
     multiply_polys,
 )
@@ -52,6 +53,7 @@ __all__ = [
     "face_vertex_ring",
     "flow_imbalance",
     "get_indicator_function",
+    "indicator_terms",
     "inner_faces",
     "inner_faces_by_edge_id",
     "is_edge_node",
