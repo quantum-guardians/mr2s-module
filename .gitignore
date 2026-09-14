@@ -222,3 +222,6 @@ __marimo__/
 
 # Claude Code local worktrees
 .claude/worktrees/
+
+# Gurobi node files (written to cwd when NodefileStart is exceeded)
+grbnodes*/
