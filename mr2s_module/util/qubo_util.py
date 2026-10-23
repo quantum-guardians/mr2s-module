@@ -6,18 +6,29 @@ from dwave.samplers import SimulatedAnnealingSampler
 sampler = SimulatedAnnealingSampler()
 
 
-def get_indicator_function(
+def indicator_terms(
     i: int, j: int, edge_id: int, weight: float
-) -> BinaryPolynomial:
+) -> dict[frozenset[str], float]:
+    """지시자 다항식의 항 사전. 방향 부호 규약(i<j)의 단일 진실.
+
+    BinaryPolynomial 을 만들지 않고 항만 돌려준다. 재귀 안에서 수십만 번 부르는
+    호출부(NHopPolyGenerator)가 객체 생성 비용 없이 쓰기 위한 형태다.
+    키를 frozenset 으로 두면 항끼리 합칠 때 집합 합집합 한 번이면 된다.
+    """
     if i == j:
         raise ValueError(f"i and j must be different, but both are {i}")
 
     # 변수명은 edge id 기반(평행 간선마다 독립 변수). i<j 는 부호(방향) 결정용으로만 사용.
-    var = f"e_{edge_id}"
+    var = frozenset((f"e_{edge_id}",))
     if i < j:
-        return BinaryPolynomial({(): weight, (var,): -weight}, Vartype.BINARY)
-    else:
-        return BinaryPolynomial({(var,): weight}, Vartype.BINARY)
+        return {frozenset(): weight, var: -weight}
+    return {var: weight}
+
+
+def get_indicator_function(
+    i: int, j: int, edge_id: int, weight: float
+) -> BinaryPolynomial:
+    return BinaryPolynomial(indicator_terms(i, j, edge_id, weight), Vartype.BINARY)
 
 
 def map_binary_poly_to_bqm(polynomial: BinaryPolynomial):
